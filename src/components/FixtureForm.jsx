@@ -1,0 +1,174 @@
+import { useState } from 'react'
+import Sheet from './Sheet'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { FIXTURE_TYPES } from '../lib/constants'
+import { todayISO } from '../lib/format'
+
+// Admin create/edit a fixture. Opponent is picked from the opponents table or
+// added inline (so the badge attaches to the opponent, reused across fixtures).
+// League name shows only for League type, auto-filled from the team, overridable.
+export default function FixtureForm({ open, onClose, onSaved, teams, opponents, seasonId, fixture }) {
+  const { profile } = useAuth()
+  const editing = !!fixture
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const [teamId, setTeamId] = useState(fixture?.team_id ?? teams[0]?.id ?? '')
+  const [opponentId, setOpponentId] = useState(fixture?.opponent_id ?? '')
+  const [newOpponent, setNewOpponent] = useState('')
+  const [matchDate, setMatchDate] = useState(fixture?.match_date ?? todayISO())
+  const [kickoff, setKickoff] = useState((fixture?.kickoff ?? '13:00').slice(0, 5))
+  const [homeAway, setHomeAway] = useState(fixture?.home_away ?? 'Home')
+  const [type, setType] = useState(fixture?.fixture_type ?? 'League')
+  const [venue, setVenue] = useState(fixture?.venue ?? '')
+  const [address, setAddress] = useState(fixture?.address ?? '')
+  const [w3w, setW3w] = useState(fixture?.w3w ?? '')
+
+  const team = teams.find((t) => t.id === teamId)
+  const [leagueName, setLeagueName] = useState(fixture?.league_name ?? '')
+  // League name defaults from the team when League type and not yet set.
+  const effectiveLeague = leagueName || (type === 'League' ? team?.league_name ?? '' : '')
+
+  async function onDelete() {
+    if (!confirm('Bin this fixture off? This removes it and any availability for it.')) return
+    setBusy(true)
+    const { error } = await supabase.from('fixtures').delete().eq('id', fixture.id)
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    onSaved(); onClose()
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault()
+    setError(null)
+    if (!teamId || !matchDate || !kickoff || !venue.trim()) {
+      setError('Team, date, kickoff and venue are all needed.'); return
+    }
+    if (!opponentId && !newOpponent.trim()) { setError('Pick an opponent or add a new one.'); return }
+
+    setBusy(true)
+    try {
+      let oppId = opponentId
+      if (!oppId && newOpponent.trim()) {
+        const { data, error } = await supabase
+          .from('opponents')
+          .insert({ club_id: profile.club_id, name: newOpponent.trim() })
+          .select('id').single()
+        if (error) throw error
+        oppId = data.id
+      }
+
+      const payload = {
+        club_id: profile.club_id,
+        season_id: seasonId,
+        team_id: teamId,
+        opponent_id: oppId,
+        match_date: matchDate,
+        kickoff,
+        home_away: homeAway,
+        fixture_type: type,
+        league_name: type === 'League' ? (effectiveLeague || null) : null,
+        venue: venue.trim(),
+        address: address.trim() || null,
+        w3w: w3w.trim() || null,
+      }
+
+      const res = editing
+        ? await supabase.from('fixtures').update(payload).eq('id', fixture.id)
+        : await supabase.from('fixtures').insert(payload)
+      if (res.error) throw res.error
+
+      onSaved(); onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose}>
+      <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT FIXTURE' : 'NEW FIXTURE'}</span></p>
+      <h2 className="display mt-2" style={{ fontSize: 26 }}>{editing ? 'Edit the game' : 'Add a game'}</h2>
+
+      {error && <p className="field-error mt-3">{error}</p>}
+
+      <form className="col gap-3 mt-4" onSubmit={onSubmit}>
+        <div className="field">
+          <label className="label">Team</label>
+          <select className="select" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+
+        <div className="field">
+          <label className="label">Opponent</label>
+          <select className="select" value={opponentId} onChange={(e) => setOpponentId(e.target.value)}>
+            <option value="">— add a new one below —</option>
+            {opponents.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          {!opponentId && (
+            <input className="input mt-2" placeholder="New opponent name" value={newOpponent} onChange={(e) => setNewOpponent(e.target.value)} />
+          )}
+        </div>
+
+        <div className="row gap-2">
+          <div className="field grow">
+            <label className="label">Date</label>
+            <input className="input" type="date" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} />
+          </div>
+          <div className="field grow">
+            <label className="label">Kickoff</label>
+            <input className="input" type="time" value={kickoff} onChange={(e) => setKickoff(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="row gap-2">
+          <div className="field grow">
+            <label className="label">Home / Away</label>
+            <select className="select" value={homeAway} onChange={(e) => setHomeAway(e.target.value)}>
+              <option>Home</option><option>Away</option>
+            </select>
+          </div>
+          <div className="field grow">
+            <label className="label">Type</label>
+            <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
+              {FIXTURE_TYPES.map((t) => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {type === 'League' && (
+          <div className="field">
+            <label className="label">League</label>
+            <input className="input" value={effectiveLeague} onChange={(e) => setLeagueName(e.target.value)} placeholder="League name" />
+          </div>
+        )}
+
+        <div className="field">
+          <label className="label">Venue</label>
+          <input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="e.g. Harvey Hadden 4G" />
+        </div>
+        <div className="field">
+          <label className="label">Address</label>
+          <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label">what3words</label>
+          <input className="input" value={w3w} onChange={(e) => setW3w(e.target.value)} placeholder="///filled.count.soap" />
+        </div>
+
+        <button className="btn btn-primary btn-block mt-2" disabled={busy}>
+          {busy ? 'Saving…' : editing ? 'Save changes' : 'Add fixture'}
+        </button>
+        {editing && (
+          <button type="button" className="btn btn-ghost btn-block" disabled={busy} onClick={onDelete}
+            style={{ color: 'var(--red-bright)', borderColor: 'var(--line)' }}>
+            Bin this fixture
+          </button>
+        )}
+      </form>
+    </Sheet>
+  )
+}
