@@ -96,11 +96,11 @@ export default function Auth() {
             <div className="row gap-2">
               <div className="field grow">
                 <label className="label">First name</label>
-                <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                <input className="input" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
               </div>
               <div className="field grow">
                 <label className="label">Surname</label>
-                <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                <input className="input" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
               </div>
             </div>
             <div className="field">
