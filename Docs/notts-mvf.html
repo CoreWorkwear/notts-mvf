@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nottinghamshire MvF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@600,700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --ink:#0c0f0d;
+  --smoke:#141815;
+  --smoke2:#1c211e;
+  --line:#2a2f2b;
+  --line2:#3a423c;
+  --blood:#E11D2A;
+  --blood-bright:#FF3340;
+  --blood-dim:rgba(225,29,42,0.14);
+  --blood-dim2:rgba(225,29,42,0.24);
+  --forest:#2FA84F;
+  --forest-bright:#44D268;
+  --forest-dim:rgba(47,168,79,0.14);
+  --forest-dim2:rgba(47,168,79,0.24);
+  --bone:#F2F0EC;
+  --bone-mute:#9aa39c;
+  --bone-dim:#5d655f;
+  --gold:#E8B53F;
+  --warn:#F5A623;
+  --warn-dim:rgba(245,166,35,0.14);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --fd:'Clash Display','Hanken Grotesk',sans-serif;
+  --fb:'Hanken Grotesk',sans-serif;
+  --fm:'Geist Mono',monospace;
+  --fs:'Instrument Serif',serif;
+}
+html{height:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+body{background:var(--ink);color:var(--bone);font-family:var(--fb);min-height:100vh;overflow-x:hidden;overflow-y:auto;-webkit-font-smoothing:antialiased;-webkit-overflow-scrolling:touch;}
+.sheet{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+::-webkit-scrollbar{width:0;height:0;}
+.mono{font-family:var(--fm);}
+.disp{font-family:var(--fd);font-weight:700;letter-spacing:-.005em;line-height:.94;text-transform:uppercase;}
+.eyebrow{font-family:var(--fm);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--bone-mute);}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;font-family:var(--fm);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+.b-blood{background:var(--blood-dim);color:var(--blood-bright);}
+.b-forest{background:var(--forest-dim);color:var(--forest-bright);}
+.b-warn{background:var(--warn-dim);color:var(--warn);}
+.b-mute{background:var(--smoke2);color:var(--bone-mute);}
+input,select,textarea{background:var(--smoke);border:1px solid var(--line);color:var(--bone);border-radius:12px;padding:13px 15px;font-family:var(--fb);font-size:16px;outline:none;transition:border-color .15s,box-shadow .15s;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--blood-bright);box-shadow:0 0 0 3px var(--blood-dim);}
+select option{background:var(--smoke);}
+button{cursor:pointer;font-family:var(--fb);border:none;border-radius:12px;transition:transform .12s,filter .15s,background .15s,border-color .15s;}
+button:active{transform:scale(.97);}
+.btn-primary{background:var(--blood-bright);color:#fff;padding:14px 20px;font-weight:700;font-size:15px;box-shadow:0 4px 16px rgba(255,46,67,.28);}
+.btn-primary:active{filter:brightness(.95);}
+.btn-primary:disabled{opacity:.4;box-shadow:none;}
+.btn-ghost{background:var(--smoke);color:var(--bone-mute);padding:13px 18px;border:1px solid var(--line);font-size:14px;font-weight:600;}
+.btn-ghost:active{border-color:var(--line2);color:var(--bone);}
+.fl{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--bone-mute);margin-bottom:7px;font-family:var(--fm);}
+.fr{margin-bottom:16px;}
+.chip{padding:10px 15px;border-radius:11px;border:1px solid var(--line);background:transparent;color:var(--bone-mute);font-size:14px;font-weight:600;cursor:pointer;min-height:42px;}
+.chip:active{transform:scale(.96);}
+.surface{background:var(--smoke);border:1px solid var(--line);border-radius:16px;}
+.sheet-wrap{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px);}
+.sheet{background:var(--smoke);border:1px solid var(--line2);border-radius:24px 24px 0 0;width:100%;max-width:620px;max-height:93vh;overflow-y:auto;padding:10px 18px calc(24px + var(--safe-b));animation:up .26s cubic-bezier(.2,.8,.2,1);}
+@keyframes up{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line2);margin:8px auto 18px;}
+.sheet-title{font-family:var(--fd);font-size:30px;letter-spacing:.01em;text-transform:uppercase;margin-bottom:18px;line-height:1;}
+@media(min-width:680px){.sheet-wrap{align-items:center;}.sheet{border-radius:22px;max-width:540px;animation:none;}}
+.tap{cursor:pointer;}
+/* concentric motif */
+.motif{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+.motif::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(115deg, transparent 0 58%, rgba(255,255,255,.06) 58% 58.6%, transparent 58.6% 63%, rgba(255,255,255,.04) 63% 63.5%, transparent 63.5%);}
+.grain{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:.05;mix-blend-mode:soft-light;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+.fade-in{animation:fade .4s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect} = React;
+
+/* Hardware-back + scroll-lock for any bottom sheet.
+   Pushing a history entry on open means the phone back button pops it (closing the sheet) instead of exiting the app. */
+function useSheetBack(open,onClose){
+  useEffect(()=>{
+    if(!open) return;
+    window.history.pushState({sheet:true},"");
+    const onPop=()=>onClose();
+    window.addEventListener("popstate",onPop);
+    const prevOverflow=document.body.style.overflow;
+    document.body.style.overflow="hidden"; // lock background scroll while sheet is up
+    return ()=>{
+      window.removeEventListener("popstate",onPop);
+      document.body.style.overflow=prevOverflow;
+      // if the sheet was closed by something other than back (e.g. Close button), tidy the history entry
+      if(window.history.state&&window.history.state.sheet) window.history.back();
+    };
+  },[open]);
+}
+
+const POSITIONS = ["GK","RB","CB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF"];
+const MATCH_FEE = 7;
+const TEAMS = {
+  xl:{id:"xl",label:"XL 11s",short:"XL",c:"var(--blood-bright)",cd:"var(--blood)",badge:"b-blood",dim:"var(--blood-dim)",dim2:"var(--blood-dim2)",grad:"linear-gradient(150deg,#E11D2A 0%,#7d0f17 100%)"},
+  community:{id:"community",label:"Community",short:"COM",c:"var(--forest-bright)",cd:"var(--forest)",badge:"b-forest",dim:"var(--forest-dim)",dim2:"var(--forest-dim2)",grad:"linear-gradient(150deg,#2FA84F 0%,#12401f 100%)"},
+};
+function teamOf(id){return TEAMS[id];}
+
+const SEED_USERS = [
+  {id:1,first:"Chris",last:"Wells",phone:"07700 900111",email:"chris@nottsmvf.test",password:"admin",role:"admin",positions:["GK"],preferred:"GK",teams:["community"],xlEligible:false,active:true,dob:"1988-04-12",ecName:"Sarah Wells",ecPhone:"07700 911111"},
+  {id:2,first:"Scott",last:"Hall",phone:"07700 900222",email:"scott@nottsmvf.test",password:"admin",role:"admin",positions:["CM","CDM"],preferred:"CM",teams:["xl"],xlEligible:true,active:true,dob:"1985-09-03",ecName:"",ecPhone:""},
+  {id:3,first:"Joe",last:"Morris",phone:"07700 900333",email:"joe@nottsmvf.test",password:"player",role:"player",positions:["GK"],preferred:"GK",teams:["community","xl"],xlEligible:true,active:true,dob:"1992-01-20",ecName:"",ecPhone:""},
+  {id:4,first:"Rich",last:"King",phone:"07700 900444",email:"rich@nottsmvf.test",password:"player",role:"player",positions:["CB","RB"],preferred:"CB",teams:["community"],xlEligible:false,active:true,dob:"1990-11-08",ecName:"",ecPhone:""},
+  {id:5,first:"Adam",last:"Bell",phone:"07700 900555",email:"adam@nottsmvf.test",password:"player",role:"player",positions:["ST","CF"],preferred:"ST",teams:["community","xl"],xlEligible:true,active:true,dob:"1994-06-30",ecName:"",ecPhone:""},
+  {id:6,first:"Declan",last:"Joyce",phone:"07700 900666",email:"dec@nottsmvf.test",password:"player",role:"player",positions:["LW","CAM"],preferred:"LW",teams:["community"],xlEligible:false,active:true,dob:"1996-02-14",ecName:"",ecPhone:""},
+  {id:7,first:"Callum",last:"Fox",phone:"07700 900777",email:"callum@nottsmvf.test",password:"player",role:"player",positions:["RM","RW"],preferred:"RM",teams:["xl"],xlEligible:true,active:true,dob:"1993-07-19",ecName:"",ecPhone:""},
+  {id:8,first:"Russ",last:"Attaway",phone:"07700 900888",email:"russ@nottsmvf.test",password:"player",role:"player",positions:["CB"],preferred:"CB",teams:["xl"],xlEligible:true,active:false,dob:"1987-12-01",ecName:"",ecPhone:""},
+];
+
+const SEASONS = ["2025/26","2026/27"];
+const CURRENT_SEASON = "2025/26";
+const LEAGUES = {xl:"MvF XL National League",community:"Notts Sunday Community Div 2"};
+
+const SEED_FIXTURES = [
+  {id:1,season:"2025/26",date:"2026-06-21",team:"community",opponent:"Bramcote Rovers",venue:"Harvey Hadden Sports Village",address:"Wigman Rd, Bilborough, Nottingham NG8 4PB",w3w:"///proper.spoon.shapes",homeAway:"Home",kickoff:"10:30",type:"League",league:"Notts Sunday Community Div 2"},
+  {id:2,season:"2025/26",date:"2026-06-21",team:"xl",opponent:"Carlton Athletic",venue:"Carlton Forum Leisure Centre",address:"Coningswath Rd, Carlton, Nottingham NG4 3SH",w3w:"///dined.gravy.lance",homeAway:"Away",kickoff:"13:00",type:"League",league:"MvF XL National League"},
+  {id:3,season:"2025/26",date:"2026-06-28",team:"community",opponent:"Mapperley FC",venue:"Harvey Hadden Sports Village",address:"Wigman Rd, Bilborough, Nottingham NG8 4PB",w3w:"///proper.spoon.shapes",homeAway:"Home",kickoff:"10:30",type:"Friendly",league:""},
+  {id:4,season:"2025/26",date:"2026-07-05",team:"xl",opponent:"Beeston Town",venue:"Beeston Fields",address:"Wollaton Rd, Beeston, Nottingham NG9 2NR",w3w:"///rocket.staple.driver",homeAway:"Away",kickoff:"11:00",type:"Cup",league:""},
+  {id:5,season:"2025/26",date:"2026-07-12",team:"community",opponent:"Arnold Sunday",venue:"Harvey Hadden Sports Village",address:"Wigman Rd, Bilborough, Nottingham NG8 4PB",w3w:"///proper.spoon.shapes",homeAway:"Home",kickoff:"10:30",type:"League",league:"Notts Sunday Community Div 2"},
+  /* past games (have results below) */
+  {id:101,season:"2025/26",date:"2026-06-07",team:"community",opponent:"Mansfield Mind",venue:"Berry Hill Park",address:"Berry Hill Ln, Mansfield NG18 4JR",w3w:"///gallery.pylon.basket",homeAway:"Away",kickoff:"12:00",type:"Friendly",league:""},
+  {id:102,season:"2025/26",date:"2026-05-31",team:"xl",opponent:"Durham Vikings",venue:"Maiden Castle",address:"Stockton Rd, Durham DH1 3SE",w3w:"///vintage.sleeps.maple",homeAway:"Away",kickoff:"14:00",type:"League",league:"MvF XL National League"},
+  {id:103,season:"2025/26",date:"2026-05-24",team:"xl",opponent:"Derby Penguins",venue:"Moor Farm",address:"Moor Ln, Derby DE24 9HY",w3w:"///cards.unite.flask",homeAway:"Away",kickoff:"15:00",type:"League",league:"MvF XL National League"},
+];
+/* league tables: fully manual, keyed by season -> team -> array of rows */
+const SEED_TABLES = {
+  "2025/26":{
+    xl:[
+      {name:"Sheffield Steel MvF",p:8,w:7,d:0,l:1,gf:31,ga:12,pts:21},
+      {name:"Durham Vikings",p:8,w:6,d:1,l:1,gf:28,ga:15,pts:19},
+      {name:"Nottinghamshire MvF",p:8,w:4,d:1,l:3,gf:22,ga:20,pts:13},
+      {name:"Carlton Athletic",p:8,w:3,d:2,l:3,gf:18,ga:19,pts:11},
+      {name:"Derby Penguins",p:8,w:2,d:1,l:5,gf:14,ga:24,pts:7},
+      {name:"Hull 11s MvF",p:8,w:1,d:1,l:6,gf:11,ga:34,pts:4},
+    ],
+    community:[
+      {name:"Nottinghamshire MvF",p:6,w:5,d:1,l:0,gf:19,ga:6,pts:16},
+      {name:"Arnold Sunday",p:6,w:4,d:0,l:2,gf:15,ga:11,pts:12},
+      {name:"Bramcote Rovers",p:6,w:2,d:2,l:2,gf:12,ga:13,pts:8},
+      {name:"Mapperley FC",p:6,w:1,d:1,l:4,gf:8,ga:18,pts:4},
+    ],
+  },
+};
+const SEED_AVAIL = {"1":{"3":"in","4":"in","6":"out"},"2":{"2":"in","5":"in","7":"maybe","8":"in"},"101":{"3":"in","4":"in","6":"in"},"102":{"2":"in","5":"in","7":"in","8":"in"},"103":{"2":"in","5":"in","7":"in","8":"in"}};
+/* RESULTS keyed by fixtureId. score = {us, them}. goals = list of {scorer, assist, minute} for our team only.
+   motm = player name. scorerId optional (squad pick) else free-typed scorer string. */
+const SEED_RESULTS = {
+  "101":{htUs:1,htThem:0,us:2,them:1,goals:[{scorer:"Adam Bell",assist:"Joe Morris",minute:"12"},{scorer:"Declan Joyce",assist:"",minute:"58"}],motm:"Adam Bell"},
+  "102":{htUs:2,htThem:3,us:4,them:6,goals:[{scorer:"Adam Bell",assist:"Callum Fox",minute:"8"},{scorer:"Adam Bell",assist:"",minute:"31"},{scorer:"Russ Attaway",assist:"Scott Hall",minute:"49"},{scorer:"Callum Fox",assist:"",minute:"77"}],motm:"Adam Bell"},
+  "103":{htUs:0,htThem:2,us:0,them:3,goals:[],motm:"Joe Morris"},
+};
+
+
+function fmtDate(d,fmt){
+  if(!d) return "";
+  const o = fmt==="long"?{weekday:"long",day:"numeric",month:"long"}:fmt==="poster"?{weekday:"short",day:"numeric",month:"short"}:{weekday:"short",day:"numeric",month:"short"};
+  return new Date(d+"T12:00:00").toLocaleDateString("en-GB",o);
+}
+function daysUntil(s){const a=new Date();a.setHours(0,0,0,0);const b=new Date(s+"T12:00:00");b.setHours(0,0,0,0);return Math.round((b-a)/86400000);}
+function mapsUrl(a){return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a);}
+function w3wUrl(w){return "https://what3words.com/"+w.replace(/^\/+/,"");}
+
+/* CREST */
+function Crest({size=36,on="blood"}){
+  const bg=on==="blood"?"var(--blood)":on==="forest"?"var(--forest)":"transparent";
+  return(
+    <div style={{width:size,height:size,borderRadius:"50%",background:bg,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`2px solid rgba(255,255,255,.9)`}}>
+      <svg width={size*0.56} height={size*0.56} viewBox="0 0 24 24" fill="none">
+        <path d="M12 2 L20 5 V11 C20 16 16 20 12 22 C8 20 4 16 4 11 V5 Z" fill="#fff" opacity="0.96"/>
+        <path d="M12 6 C10 6 9 7.5 9 9.5 C9 11 10 12 10 13 L14 13 C14 12 15 11 15 9.5 C15 7.5 14 6 12 6 Z" fill={bg==="transparent"?"var(--ink)":bg}/>
+        <circle cx="12" cy="10" r="1.4" fill="#fff"/>
+      </svg>
+    </div>
+  );
+}
+
+/* AUTH */
+function Auth({users,setUsers,onLogin}){
+  const [mode,setMode]=useState("login");
+  const [email,setEmail]=useState(""),[pw,setPw]=useState(""),[err,setErr]=useState("");
+  const [reg,setReg]=useState({first:"",last:"",phone:"",email:"",password:"",positions:[],preferred:"",teams:["xl"]});
+  function doLogin(){setErr("");const u=users.find(x=>x.email.toLowerCase()===email.trim().toLowerCase()&&x.password===pw);if(!u){setErr("Email or password not recognised.");return;}onLogin(u);}
+  function togglePos(p){setReg(r=>({...r,positions:r.positions.includes(p)?r.positions.filter(x=>x!==p):[...r.positions,p]}));}
+  function toggleTeam(t){setReg(r=>({...r,teams:r.teams.includes(t)?r.teams.filter(x=>x!==t):[...r.teams,t]}));}
+  function doRegister(){setErr("");if(!reg.first.trim()||!reg.last.trim()||!reg.email.trim()||!reg.phone.trim()||!reg.password.trim()){setErr("First name, surname, email, phone and password are all needed.");return;}if(reg.positions.length===0){setErr("Pick at least one position.");return;}if(reg.teams.length===0){setErr("Pick at least one team.");return;}if(users.some(u=>u.email.toLowerCase()===reg.email.trim().toLowerCase())){setErr("That email's already registered.");return;}const u={id:Date.now(),first:reg.first.trim(),last:reg.last.trim(),phone:reg.phone.trim(),email:reg.email.trim(),password:reg.password,role:"player",positions:reg.positions,preferred:reg.preferred||reg.positions[0],teams:reg.teams,xlEligible:false};setUsers(p=>[...p,u]);onLogin(u);}
+  return(
+    <div style={{minHeight:"100vh",position:"relative",display:"flex",flexDirection:"column",justifyContent:"center",padding:"32px 20px calc(32px + var(--safe-b))",maxWidth:480,margin:"0 auto"}}>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(120% 60% at 50% 0%, rgba(200,16,46,.22), transparent 70%)"}}/>
+      <div style={{position:"relative",textAlign:"center",marginBottom:30}}>
+        <Crest size={84}/>
+        <div className="disp" style={{fontSize:44,marginTop:16}}>Nottinghamshire<br/>MvF</div>
+        <div className="eyebrow" style={{marginTop:8}}>Est. 2020 · Team Hub</div>
+      </div>
+      <div className="surface" style={{position:"relative",padding:22,borderRadius:20}}>
+        <div style={{display:"flex",gap:6,marginBottom:22,background:"var(--ink)",padding:5,borderRadius:13}}>
+          {["login","register"].map(m=>(<button key={m} onClick={()=>{setMode(m);setErr("");}} style={{flex:1,padding:12,borderRadius:9,background:mode===m?"var(--blood-bright)":"transparent",color:mode===m?"#fff":"var(--bone-mute)",fontWeight:700,fontSize:14}}>{m==="login"?"Sign in":"Register"}</button>))}
+        </div>
+        {mode==="login"?(
+          <>
+            <div className="fr"><label className="fl">Email</label><input type="email" inputMode="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></div>
+            <div className="fr"><label className="fl">Password</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
+            {err&&<div style={{color:"var(--blood-bright)",fontSize:14,marginBottom:14}}>{err}</div>}
+            <button className="btn-primary" style={{width:"100%"}} onClick={doLogin}>Sign in</button>
+            <div className="mono" style={{marginTop:18,padding:13,background:"var(--ink)",borderRadius:11,fontSize:12,color:"var(--bone-mute)",lineHeight:1.8}}>
+              <span style={{color:"var(--bone)"}}>DEMO LOGINS</span><br/>Admin · chris@nottsmvf.test · admin<br/>Player · joe@nottsmvf.test · player
+            </div>
+          </>
+        ):(
+          <>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div className="fr"><label className="fl">First name *</label><input value={reg.first} onChange={e=>setReg(r=>({...r,first:e.target.value}))}/></div>
+              <div className="fr"><label className="fl">Surname *</label><input value={reg.last} onChange={e=>setReg(r=>({...r,last:e.target.value}))}/></div>
+            </div>
+            <div className="fr"><label className="fl">Phone *</label><input type="tel" inputMode="tel" value={reg.phone} onChange={e=>setReg(r=>({...r,phone:e.target.value}))} placeholder="07700 900000"/></div>
+            <div className="fr"><label className="fl">Email *</label><input type="email" inputMode="email" value={reg.email} onChange={e=>setReg(r=>({...r,email:e.target.value}))}/></div>
+            <div className="fr"><label className="fl">Password *</label><input type="password" value={reg.password} onChange={e=>setReg(r=>({...r,password:e.target.value}))}/></div>
+            <div className="fr"><label className="fl">Positions you play</label><div style={{display:"flex",flexWrap:"wrap",gap:7}}>{POSITIONS.map(p=>{const on=reg.positions.includes(p);return <button key={p} onClick={()=>togglePos(p)} className="chip" style={on?{borderColor:"var(--blood-bright)",background:"var(--blood-dim2)",color:"var(--blood-bright)"}:{}}>{p}</button>;})}</div></div>
+            {reg.positions.length>0&&<div className="fr"><label className="fl">Preferred position</label><select value={reg.preferred} onChange={e=>setReg(r=>({...r,preferred:e.target.value}))}><option value="">Pick one</option>{reg.positions.map(p=><option key={p}>{p}</option>)}</select></div>}
+            <div className="fr"><label className="fl">Which team(s)?</label><div style={{display:"flex",gap:8}}>{Object.values(TEAMS).map(t=>{const on=reg.teams.includes(t.id);return <button key={t.id} onClick={()=>toggleTeam(t.id)} className="chip" style={on?{borderColor:t.c,background:t.dim2,color:t.c}:{}}>{t.label}</button>;})}</div><div style={{fontSize:11,color:"var(--bone-dim)",marginTop:7}}>XL 11s eligibility is confirmed by an admin after you register.</div></div>
+            {err&&<div style={{color:"var(--blood-bright)",fontSize:14,marginBottom:14}}>{err}</div>}
+            <button className="btn-primary" style={{width:"100%"}} onClick={doRegister}>Create account</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const AVAIL_OPTS=[{k:"in",l:"I'm in",c:"var(--forest-bright)",d:"var(--forest-dim2)"},{k:"maybe",l:"Maybe",c:"var(--warn)",d:"var(--warn-dim)"},{k:"out",l:"Can't make it",c:"var(--blood-bright)",d:"var(--blood-dim2)"}];
+function AvailControl({value,onChange}){
+  return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>{AVAIL_OPTS.map(o=>{const on=value===o.k;return(<button key={o.k} onClick={()=>onChange(o.k)} style={{padding:"13px 6px",borderRadius:12,border:`1.5px solid ${on?o.c:"var(--line)"}`,background:on?o.d:"transparent",color:on?o.c:"var(--bone-mute)",fontSize:13,fontWeight:on?700:600}}>{o.l}</button>);})}</div>);
+}
+
+/* HERO POSTER — the signature, now an action surface */
+function HeroPoster({fix,countIn,counts,myStatus,setMyStatus,isAdmin,onOpen}){
+  const t=teamOf(fix.team);const du=daysUntil(fix.date);
+  const [saved,setSaved]=useState(false);
+  function set(v){setMyStatus(v);setSaved(true);setTimeout(()=>setSaved(false),1600);}
+  const opts=[["in","I'm in","var(--forest-bright)"],["maybe","Maybe","var(--warn)"],["out","Can't","var(--blood-bright)"]];
+  return(
+    <div className="fade-in" style={{position:"relative",borderRadius:20,overflow:"hidden",marginBottom:24,minHeight:280,background:t.grad,boxShadow:"0 12px 40px rgba(0,0,0,.4)"}}>
+      <div className="motif"/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,.15) 0%,transparent 30%,rgba(0,0,0,.55) 100%)"}}/>
+      <div className="tap" onClick={()=>onOpen(fix)} style={{position:"relative",padding:"18px 18px 14px",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div className="eyebrow" style={{color:"rgba(255,255,255,.85)"}}>Next Up · {t.label}</div>
+          <span className="badge" style={{background:"rgba(0,0,0,.35)",color:"#fff"}}>{du===0?"Today":du===1?"Tomorrow":du+" days"}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginTop:14}}>
+          <Crest size={42} on="none"/>
+          <span className="disp" style={{fontSize:20,color:"rgba(255,255,255,.6)"}}>v</span>
+          <div style={{width:42,height:42,borderRadius:"50%",border:"2px dashed rgba(255,255,255,.55)",display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.22)",fontFamily:"var(--fb)",fontWeight:700,fontSize:15,color:"#fff"}}>{fix.opponent.slice(0,2).toUpperCase()}</div>
+        </div>
+        <div className="disp" style={{fontSize:"clamp(40px,13vw,72px)",color:"#fff",marginTop:16,textShadow:"0 2px 20px rgba(0,0,0,.3)"}}>{fix.opponent}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"4px 12px",marginTop:14,alignItems:"center"}}>
+          <span className="mono" style={{fontSize:12,color:"#fff",letterSpacing:".06em"}}>{fix.type.toUpperCase()}</span>
+          <span style={{color:"rgba(255,255,255,.4)"}}>·</span>
+          <span className="mono" style={{fontSize:12,color:"#fff",letterSpacing:".06em"}}>{fmtDate(fix.date,"poster").toUpperCase()}</span>
+          <span style={{color:"rgba(255,255,255,.4)"}}>·</span>
+          <span className="mono" style={{fontSize:12,color:"#fff",letterSpacing:".06em"}}>{fix.kickoff} KO</span>
+          <span style={{color:"rgba(255,255,255,.4)"}}>·</span>
+          <span className="mono" style={{fontSize:12,color:"#fff",letterSpacing:".06em"}}>{fix.homeAway==="Home"?"HOME":"AWAY"}</span>
+        </div>
+      </div>
+      {/* ACTION STRIP — player: one-tap in/maybe/out; admin: squad state */}
+      <div style={{position:"relative",padding:"0 18px 18px"}}>
+        {isAdmin
+          ?<div className="tap" onClick={()=>onOpen(fix,"whosin")} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:14,borderTop:"1px solid rgba(255,255,255,.2)"}}>
+              <span style={{fontSize:14,color:"#fff"}}>
+                <strong style={{fontSize:17}}>{counts.in}</strong> in
+                <span style={{opacity:.7}}> · {counts.maybe} maybe · {counts.out} out</span>
+              </span>
+              <span className="mono" style={{fontSize:13,color:"#fff",fontWeight:500}}>Who's in ›</span>
+            </div>
+          :<div style={{paddingTop:14,borderTop:"1px solid rgba(255,255,255,.2)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+                <span className="eyebrow" style={{color:"rgba(255,255,255,.8)"}}>{myStatus?"You're down as":"Are you in?"}</span>
+                {saved&&<span className="mono fade-in" style={{fontSize:11,color:"#fff",fontWeight:600}}>SAVED ✓</span>}
+                {!saved&&<span className="tap mono" onClick={()=>onOpen(fix,"whosin")} style={{fontSize:12,color:"rgba(255,255,255,.85)"}}>{counts.in} in ›</span>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {opts.map(([k,l,c])=>{const on=myStatus===k;return(
+                  <button key={k} onClick={()=>set(k)} style={{flex:1,padding:"12px 6px",borderRadius:11,border:on?`1.5px solid ${c}`:"1.5px solid rgba(255,255,255,.3)",background:on?c:"rgba(0,0,0,.25)",color:"#fff",fontWeight:700,fontSize:14}}>{l}</button>
+                );})}
+              </div>
+            </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+/* FIXTURE STRIP ROW */
+function FixtureStrip({fix,counts,onOpen}){
+  const t=teamOf(fix.team);const du=daysUntil(fix.date);
+  const home=fix.homeAway==="Home";
+  const ourName="Notts "+t.short;
+  return(
+    <div className="tap" onClick={()=>onOpen(fix)} style={{position:"relative",borderRadius:14,overflow:"hidden",background:"var(--smoke)",border:"1px solid var(--line)",display:"flex"}}>
+      <div style={{width:6,background:t.grad,flexShrink:0}}/>
+      <div style={{padding:"13px 15px",flex:1,minWidth:0}}>
+        {/* top line: which team + type, and countdown */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+          <span className={`badge ${t.badge}`}>{t.label}</span>
+          <span className="mono" style={{fontSize:11,color:du<=3?"var(--warn)":"var(--bone-dim)"}}>{fmtDate(fix.date,"poster").toUpperCase()} · {du===0?"TODAY":du===1?"TMRW":du+"D"}</span>
+        </div>
+        {/* the fixture: home team listed first, always */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
+          <div className="disp" style={{fontSize:22,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"right",color:home?"var(--bone)":"var(--bone-mute)"}}>{home?ourName:fix.opponent}</div>
+          <span className="mono" style={{fontSize:11,color:"var(--bone-dim)",flexShrink:0}}>v</span>
+          <div className="disp" style={{fontSize:22,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:home?"var(--bone-mute)":"var(--bone)"}}>{home?fix.opponent:ourName}</div>
+        </div>
+        {/* meta: KO, home/away, venue */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11,flexWrap:"wrap"}}>
+          <span className="badge b-mute">{fix.kickoff} KO</span>
+          <span className={`badge ${home?"b-green":"b-mute"}`}>{home?"HOME":"AWAY"}</span>
+          <span className="badge b-mute">{fix.type}</span>
+          <span style={{fontSize:12,color:"var(--bone-mute)",display:"flex",alignItems:"center",gap:5,flex:1,minWidth:0}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0,opacity:.7}}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fix.venue}</span>
+          </span>
+        </div>
+        {/* availability counts, tappable to who's in */}
+        <div style={{display:"flex",gap:14,paddingTop:10,borderTop:"1px solid var(--line)"}} onClick={e=>{e.stopPropagation();onOpen(fix,"whosin");}}>
+          {[["IN",counts.in,"var(--forest-bright)"],["MAYBE",counts.maybe,"var(--warn)"],["OUT",counts.out,"var(--blood-bright)"]].map(([l,v,c])=>(
+            <div key={l} style={{display:"flex",alignItems:"baseline",gap:5}}>
+              <span className="disp" style={{fontSize:20,color:c}}>{v}</span>
+              <span className="mono" style={{fontSize:9,color:"var(--bone-dim)",letterSpacing:".06em"}}>{l}</span>
+            </div>
+          ))}
+          <span className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginLeft:"auto",alignSelf:"center"}}>Who's in ›</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* FIXTURE DETAIL */
+function FixtureDetail({fix,me,users,avail,setAvail,isAdmin,onClose,onEdit,initialTab}){
+  useSheetBack(true,onClose);
+  const t=teamOf(fix.team);
+  const [tab,setTab]=useState(initialTab||"mine");
+  const fa=avail[String(fix.id)]||{};
+  const eligible=users.filter(u=>u.active!==false&&u.teams.includes(fix.team)&&(fix.team!=="xl"||u.xlEligible));
+  const g={in:[],maybe:[],out:[],none:[]};
+  eligible.forEach(u=>{const s=fa[String(u.id)];g[s==="in"?"in":s==="maybe"?"maybe":s==="out"?"out":"none"].push(u);});
+  const canRespond=isAdmin||(me.teams.includes(fix.team)&&(fix.team!=="xl"||me.xlEligible));
+  const mine=fa[String(me.id)]||null;
+  const mineLabel=mine?(AVAIL_OPTS.find(o=>o.k===mine)||{}).l:"Not set";
+  const mineColor=mine?(AVAIL_OPTS.find(o=>o.k===mine)||{}).c:"var(--bone-dim)";
+  const [justSaved,setJustSaved]=useState(false);
+  function setMine(v){setAvail(p=>({...p,[String(fix.id)]:{...p[String(fix.id)],[String(me.id)]:v}}));setJustSaved(true);setTimeout(()=>setJustSaved(false),1800);}
+  return(
+    <div className="sheet-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet" style={{padding:0,overflow:"hidden"}}>
+        <div style={{position:"relative",background:t.grad,padding:"calc(10px + var(--safe-t)) 18px 18px"}}>
+          <div className="motif"/>
+          <div style={{position:"relative"}}>
+            <div className="grab" style={{background:"rgba(255,255,255,.5)"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div className="eyebrow" style={{color:"rgba(255,255,255,.85)"}}>{t.label} · {fix.type}</div>
+              <span className="badge" style={{background:"rgba(0,0,0,.3)",color:"#fff"}}>{fix.homeAway}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+              <Crest size={36} on="none"/><span className="disp" style={{fontSize:16,color:"rgba(255,255,255,.6)"}}>v</span>
+              <div style={{width:36,height:36,borderRadius:"50%",border:"2px dashed rgba(255,255,255,.55)",display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.22)",fontFamily:"var(--fd)",fontSize:14,color:"#fff"}}>{fix.opponent.slice(0,2).toUpperCase()}</div>
+            </div>
+            <div className="disp" style={{fontSize:"clamp(38px,11vw,56px)",color:"#fff"}}>{fix.opponent}</div>
+            <div className="mono" style={{fontSize:13,color:"#fff",marginTop:8,letterSpacing:".04em"}}>{fmtDate(fix.date,"long").toUpperCase()} · {fix.kickoff} KO</div>
+          </div>
+        </div>
+
+        {/* venue (always shown, it's reference) */}
+        <div style={{padding:"16px 18px 0"}}>
+          <div className="surface" style={{padding:15,background:"var(--ink)"}}>
+            <div className="eyebrow" style={{marginBottom:7}}>Venue</div>
+            <div style={{fontWeight:700,fontSize:16}}>{fix.venue}</div>
+            <div style={{color:"var(--bone-mute)",fontSize:14,marginTop:3}}>{fix.address}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginTop:12}}>
+              <a href={mapsUrl(fix.address)} target="_blank" rel="noreferrer" className="btn-ghost" style={{textAlign:"center",textDecoration:"none"}}>Open in Maps</a>
+              <a href={w3wUrl(fix.w3w)} target="_blank" rel="noreferrer" className="btn-ghost" style={{textAlign:"center",textDecoration:"none",color:"var(--blood-bright)",borderColor:"var(--blood-dim2)"}}>{fix.w3w}</a>
+            </div>
+          </div>
+        </div>
+
+        {/* tabs */}
+        <div style={{padding:"16px 18px 0"}}>
+          <div style={{display:"flex",gap:5,background:"var(--ink)",padding:5,borderRadius:13,border:"1px solid var(--line)"}}>
+            {[["mine","My availability"],["whosin","Who's in"]].map(([k,l])=>(
+              <button key={k} onClick={()=>setTab(k)} style={{flex:1,padding:"11px",borderRadius:9,background:tab===k?"var(--blood-bright)":"transparent",color:tab===k?"#fff":"var(--bone-mute)",fontSize:13,fontWeight:700}}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{padding:"16px 18px calc(24px + var(--safe-b))"}}>
+          {tab==="whosin"?(
+            <>
+              {/* your status, view-only marker here */}
+              {canRespond&&(
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderRadius:12,background:"var(--ink)",border:"1px solid var(--line)",marginBottom:16}}>
+                  <span className="mono" style={{fontSize:12,color:"var(--bone-mute)",letterSpacing:".04em"}}>YOU'RE DOWN AS</span>
+                  <span style={{fontSize:14,fontWeight:700,color:mineColor}}>{mineLabel}</span>
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:12}}>
+                <div className="disp" style={{fontSize:24}}>The Squad</div>
+                <div className="mono" style={{fontSize:12,color:"var(--bone-mute)"}}><span style={{color:"var(--forest-bright)"}}>{g.in.length} IN</span> · {g.maybe.length} MAYBE · {g.out.length} OUT</div>
+              </div>
+              {[["Available",g.in,"var(--forest-bright)"],["Maybe",g.maybe,"var(--warn)"],["Out",g.out,"var(--blood-bright)"],["No reply",g.none,"var(--bone-mute)"]].map(([label,arr,col])=>(arr.length>0&&(
+                <div key={label} style={{marginBottom:14}}>
+                  <div className="mono" style={{fontSize:11,textTransform:"uppercase",letterSpacing:".08em",color:col,marginBottom:7}}>{label} · {arr.length}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:1}}>{arr.map(u=>(<div key={u.id} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid var(--line)",fontSize:15}}><span style={{fontWeight:500}}>{u.first} {u.last}{u.id===me.id&&<span className="mono" style={{fontSize:10,color:"var(--bone-dim)",marginLeft:6}}>YOU</span>}</span><span className="mono" style={{color:"var(--bone-dim)",fontSize:12}}>{u.preferred}</span></div>))}</div>
+                </div>
+              )))}
+            </>
+          ):(
+            <>
+              {canRespond?(
+                <>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                    <div className="fl">Set your availability</div>
+                    {justSaved&&<span className="mono fade-in" style={{fontSize:12,color:"var(--forest-bright)",fontWeight:600}}>SAVED ✓</span>}
+                  </div>
+                  <AvailControl value={mine} onChange={setMine}/>
+                  <div style={{fontSize:13,color:"var(--bone-mute)",marginTop:14,lineHeight:1.5}}>
+                    Tap to let the gaffer know if you're about for this one. You can change it any time before kickoff.
+                  </div>
+                  <div style={{marginTop:18,padding:"13px 15px",borderRadius:12,background:"var(--ink)",border:"1px solid var(--line)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span className="mono" style={{fontSize:12,color:"var(--bone-mute)",letterSpacing:".04em"}}>CURRENT STATUS</span>
+                    <span style={{fontSize:15,fontWeight:700,color:mineColor}}>{mineLabel}</span>
+                  </div>
+                </>
+              ):(
+                <div style={{padding:"24px 0",textAlign:"center",color:"var(--bone-mute)",fontSize:14}}>
+                  This is an {t.label} fixture. You're not in this squad, so you can view who's in but can't set availability.
+                </div>
+              )}
+            </>
+          )}
+          <div style={{display:"flex",gap:9,marginTop:22}}>
+            <button className="btn-ghost" style={{flex:1}} onClick={onClose}>Close</button>
+            {isAdmin&&<button className="btn-primary" style={{flex:1}} onClick={()=>onEdit(fix)}>Edit fixture</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* FIXTURE FORM */
+function FixtureForm({initial,onSave,onClose,season}){
+  const blank={season:season||CURRENT_SEASON,date:"",team:"xl",opponent:"",venue:"",address:"",w3w:"",homeAway:"Home",kickoff:"10:30",type:"League",league:LEAGUES.xl};
+  const [form,setForm]=useState(initial?{...initial}:blank);const [err,setErr]=useState("");
+  useSheetBack(true,onClose);
+  function pickTeam(id){setForm(f=>({...f,team:id,league:f.type==="League"?LEAGUES[id]:f.league}));}
+  function pickType(ty){setForm(f=>({...f,type:ty,league:ty==="League"?(LEAGUES[f.team]||""):""}));}
+  function save(){setErr("");if(!form.date||!form.opponent.trim()||!form.venue.trim()){setErr("Date, opponent and venue are needed.");return;}onSave(form);}
+  return(
+    <div className="sheet-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet">
+        <div className="grab"/>
+        <div className="sheet-title" style={{color:"var(--blood-bright)"}}>{initial?"Edit fixture":"Add fixture"}</div>
+        <div className="fr"><label className="fl">Team</label><div style={{display:"flex",gap:8}}>{Object.values(TEAMS).map(t=>{const on=form.team===t.id;return <button key={t.id} onClick={()=>pickTeam(t.id)} className="chip" style={on?{borderColor:t.c,background:t.dim2,color:t.c,fontWeight:700}:{}}>{t.label}</button>;})}</div></div>
+        <div className="fr"><label className="fl">Date</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+        <div className="fr"><label className="fl">Opponent</label><input value={form.opponent} onChange={e=>setForm(f=>({...f,opponent:e.target.value}))} placeholder="e.g. Carlton Athletic"/></div>
+        <div className="fr"><label className="fl">Venue name</label><input value={form.venue} onChange={e=>setForm(f=>({...f,venue:e.target.value}))} placeholder="Ground name"/></div>
+        <div className="fr"><label className="fl">Full address</label><textarea rows={2} value={form.address} onChange={e=>setForm(f=>({...f,address:e.target.value}))} placeholder="Street, area, postcode"/></div>
+        <div className="fr"><label className="fl">what3words</label><input value={form.w3w} onChange={e=>setForm(f=>({...f,w3w:e.target.value}))} placeholder="///word.word.word"/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div className="fr"><label className="fl">Home/Away</label><select value={form.homeAway} onChange={e=>setForm(f=>({...f,homeAway:e.target.value}))}><option>Home</option><option>Away</option></select></div>
+          <div className="fr"><label className="fl">Kickoff</label><input type="time" value={form.kickoff} onChange={e=>setForm(f=>({...f,kickoff:e.target.value}))}/></div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div className="fr"><label className="fl">Type</label><select value={form.type} onChange={e=>pickType(e.target.value)}><option>League</option><option>Friendly</option><option>Cup</option><option>Other</option></select></div>
+          <div className="fr"><label className="fl">Season</label><select value={form.season} onChange={e=>setForm(f=>({...f,season:e.target.value}))}>{SEASONS.map(s=><option key={s}>{s}</option>)}</select></div>
+        </div>
+        {form.type==="League"&&<div className="fr"><label className="fl">League name</label><input value={form.league} onChange={e=>setForm(f=>({...f,league:e.target.value}))} placeholder="Which league?"/></div>}
+        {err&&<div style={{color:"var(--blood-bright)",fontSize:14,marginBottom:12}}>{err}</div>}
+        <div style={{display:"flex",gap:9}}><button className="btn-ghost" style={{flex:1}} onClick={onClose}>Cancel</button><button className="btn-primary" style={{flex:1}} onClick={save}>{initial?"Save changes":"Add fixture"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+/* CALENDAR */
+function CalendarView({fixtures,onOpen}){
+  const today=new Date();const [ym,setYm]=useState({y:today.getFullYear(),m:today.getMonth()});
+  const first=new Date(ym.y,ym.m,1);const startDow=(first.getDay()+6)%7;const daysIn=new Date(ym.y,ym.m+1,0).getDate();
+  const monthLabel=first.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+  const byDay={};fixtures.forEach(f=>{const d=new Date(f.date+"T12:00:00");if(d.getFullYear()===ym.y&&d.getMonth()===ym.m){(byDay[d.getDate()]=byDay[d.getDate()]||[]).push(f);}});
+  function shift(n){setYm(p=>{const d=new Date(p.y,p.m+n,1);return{y:d.getFullYear(),m:d.getMonth()};});}
+  const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=daysIn;d++)cells.push(d);
+  return(
+    <div className="fade-in">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <button className="btn-ghost" style={{padding:"10px 16px"}} onClick={()=>shift(-1)}>‹</button>
+        <div className="disp" style={{fontSize:26}}>{monthLabel}</div>
+        <button className="btn-ghost" style={{padding:"10px 16px"}} onClick={()=>shift(1)}>›</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5}}>
+        {["M","T","W","T","F","S","S"].map((d,i)=><div key={i} className="mono" style={{textAlign:"center",fontSize:11,color:"var(--bone-dim)",padding:"4px 0"}}>{d}</div>)}
+        {cells.map((d,i)=>{if(!d)return <div key={i}/>;const games=byDay[d]||[];const isToday=ym.y===today.getFullYear()&&ym.m===today.getMonth()&&d===today.getDate();return(
+          <div key={i} style={{minHeight:62,borderRadius:11,border:`1px solid ${isToday?"var(--blood-bright)":"var(--line)"}`,background:games.length?"var(--smoke)":"transparent",padding:6,display:"flex",flexDirection:"column",gap:3}}>
+            <div className="mono" style={{fontSize:12,color:isToday?"var(--blood-bright)":"var(--bone-mute)",fontWeight:isToday?700:400}}>{d}</div>
+            {games.slice(0,2).map(gm=>(<div key={gm.id} className="tap" onClick={()=>onOpen(gm)} style={{height:7,borderRadius:3,background:teamOf(gm.team).grad}}/>))}
+            {games.length>2&&<div style={{fontSize:9,color:"var(--bone-dim)"}}>+{games.length-2}</div>}
+          </div>
+        );})}
+      </div>
+      <div style={{display:"flex",gap:16,marginTop:16,justifyContent:"center",fontSize:12,color:"var(--bone-mute)"}}>
+        <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:11,height:11,borderRadius:3,background:"var(--blood-bright)"}}/>XL 11s</span>
+        <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:11,height:11,borderRadius:3,background:"var(--forest-bright)"}}/>Community</span>
+      </div>
+      {(()=>{
+        const monthGames=Object.keys(byDay).map(Number).sort((a,b)=>a-b).flatMap(d=>byDay[d]);
+        if(!monthGames.length) return <div style={{textAlign:"center",color:"var(--bone-dim)",fontSize:13,marginTop:20}}>No games this month.</div>;
+        return(
+          <div style={{marginTop:22}}>
+            <div className="eyebrow" style={{marginBottom:12}}>This month</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {monthGames.map(gm=>{const t=teamOf(gm.team);return(
+                <div key={gm.id} className="tap" onClick={()=>onOpen(gm)} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 13px",borderRadius:12,background:"var(--smoke)",border:"1px solid var(--line)"}}>
+                  <div style={{width:4,alignSelf:"stretch",borderRadius:2,background:t.grad,flexShrink:0}}/>
+                  <div className="mono" style={{fontSize:12,color:"var(--bone-mute)",width:54,flexShrink:0}}>{fmtDate(gm.date,"poster").toUpperCase()}</div>
+                  <div className="disp" style={{fontSize:19,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{gm.homeAway==="Home"?"v":"@"} {gm.opponent}</div>
+                  <span className="mono" style={{fontSize:11,color:"var(--bone-dim)",flexShrink:0}}>{gm.kickoff}</span>
+                </div>
+              );})}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/* FIXTURES PAGE */
+function Fixtures({me,users,fixtures,setFixtures,avail,setAvail,isAdmin,season}){
+  const [teamFilter,setTeamFilter]=useState("all");const [view,setView]=useState("cards");
+  const [detail,setDetail]=useState(null);const [detailTab,setDetailTab]=useState("whosin");const [formOpen,setFormOpen]=useState(false);const [editFix,setEditFix]=useState(null);
+  function openDetail(f,tab){setDetailTab(tab||"whosin");setDetail(f);}
+  const today=new Date().toISOString().split("T")[0];
+  function vis(f){if(isAdmin)return true;if(!me.teams.includes(f.team))return false;if(f.team==="xl"&&!me.xlEligible)return false;return true;}
+  const visible=fixtures.filter(vis);
+  const calList=visible.filter(f=>teamFilter==="all"||f.team===teamFilter);
+  const list=visible.filter(f=>f.date>=today).filter(f=>teamFilter==="all"||f.team===teamFilter).sort((a,b)=>a.date.localeCompare(b.date)||a.kickoff.localeCompare(b.kickoff));
+  function countIn(fid){return Object.values(avail[String(fid)]||{}).filter(v=>v==="in").length;}
+  function countsFor(fid){const fa=avail[String(fid)]||{};const v=Object.values(fa);return{in:v.filter(x=>x==="in").length,maybe:v.filter(x=>x==="maybe").length,out:v.filter(x=>x==="out").length};}
+  function saveFix(form){if(editFix){setFixtures(p=>p.map(x=>x.id===editFix.id?{...x,...form}:x));if(detail)setDetail(d=>({...d,...form}));}else setFixtures(p=>[...p,{...form,id:Date.now()}]);setFormOpen(false);setEditFix(null);}
+  const [hero,...rest]=list;
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <div className="disp" style={{fontSize:40}}>Fixtures</div>
+        {isAdmin&&<button className="btn-primary" style={{padding:"12px 18px"}} onClick={()=>{setEditFix(null);setFormOpen(true);}}>+ Add</button>}
+      </div>
+      <div style={{display:"flex",gap:9,marginBottom:20}}>
+        <div style={{display:"flex",gap:5,background:"var(--smoke)",padding:5,borderRadius:13,flex:1,border:"1px solid var(--line)"}}>
+          {[["cards","List"],["calendar","Calendar"]].map(([k,l])=>(<button key={k} onClick={()=>setView(k)} style={{flex:1,padding:"10px",borderRadius:9,background:view===k?"var(--blood-bright)":"transparent",color:view===k?"#fff":"var(--bone-mute)",fontSize:13,fontWeight:700}}>{l}</button>))}
+        </div>
+        {(isAdmin||(me.teams.includes("xl")&&me.xlEligible&&me.teams.includes("community")))&&(
+          <select style={{width:"auto",flex:1}} value={teamFilter} onChange={e=>setTeamFilter(e.target.value)}><option value="all">Both teams</option><option value="xl">XL 11s</option><option value="community">Community</option></select>
+        )}
+      </div>
+      {view==="calendar"
+        ?<CalendarView fixtures={calList} onOpen={f=>openDetail(f)}/>
+        :(list.length===0
+          ?<div className="surface" style={{textAlign:"center",padding:"36px 24px",color:"var(--bone-mute)"}}>
+            <div style={{fontSize:30,marginBottom:10}}>📭</div>
+            <div style={{fontSize:15,color:"var(--bone)",fontWeight:600,marginBottom:6}}>{isAdmin?"No upcoming fixtures":"Nothing in the diary yet"}</div>
+            <div style={{fontSize:13,lineHeight:1.5}}>{isAdmin?"Add a fixture and it'll show here for the squad.":`New games for your team${me.teams.includes("xl")&&!me.xlEligible?" (and any XL games once you're signed off)":""} will appear here. Check back, or give the gaffer a nudge.`}</div>
+          </div>
+          :<>
+            {hero&&<HeroPoster fix={hero} countIn={countIn(hero.id)} counts={countsFor(hero.id)} myStatus={(avail[String(hero.id)]||{})[String(me.id)]} setMyStatus={v=>setAvail(p=>({...p,[String(hero.id)]:{...p[String(hero.id)],[String(me.id)]:v}}))} isAdmin={isAdmin} onOpen={openDetail}/>}
+            {rest.length>0&&<div className="eyebrow" style={{marginBottom:12}}>Coming up after</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:11}}>{rest.map(f=><FixtureStrip key={f.id} fix={f} counts={countsFor(f.id)} onOpen={openDetail}/>)}</div>
+          </>
+        )
+      }
+      {detail&&<FixtureDetail fix={detail} initialTab={detailTab} me={me} users={users} avail={avail} setAvail={setAvail} isAdmin={isAdmin} onClose={()=>setDetail(null)} onEdit={f=>{setDetail(null);setTimeout(()=>{setEditFix(f);setFormOpen(true);},60);}}/>}
+      {formOpen&&<FixtureForm initial={editFix} season={season} onSave={saveFix} onClose={()=>{setFormOpen(false);setEditFix(null);}}/>}
+    </div>
+  );
+}
+
+/* PROFILE */
+function Profile({me,setUsers}){
+  const [form,setForm]=useState({first:me.first,last:me.last,phone:me.phone,positions:[...me.positions],preferred:me.preferred});const [saved,setSaved]=useState(false);
+  function togglePos(p){setForm(f=>{const positions=f.positions.includes(p)?f.positions.filter(x=>x!==p):[...f.positions,p];const preferred=positions.includes(f.preferred)?f.preferred:(positions[0]||"");return{...f,positions,preferred};});}
+  function save(){setUsers(p=>p.map(u=>u.id===me.id?{...u,...form}:u));setSaved(true);setTimeout(()=>setSaved(false),2000);}
+  const t=me.teams.includes("xl")?TEAMS.xl:TEAMS.community;
+  return(
+    <div style={{maxWidth:580}}>
+      <div className="disp" style={{fontSize:40,marginBottom:18}}>My Profile</div>
+      <div style={{position:"relative",borderRadius:18,overflow:"hidden",marginBottom:18,background:t.grad,padding:"20px 18px"}}>
+        <div className="motif"/>
+        <div style={{position:"relative"}}>
+          <div className="disp" style={{fontSize:34,color:"#fff"}}>{me.first} {me.last}</div>
+          <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
+            {me.teams.map(tm=><span key={tm} className="badge" style={{background:"rgba(0,0,0,.3)",color:"#fff"}}>{teamOf(tm).label}</span>)}
+            {me.xlEligible&&<span className="badge" style={{background:"rgba(255,255,255,.9)",color:"var(--blood)"}}>XL Eligible</span>}
+            {me.role==="admin"&&<span className="badge" style={{background:"rgba(0,0,0,.3)",color:"#fff"}}>Admin</span>}
+          </div>
+        </div>
+      </div>
+      <div className="surface" style={{padding:17}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div className="fr"><label className="fl">First name *</label><input value={form.first} onChange={e=>setForm(f=>({...f,first:e.target.value}))}/></div>
+          <div className="fr"><label className="fl">Surname *</label><input value={form.last} onChange={e=>setForm(f=>({...f,last:e.target.value}))}/></div>
+        </div>
+        <div className="fr"><label className="fl">Phone</label><input type="tel" inputMode="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/></div>
+        <div className="fr"><label className="fl">Email</label><input value={me.email} disabled style={{opacity:.55}}/><div style={{fontSize:11,color:"var(--bone-dim)",marginTop:5}}>Email's your login, ask an admin to change it.</div></div>
+        <div className="fr"><label className="fl">Positions you play</label><div style={{display:"flex",flexWrap:"wrap",gap:7}}>{POSITIONS.map(p=>{const on=form.positions.includes(p);return <button key={p} onClick={()=>togglePos(p)} className="chip" style={on?{borderColor:"var(--blood-bright)",background:"var(--blood-dim2)",color:"var(--blood-bright)"}:{}}>{p}</button>;})}</div></div>
+        {form.positions.length>0&&<div className="fr"><label className="fl">Preferred position</label><select value={form.preferred} onChange={e=>setForm(f=>({...f,preferred:e.target.value}))}>{form.positions.map(p=><option key={p}>{p}</option>)}</select></div>}
+        <div style={{display:"flex",gap:11,alignItems:"center",marginTop:8}}><button className="btn-primary" onClick={save}>Save changes</button>{saved&&<span style={{color:"var(--forest-bright)",fontSize:14,fontWeight:600}}>Saved ✓</span>}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ADMIN PLAYERS */
+function AdminPlayers({me,users,setUsers}){
+  const [q,setQ]=useState("");const [editId,setEditId]=useState(null);const [form,setForm]=useState(null);const [isNew,setIsNew]=useState(false);const [err,setErr]=useState("");
+  const blank={first:"",last:"",phone:"",email:"",password:"",role:"player",positions:[],preferred:"",teams:["xl"],xlEligible:false,active:true,dob:"",ecName:"",ecPhone:""};
+  function openEdit(u){setForm({...u,positions:[...u.positions],teams:[...u.teams]});setEditId(u.id);setIsNew(false);}
+  function openAdd(){setForm({...blank,id:Date.now()});setEditId(null);setIsNew(true);}
+  function togglePos(p){setForm(f=>({...f,positions:f.positions.includes(p)?f.positions.filter(x=>x!==p):[...f.positions,p]}));}
+  function toggleTeam(t){setForm(f=>({...f,teams:f.teams.includes(t)?f.teams.filter(x=>x!==t):[...f.teams,t]}));}
+  function close(){setEditId(null);setForm(null);setIsNew(false);setErr("");}
+  function save(){
+    setErr("");
+    if(!form.first.trim()||!form.last.trim()||!form.email.trim()||!form.phone.trim()){setErr("First name, surname, email and phone are all required.");return;}
+    if(isNew&&users.some(u=>u.email.toLowerCase()===form.email.trim().toLowerCase())){setErr("That email's already registered.");return;}
+    const clean={...form,first:form.first.trim(),last:form.last.trim(),email:form.email.trim(),phone:form.phone.trim(),preferred:form.positions.includes(form.preferred)?form.preferred:form.positions[0]};
+    if(isNew) setUsers(p=>[...p,clean]);
+    else setUsers(p=>p.map(u=>u.id===editId?{...u,...clean}:u));
+    close();
+  }
+  function toggleActive(){setForm(f=>({...f,active:f.active===false?true:false}));}
+
+  const matched=users.filter(u=>(u.first+" "+u.last+" "+u.email).toLowerCase().includes(q.toLowerCase()));
+  const activeList=matched.filter(u=>u.active!==false).sort((a,b)=>a.first.localeCompare(b.first));
+  const inactiveList=matched.filter(u=>u.active===false).sort((a,b)=>a.first.localeCompare(b.first));
+
+  function Row({u}){
+    const t=u.teams.includes("xl")?TEAMS.xl:TEAMS.community;
+    return(
+      <div className="tap" onClick={()=>openEdit(u)} style={{display:"flex",borderRadius:14,overflow:"hidden",background:"var(--smoke)",border:"1px solid var(--line)",opacity:u.active===false?.6:1}}>
+        <div style={{width:6,background:t.grad,flexShrink:0}}/>
+        <div style={{padding:"13px 15px",flex:1}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div><div style={{fontWeight:700,fontSize:16}}>{u.first} {u.last}</div><div className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginTop:3}}>{u.phone||"no phone"}</div></div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>{u.teams.map(tm=><span key={tm} className={`badge ${teamOf(tm).badge}`}>{teamOf(tm).short}</span>)}{u.role==="admin"&&<span className="badge b-mute">Admin</span>}{u.active===false&&<span className="badge b-warn">Inactive</span>}</div>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:11,paddingTop:11,borderTop:"1px solid var(--line)"}}>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{u.positions.map(p=><span key={p} className={`badge ${p===u.preferred?"b-blood":"b-mute"}`}>{p}</span>)}</div>
+            <span className={`badge ${u.xlEligible?"b-blood":"b-mute"}`}>{u.xlEligible?"XL ✓":"XL ✗"}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <div className="disp" style={{fontSize:40}}>Players</div>
+        <button className="btn-primary" style={{padding:"12px 18px"}} onClick={openAdd}>+ Add</button>
+      </div>
+      <div className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginBottom:16}}>{activeList.length} ACTIVE · {users.filter(u=>u.xlEligible&&u.active!==false).length} XL · {users.filter(u=>u.role==="admin").length} ADMINS</div>
+      <input style={{marginBottom:16}} placeholder="Search name or email" value={q} onChange={e=>setQ(e.target.value)}/>
+      <div style={{display:"flex",flexDirection:"column",gap:11}}>
+        {activeList.map(u=><Row key={u.id} u={u}/>)}
+      </div>
+      {inactiveList.length>0&&(
+        <div style={{marginTop:24}}>
+          <div className="eyebrow" style={{marginBottom:12}}>Inactive · kept for history</div>
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>{inactiveList.map(u=><Row key={u.id} u={u}/>)}</div>
+        </div>
+      )}
+      {form&&<PlayerEditSheet me={me} form={form} setForm={setForm} togglePos={togglePos} toggleTeam={toggleTeam} toggleActive={toggleActive} onSave={save} onClose={close} isNew={isNew} err={err}/>}
+    </div>
+  );
+}
+
+function PlayerEditSheet({me,form,setForm,togglePos,toggleTeam,toggleActive,onSave,onClose,isNew,err}){
+  useSheetBack(true,onClose);
+  const [tempPw,setTempPw]=useState(null);
+  const isSelf=form.id===me.id;
+  function resetPw(){
+    // mirrors a real reset: generate a temporary password to hand over. Real app sends a reset link instead.
+    const t=Math.random().toString(36).slice(2,8);
+    setForm(f=>({...f,password:t}));setTempPw(t);
+  }
+  return(
+    <div className="sheet-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet">
+        <div className="grab"/>
+        <div className="sheet-title" style={{color:"var(--blood-bright)"}}>{isNew?"Add player":`${form.first} ${form.last}`}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div className="fr"><label className="fl">First name *</label><input value={form.first} onChange={e=>setForm(f=>({...f,first:e.target.value}))}/></div>
+          <div className="fr"><label className="fl">Surname *</label><input value={form.last} onChange={e=>setForm(f=>({...f,last:e.target.value}))}/></div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div className="fr"><label className="fl">Phone *</label><input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/></div>
+          <div className="fr"><label className="fl">Date of birth</label><input type="date" value={form.dob||""} onChange={e=>setForm(f=>({...f,dob:e.target.value}))}/></div>
+        </div>
+        <div className="fr"><label className="fl">Email (login) *</label><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/></div>
+
+        <div className="fr">
+          <label className="fl">Emergency contact</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <input placeholder="Name" value={form.ecName||""} onChange={e=>setForm(f=>({...f,ecName:e.target.value}))}/>
+            <input type="tel" placeholder="Phone" value={form.ecPhone||""} onChange={e=>setForm(f=>({...f,ecPhone:e.target.value}))}/>
+          </div>
+        </div>
+
+        <div className="fr"><label className="fl">Positions</label><div style={{display:"flex",flexWrap:"wrap",gap:7}}>{POSITIONS.map(p=>{const on=form.positions.includes(p);return <button key={p} onClick={()=>togglePos(p)} className="chip" style={on?{borderColor:"var(--blood-bright)",background:"var(--blood-dim2)",color:"var(--blood-bright)"}:{}}>{p}</button>;})}</div></div>
+        {form.positions.length>0&&<div className="fr"><label className="fl">Preferred</label><select value={form.preferred} onChange={e=>setForm(f=>({...f,preferred:e.target.value}))}>{form.positions.map(p=><option key={p}>{p}</option>)}</select></div>}
+        <div className="fr"><label className="fl">Teams</label><div style={{display:"flex",gap:8}}>{Object.values(TEAMS).map(t=>{const on=form.teams.includes(t.id);return <button key={t.id} onClick={()=>toggleTeam(t.id)} className="chip" style={on?{borderColor:t.c,background:t.dim2,color:t.c}:{}}>{t.label}</button>;})}</div></div>
+        <div className="fr"><label className="fl">XL 11s eligibility</label><button onClick={()=>setForm(f=>({...f,xlEligible:!f.xlEligible}))} style={{padding:"13px 18px",borderRadius:12,border:`1.5px solid ${form.xlEligible?"var(--blood-bright)":"var(--line)"}`,background:form.xlEligible?"var(--blood-dim)":"transparent",color:form.xlEligible?"var(--blood-bright)":"var(--bone-mute)",fontWeight:700,fontSize:14}}>{form.xlEligible?"✓ Eligible for XL 11s":"Not eligible"}</button></div>
+        <div className="fr"><label className="fl">Role</label><div style={{display:"flex",gap:8}}>{["player","admin"].map(r=>{const on=form.role===r;const blocked=isSelf&&r==="player";return <button key={r} disabled={blocked} onClick={()=>setForm(f=>({...f,role:r}))} className="chip" style={{...(on?{borderColor:"var(--bone)",background:"rgba(244,238,234,.1)",color:"var(--bone)",fontWeight:700}:{}),...(blocked?{opacity:.4}:{})}}>{r==="admin"?"Admin":"Player"}</button>;})}</div><div style={{fontSize:11,color:"var(--bone-dim)",marginTop:7}}>Only admins create admins. You can't demote yourself.</div></div>
+
+        {/* password */}
+        {isNew?(
+          <div className="fr"><label className="fl">Temporary password</label><input value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="Set a starter password"/><div style={{fontSize:11,color:"var(--bone-dim)",marginTop:5}}>Hand this to the player so they can sign in. They change it after.</div></div>
+        ):(
+          <div className="fr">
+            <label className="fl">Password</label>
+            <div style={{display:"flex",gap:9,alignItems:"center"}}>
+              <button className="btn-ghost" onClick={resetPw}>Reset password</button>
+              {tempPw&&<span className="mono" style={{fontSize:14,color:"var(--forest-bright)"}}>Temp: <strong>{tempPw}</strong></span>}
+            </div>
+            <div style={{fontSize:11,color:"var(--bone-dim)",marginTop:7}}>Passwords can't be viewed, only reset. In the live app this sends the player a reset link; here it sets a temporary one to pass on.</div>
+          </div>
+        )}
+
+        {/* active / deactivate */}
+        {!isNew&&(
+          <div className="fr">
+            <label className="fl">Squad status</label>
+            <button onClick={toggleActive} disabled={isSelf} style={{width:"100%",padding:"13px 18px",borderRadius:12,border:`1.5px solid ${form.active===false?"var(--warn)":"var(--line)"}`,background:form.active===false?"var(--warn-dim)":"transparent",color:form.active===false?"var(--warn)":"var(--bone-mute)",fontWeight:700,fontSize:14,opacity:isSelf?.4:1}}>{form.active===false?"Inactive · tap to reactivate":"Active · tap to make inactive"}</button>
+            <div style={{fontSize:11,color:"var(--bone-dim)",marginTop:7}}>Inactive players drop off squad lists and availability but stay on past results. {isSelf&&"You can't deactivate yourself."}</div>
+          </div>
+        )}
+
+        {err&&<div style={{color:"var(--blood-bright)",fontSize:14,marginBottom:10}}>{err}</div>}
+        <div style={{display:"flex",gap:9,marginTop:8}}><button className="btn-ghost" style={{flex:1}} onClick={onClose}>Cancel</button><button className="btn-primary" style={{flex:1}} onClick={onSave}>{isNew?"Add player":"Save changes"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+/* ADMIN AVAIL */
+function AdminAvail({users,fixtures,avail,onOpen}){
+  const today=new Date().toISOString().split("T")[0];
+  const upcoming=fixtures.filter(f=>f.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!upcoming.length)return <div className="surface" style={{padding:36,textAlign:"center",color:"var(--bone-mute)"}}>No upcoming fixtures to track.</div>;
+  return(
+    <div>
+      <div className="disp" style={{fontSize:40,marginBottom:6}}>Who's In</div>
+      <div className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginBottom:16}}>TAP A FIXTURE FOR THE FULL LIST</div>
+      <div style={{display:"flex",flexDirection:"column",gap:11}}>
+        {upcoming.map(f=>{const t=teamOf(f.team);const eligible=users.filter(u=>u.active!==false&&u.teams.includes(f.team)&&(f.team!=="xl"||u.xlEligible));const fa=avail[String(f.id)]||{};const ins=eligible.filter(u=>fa[String(u.id)]==="in").length;const maybes=eligible.filter(u=>fa[String(u.id)]==="maybe").length;const outs=eligible.filter(u=>fa[String(u.id)]==="out").length;const none=eligible.length-ins-maybes-outs;return(
+          <div key={f.id} className="tap" onClick={()=>onOpen(f)} style={{display:"flex",borderRadius:14,overflow:"hidden",background:"var(--smoke)",border:"1px solid var(--line)"}}>
+            <div style={{width:6,background:t.grad,flexShrink:0}}/>
+            <div style={{padding:"14px 15px",flex:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}><div className="disp" style={{fontSize:24}}>{f.homeAway==="Home"?"v":"@"} {f.opponent}</div><span className={`badge ${t.badge}`}>{t.short}</span></div>
+              <div className="mono" style={{fontSize:11,color:"var(--bone-mute)",marginBottom:12}}>{fmtDate(f.date,"poster").toUpperCase()} · {f.kickoff}</div>
+              <div style={{display:"flex",gap:16}}>{[["IN",ins,"var(--forest-bright)"],["MAYBE",maybes,"var(--warn)"],["OUT",outs,"var(--blood-bright)"],["NO REPLY",none,"var(--bone-mute)"]].map(([l,v,c])=>(<div key={l}><div className="disp" style={{fontSize:26,color:c}}>{v}</div><div className="mono" style={{fontSize:9,color:"var(--bone-dim)",letterSpacing:".06em"}}>{l}</div></div>))}</div>
+            </div>
+          </div>
+        );})}
+      </div>
+    </div>
+  );
+}
+
+/* ============ RESULTS ============ */
+function outcome(r){if(r.us>r.them)return "W";if(r.us<r.them)return "L";return "D";}
+function outcomeColor(o){return o==="W"?"var(--forest-bright)":o==="L"?"var(--blood-bright)":"var(--bone-mute)";}
+
+/* result hero — most recent, poster style */
+function ResultHero({fix,result,onOpen}){
+  const t=teamOf(fix.team);const o=outcome(result);
+  return(
+    <div className="tap fade-in" onClick={()=>onOpen(fix)} style={{position:"relative",borderRadius:20,overflow:"hidden",marginBottom:24,background:t.grad,boxShadow:"0 12px 40px rgba(0,0,0,.4)"}}>
+      <div className="motif"/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,.15),transparent 40%,rgba(0,0,0,.5))"}}/>
+      <div style={{position:"relative",padding:"18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+          <div className="eyebrow" style={{color:"rgba(255,255,255,.85)"}}>Latest Result · {t.label}</div>
+          <span className="badge" style={{background:"rgba(0,0,0,.35)",color:"#fff"}}>{fix.type}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:18,marginBottom:14}}>
+          <div style={{textAlign:"center",flex:1}}>
+            <Crest size={46} on="none"/>
+            <div className="mono" style={{fontSize:11,color:"#fff",marginTop:6}}>NOTTS MVF</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div className="disp" style={{fontSize:54,color:"#fff",lineHeight:1}}>{result.us}–{result.them}</div>
+            <div className="mono" style={{fontSize:10,color:"rgba(255,255,255,.7)",marginTop:4}}>HT {result.htUs}–{result.htThem}</div>
+          </div>
+          <div style={{textAlign:"center",flex:1}}>
+            <div style={{width:46,height:46,borderRadius:"50%",border:"2px dashed rgba(255,255,255,.55)",display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.22)",fontFamily:"var(--fd)",fontSize:18,color:"#fff",margin:"0 auto"}}>{fix.opponent.slice(0,2).toUpperCase()}</div>
+            <div className="mono" style={{fontSize:11,color:"#fff",marginTop:6,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginLeft:"auto",marginRight:"auto"}}>{fix.opponent.toUpperCase()}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:14,borderTop:"1px solid rgba(255,255,255,.2)"}}>
+          <span className="mono" style={{fontSize:12,color:"#fff"}}>{fmtDate(fix.date,"poster").toUpperCase()}</span>
+          <span className="mono" style={{fontSize:13,color:"#fff",fontWeight:500}}>Match centre ›</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* result strip row */
+function ResultStrip({fix,result,onOpen}){
+  const t=teamOf(fix.team);const o=outcome(result);
+  return(
+    <div className="tap" onClick={()=>onOpen(fix)} style={{display:"flex",alignItems:"stretch",borderRadius:14,overflow:"hidden",background:"var(--smoke)",border:"1px solid var(--line)"}}>
+      <div style={{width:6,background:t.grad,flexShrink:0}}/>
+      <div style={{width:44,display:"flex",alignItems:"center",justifyContent:"center",background:"var(--ink)",flexShrink:0}}>
+        <span className="disp" style={{fontSize:22,color:outcomeColor(o)}}>{o}</span>
+      </div>
+      <div style={{padding:"12px 15px",flex:1,minWidth:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <span className={`badge ${t.badge}`}>{t.short} · {fix.type}</span>
+          <span className="mono" style={{fontSize:11,color:"var(--bone-dim)"}}>{fmtDate(fix.date,"poster").toUpperCase()}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div className="disp" style={{fontSize:22,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fix.homeAway==="Home"?"v":"@"} {fix.opponent}</div>
+          <div className="disp" style={{fontSize:24,color:outcomeColor(o)}}>{result.us}–{result.them}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* FM-style match centre */
+function MatchCentre({fix,result,me,users,avail,isAdmin,onClose,onEdit}){
+  useSheetBack(true,onClose);
+  const t=teamOf(fix.team);const o=outcome(result);
+  const fa=avail[String(fix.id)]||{};
+  const played=users.filter(u=>u.teams.includes(fix.team)&&(fix.team!=="xl"||u.xlEligible)).filter(u=>fa[String(u.id)]==="in");
+  const sorted=[...result.goals].sort((a,b)=>(parseInt(a.minute)||999)-(parseInt(b.minute)||999));
+  return(
+    <div className="sheet-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet" style={{padding:0,overflow:"hidden"}}>
+        <div style={{position:"relative",background:t.grad,padding:"calc(10px + var(--safe-t)) 18px 20px"}}>
+          <div className="motif"/>
+          <div style={{position:"relative"}}>
+            <div className="grab" style={{background:"rgba(255,255,255,.5)"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div className="eyebrow" style={{color:"rgba(255,255,255,.85)"}}>Full Time · {t.label} · {fix.type}</div>
+              <span className="badge" style={{background:o==="W"?"rgba(63,185,80,.9)":o==="L"?"rgba(0,0,0,.4)":"rgba(0,0,0,.4)",color:"#fff"}}>{o==="W"?"WON":o==="L"?"LOST":"DRAW"}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16,margin:"14px 0 6px"}}>
+              <div style={{textAlign:"center",flex:1}}><Crest size={48} on="none"/><div className="mono" style={{fontSize:11,color:"#fff",marginTop:6}}>NOTTS MVF</div></div>
+              <div style={{textAlign:"center"}}>
+                <div className="disp" style={{fontSize:60,color:"#fff",lineHeight:1}}>{result.us}–{result.them}</div>
+                <div className="mono" style={{fontSize:11,color:"rgba(255,255,255,.75)",marginTop:6}}>HALF TIME {result.htUs}–{result.htThem}</div>
+              </div>
+              <div style={{textAlign:"center",flex:1}}>
+                <div style={{width:48,height:48,borderRadius:"50%",border:"2px dashed rgba(255,255,255,.55)",display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.22)",fontFamily:"var(--fd)",fontSize:18,color:"#fff",margin:"0 auto"}}>{fix.opponent.slice(0,2).toUpperCase()}</div>
+                <div className="mono" style={{fontSize:11,color:"#fff",marginTop:6,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",margin:"6px auto 0"}}>{fix.opponent.toUpperCase()}</div>
+              </div>
+            </div>
+            <div className="mono" style={{textAlign:"center",fontSize:12,color:"#fff",marginTop:8}}>{fmtDate(fix.date,"long").toUpperCase()} · {fix.venue.toUpperCase()}</div>
+          </div>
+        </div>
+
+        <div style={{padding:"18px 18px calc(24px + var(--safe-b))"}}>
+          {/* MOTM */}
+          {result.motm&&(
+            <div className="surface" style={{padding:15,marginBottom:16,background:"var(--ink)",display:"flex",alignItems:"center",gap:13}}>
+              <div style={{width:42,height:42,borderRadius:10,background:t.grad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21.4 8 14 2 9.4h7.6z"/></svg>
+              </div>
+              <div><div className="eyebrow">Man of the Match</div><div style={{fontSize:17,fontWeight:700,marginTop:2}}>{result.motm}</div></div>
+            </div>
+          )}
+
+          {/* goal timeline */}
+          <div className="disp" style={{fontSize:24,marginBottom:12}}>Goals</div>
+          {sorted.length===0
+            ?<div style={{color:"var(--bone-mute)",fontSize:14,padding:"8px 0 16px"}}>{result.us===0?"No goals for us this time.":"Goals not logged."}</div>
+            :<div style={{position:"relative",marginBottom:16}}>
+              <div style={{position:"absolute",left:43,top:6,bottom:6,width:2,background:"var(--line)"}}/>
+              {sorted.map((gl,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:14,marginBottom:14,position:"relative"}}>
+                  <div className="mono" style={{width:34,textAlign:"right",fontSize:13,color:"var(--bone-mute)",flexShrink:0,paddingTop:2}}>{gl.minute?gl.minute+"'":"—"}</div>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:t.grad,border:"3px solid var(--smoke)",flexShrink:0,zIndex:1,marginTop:1}}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:15,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{color:"var(--bone-mute)"}}><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2"/><path d="M12 7l1.5 3 3.3.3-2.5 2.2.8 3.2L12 14.2 7.9 16l.8-3.2-2.5-2.2 3.3-.3z" fill="currentColor"/></svg>
+                      {gl.scorer}
+                    </div>
+                    {gl.assist&&<div style={{fontSize:13,color:"var(--bone-mute)",marginTop:1}}>assist · {gl.assist}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+
+          {/* squad that played */}
+          <div className="disp" style={{fontSize:24,marginBottom:12,marginTop:8}}>Squad</div>
+          {played.length===0
+            ?<div style={{color:"var(--bone-mute)",fontSize:14}}>No availability was logged for this game.</div>
+            :<div style={{display:"flex",flexDirection:"column",gap:1,marginBottom:8}}>{played.map(u=>{
+                const goals=result.goals.filter(g=>g.scorer===`${u.first} ${u.last}`).length;
+                const assists=result.goals.filter(g=>g.assist===`${u.first} ${u.last}`).length;
+                return(
+                  <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--line)",fontSize:15}}>
+                    <span style={{fontWeight:500}}>{u.first} {u.last}{result.motm===`${u.first} ${u.last}`&&<span className="mono" style={{fontSize:9,color:"var(--gold)",marginLeft:6}}>MOTM</span>}</span>
+                    <span style={{display:"flex",gap:8,alignItems:"center"}}>
+                      {goals>0&&<span className="mono" style={{fontSize:12,color:"var(--forest-bright)"}}>{goals}⚽</span>}
+                      {assists>0&&<span className="mono" style={{fontSize:12,color:"var(--bone-mute)"}}>{assists}A</span>}
+                      <span className="mono" style={{fontSize:11,color:"var(--bone-dim)"}}>{u.preferred}</span>
+                    </span>
+                  </div>
+                );
+              })}</div>
+          }
+
+          <div style={{display:"flex",gap:9,marginTop:20}}>
+            <button className="btn-ghost" style={{flex:1}} onClick={onClose}>Close</button>
+            {isAdmin&&<button className="btn-primary" style={{flex:1}} onClick={()=>onEdit(fix)}>Edit result</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* result entry form (admin) */
+function ResultForm({fix,result,users,onSave,onClose}){
+  useSheetBack(true,onClose);
+  const squad=users.filter(u=>u.teams.includes(fix.team)&&(fix.team!=="xl"||u.xlEligible)).map(u=>`${u.first} ${u.last}`);
+  const blank={htUs:0,htThem:0,us:0,them:0,goals:[],motm:""};
+  const [r,setR]=useState(result?{...result,goals:result.goals.map(g=>({...g}))}:blank);
+  function setNum(k,v){setR(p=>({...p,[k]:Math.max(0,parseInt(v)||0)}));}
+  function addGoal(){setR(p=>({...p,goals:[...p.goals,{scorer:"",assist:"",minute:""}]}));}
+  function setGoal(i,k,v){setR(p=>({...p,goals:p.goals.map((g,j)=>j===i?{...g,[k]:v}:g)}));}
+  function delGoal(i){setR(p=>({...p,goals:p.goals.filter((_,j)=>j!==i)}));}
+  return(
+    <div className="sheet-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="sheet">
+        <div className="grab"/>
+        <div className="sheet-title" style={{color:"var(--blood-bright)"}}>{result?"Edit result":"Add result"}</div>
+        <div className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginBottom:18}}>{fix.homeAway==="Home"?"v":"@"} {fix.opponent.toUpperCase()} · {fmtDate(fix.date,"poster").toUpperCase()}</div>
+
+        <div className="fl">Full-time score</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+          <div style={{textAlign:"center",flex:1}}><div className="mono" style={{fontSize:11,color:"var(--bone-mute)",marginBottom:5}}>NOTTS</div><input type="number" inputMode="numeric" value={r.us} onChange={e=>setNum("us",e.target.value)} style={{textAlign:"center",fontFamily:"var(--fd)",fontSize:22}}/></div>
+          <span className="disp" style={{fontSize:24,color:"var(--bone-dim)"}}>–</span>
+          <div style={{textAlign:"center",flex:1}}><div className="mono" style={{fontSize:11,color:"var(--bone-mute)",marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fix.opponent.slice(0,10).toUpperCase()}</div><input type="number" inputMode="numeric" value={r.them} onChange={e=>setNum("them",e.target.value)} style={{textAlign:"center",fontFamily:"var(--fd)",fontSize:22}}/></div>
+        </div>
+
+        <div className="fl">Half-time score</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          <input type="number" inputMode="numeric" value={r.htUs} onChange={e=>setNum("htUs",e.target.value)} style={{textAlign:"center"}}/>
+          <span className="disp" style={{fontSize:20,color:"var(--bone-dim)"}}>–</span>
+          <input type="number" inputMode="numeric" value={r.htThem} onChange={e=>setNum("htThem",e.target.value)} style={{textAlign:"center"}}/>
+        </div>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div className="fl" style={{marginBottom:0}}>Our goals</div>
+          <button className="btn-ghost" style={{padding:"7px 13px",fontSize:13}} onClick={addGoal}>+ Add goal</button>
+        </div>
+        {r.goals.length===0&&<div style={{color:"var(--bone-dim)",fontSize:13,marginBottom:14}}>No goals added yet.</div>}
+        {r.goals.map((g,i)=>(
+          <div key={i} className="surface" style={{padding:12,marginBottom:10,background:"var(--ink)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+              <span className="mono" style={{fontSize:11,color:"var(--bone-mute)"}}>GOAL {i+1}</span>
+              <button onClick={()=>delGoal(i)} style={{background:"transparent",color:"var(--blood-bright)",fontSize:12,padding:"3px 8px"}}>Remove</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
+              <input list="squadlist" placeholder="Scorer" value={g.scorer} onChange={e=>setGoal(i,"scorer",e.target.value)}/>
+              <input placeholder="Min" inputMode="numeric" value={g.minute} onChange={e=>setGoal(i,"minute",e.target.value.replace(/[^0-9]/g,""))}/>
+            </div>
+            <input list="squadlist" placeholder="Assist (optional)" value={g.assist} onChange={e=>setGoal(i,"assist",e.target.value)}/>
+          </div>
+        ))}
+
+        <div className="fr" style={{marginTop:8}}><label className="fl">Man of the match</label><input list="squadlist" value={r.motm} onChange={e=>setR(p=>({...p,motm:e.target.value}))} placeholder="Pick or type a name"/></div>
+
+        <datalist id="squadlist">{squad.map(n=><option key={n} value={n}/>)}</datalist>
+
+        <div style={{display:"flex",gap:9,marginTop:8}}><button className="btn-ghost" style={{flex:1}} onClick={onClose}>Cancel</button><button className="btn-primary" style={{flex:1}} onClick={()=>onSave(fix.id,r)}>{result?"Save result":"Save result"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+/* RESULTS PAGE */
+function Results({me,users,fixtures,results,avail,setResults,isAdmin}){
+  const [teamFilter,setTeamFilter]=useState("all");
+  const [centre,setCentre]=useState(null);const [formFix,setFormFix]=useState(null);
+  const today=new Date().toISOString().split("T")[0];
+  function vis(f){if(isAdmin)return true;if(!me.teams.includes(f.team))return false;if(f.team==="xl"&&!me.xlEligible)return false;return true;}
+  const past=fixtures.filter(vis).filter(f=>f.date<today).filter(f=>teamFilter==="all"||f.team===teamFilter).sort((a,b)=>b.date.localeCompare(a.date));
+  const withResult=past.filter(f=>results[String(f.id)]);
+  const awaiting=past.filter(f=>!results[String(f.id)]);
+  const [hero,...rest]=withResult;
+  function saveResult(fid,r){setResults(p=>({...p,[String(fid)]:r}));setFormFix(null);}
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <div className="disp" style={{fontSize:40}}>Results</div>
+        <select style={{width:"auto"}} value={teamFilter} onChange={e=>setTeamFilter(e.target.value)}><option value="all">Both teams</option><option value="xl">XL 11s</option><option value="community">Community</option></select>
+      </div>
+
+      {/* admin: games still needing a result */}
+      {isAdmin&&awaiting.length>0&&(
+        <div style={{marginBottom:24}}>
+          <div className="eyebrow" style={{marginBottom:12}}>Needs a result</div>
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>
+            {awaiting.map(f=>{const t=teamOf(f.team);return(
+              <div key={f.id} className="tap" onClick={()=>setFormFix(f)} style={{display:"flex",borderRadius:14,overflow:"hidden",background:"var(--smoke)",border:"1px dashed var(--line2)"}}>
+                <div style={{width:6,background:t.grad,flexShrink:0}}/>
+                <div style={{padding:"13px 15px",flex:1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><div className="disp" style={{fontSize:22}}>{f.homeAway==="Home"?"v":"@"} {f.opponent}</div><div className="mono" style={{fontSize:11,color:"var(--bone-mute)",marginTop:2}}>{fmtDate(f.date,"poster").toUpperCase()} · {teamOf(f.team).short}</div></div>
+                  <span className="badge b-warn">+ Add result</span>
+                </div>
+              </div>
+            );})}
+          </div>
+        </div>
+      )}
+
+      {withResult.length===0
+        ?<div className="surface" style={{textAlign:"center",padding:40,color:"var(--bone-mute)"}}>No results logged yet.</div>
+        :<>
+          {hero&&<ResultHero fix={hero} result={results[String(hero.id)]} onOpen={f=>setCentre(f)}/>}
+          {rest.length>0&&<div className="eyebrow" style={{marginBottom:12}}>Earlier results</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>{rest.map(f=><ResultStrip key={f.id} fix={f} result={results[String(f.id)]} onOpen={ff=>setCentre(ff)}/>)}</div>
+        </>
+      }
+
+      {centre&&<MatchCentre fix={centre} result={results[String(centre.id)]} me={me} users={users} avail={avail} isAdmin={isAdmin} onClose={()=>setCentre(null)} onEdit={f=>{setCentre(null);setTimeout(()=>setFormFix(f),60);}}/>}
+      {formFix&&<ResultForm fix={formFix} result={results[String(formFix.id)]} users={users} onSave={saveResult} onClose={()=>setFormFix(null)}/>}
+    </div>
+  );
+}
+
+/* ============ STATS ENGINE ============ */
+/* Builds per-player tallies from results, split league vs friendly, filtered by season + team. */
+function buildStats({users,fixtures,results,avail,season,teamFilter}){
+  const fxById={};fixtures.forEach(f=>{fxById[String(f.id)]=f;});
+  // init player rows
+  const rows={};
+  users.forEach(u=>{rows[`${u.first} ${u.last}`]={name:`${u.first} ${u.last}`,id:u.id,active:u.active!==false,
+    apps:{l:0,f:0},goals:{l:0,f:0},assists:{l:0,f:0},motm:{l:0,f:0},w:0,d:0,ls:0,form:[]};});
+  function ensure(name){if(!rows[name])rows[name]={name,id:null,active:true,apps:{l:0,f:0},goals:{l:0,f:0},assists:{l:0,f:0},motm:{l:0,f:0},w:0,d:0,ls:0,form:[]};return rows[name];}
+
+  Object.entries(results).forEach(([fid,r])=>{
+    const fx=fxById[fid];if(!fx)return;
+    if(season&&fx.season!==season)return;
+    if(teamFilter&&teamFilter!=="all"&&fx.team!==teamFilter)return;
+    const isLeague=fx.type==="League";const k=isLeague?"l":"f";
+    const res=r.us>r.them?"W":r.us<r.them?"L":"D";
+    // appearances: anyone marked 'in' for that fixture
+    const fa=avail[fid]||{};
+    users.forEach(u=>{if(fa[String(u.id)]==="in"){const row=ensure(`${u.first} ${u.last}`);row.apps[k]++;if(isLeague){if(res==="W")row.w++;else if(res==="D")row.d++;else row.ls++;row.form.push(res);}}});
+    // goals + assists
+    r.goals.forEach(g=>{if(g.scorer){ensure(g.scorer).goals[k]++;}if(g.assist){ensure(g.assist).assists[k]++;}});
+    // motm
+    if(r.motm){ensure(r.motm).motm[k]++;}
+  });
+  return Object.values(rows);
+}
+const tot=o=>o.l+o.f;
+
+function StatLeader({label,rows,pick,color}){
+  const ranked=[...rows].filter(r=>pick(r)>0).sort((a,b)=>pick(b)-pick(a)).slice(0,5);
+  if(!ranked.length) return null;
+  const top=pick(ranked[0]);
+  return(
+    <div className="surface" style={{padding:16,marginBottom:14}}>
+      <div className="eyebrow" style={{marginBottom:12}}>{label}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {ranked.map((r,i)=>(
+          <div key={r.name} style={{display:"flex",alignItems:"center",gap:12}}>
+            <span className="disp" style={{fontSize:18,width:20,color:i===0?color:"var(--bone-dim)"}}>{i+1}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:15,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+              <div style={{height:5,borderRadius:3,background:"var(--ink)",marginTop:5,overflow:"hidden"}}><div style={{height:"100%",width:`${(pick(r)/top)*100}%`,background:color,borderRadius:3}}/></div>
+            </div>
+            <span className="disp" style={{fontSize:22,color:color}}>{pick(r)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* GOLDEN BOOT — top scorer, with crown, for the bragging rights */
+function GoldenBoot({rows,scopeLabel}){
+  const ranked=[...rows].filter(r=>tot(r.goals)>0).sort((a,b)=>tot(b.goals)-tot(a.goals));
+  if(!ranked.length) return null;
+  const top=ranked[0];const topN=tot(top.goals);
+  const joint=ranked.filter(r=>tot(r.goals)===topN);
+  return(
+    <div style={{position:"relative",borderRadius:18,overflow:"hidden",marginBottom:18,background:"linear-gradient(135deg,#e8b53f 0%,#9a7415 100%)",padding:"18px 18px"}}>
+      <div className="motif"/>
+      <div style={{position:"relative"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div className="eyebrow" style={{color:"rgba(0,0,0,.7)"}}>{scopeLabel} Golden Boot</div>
+          <span style={{fontSize:22}}>👑</span>
+        </div>
+        {joint.length===1
+          ?<div className="disp" style={{fontSize:"clamp(30px,9vw,42px)",color:"#1a1206",lineHeight:.95}}>{top.name}</div>
+          :<div className="disp" style={{fontSize:"clamp(24px,7vw,32px)",color:"#1a1206",lineHeight:1}}>{joint.map(r=>r.name).join(" · ")}</div>
+        }
+        <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:8}}>
+          <span className="disp" style={{fontSize:36,color:"#1a1206"}}>{topN}</span>
+          <span className="mono" style={{fontSize:12,color:"rgba(0,0,0,.7)"}}>GOALS · {top.goals.l}L · {top.goals.f}F{joint.length>1?` · ${joint.length} TIED`:""}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* CLUB STATS PAGE */
+function Stats({users,fixtures,results,avail,season}){
+  const [teamFilter,setTeamFilter]=useState("all");
+  const rows=buildStats({users,fixtures,results,avail,season,teamFilter});
+  const [sortKey,setSortKey]=useState("goals");
+  const sorters={goals:r=>tot(r.goals),assists:r=>tot(r.assists),apps:r=>tot(r.apps),motm:r=>tot(r.motm)};
+  const table=[...rows].filter(r=>tot(r.apps)>0||tot(r.goals)>0||tot(r.assists)>0).sort((a,b)=>sorters[sortKey](b)-sorters[sortKey](a));
+  const scopeLabel=teamFilter==="all"?"Club":teamFilter==="xl"?"XL 11s":"Community";
+  const scopeNote=teamFilter==="all"?"WHOLE CLUB · BOTH TEAMS COMBINED":teamFilter==="xl"?"XL 11S (FIRST TEAM)":"COMMUNITY (RESERVES)";
+
+  return(
+    <div>
+      <div className="disp" style={{fontSize:40,marginBottom:4}}>{teamFilter==="all"?"Club Stats":scopeLabel+" Stats"}</div>
+      <div className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginBottom:16}}>{season} · {scopeNote}</div>
+
+      {/* team cut: Club / XL / Community */}
+      <div style={{display:"flex",gap:5,background:"var(--smoke)",padding:5,borderRadius:13,border:"1px solid var(--line)",marginBottom:20}}>
+        {[["all","Whole Club"],["xl","XL 11s"],["community","Community"]].map(([k,l])=>{
+          const on=teamFilter===k;
+          const col=k==="xl"?"var(--blood-bright)":k==="community"?"var(--forest-bright)":"var(--bone)";
+          return <button key={k} onClick={()=>setTeamFilter(k)} style={{flex:1,padding:"10px 4px",borderRadius:9,background:on?(k==="community"?"var(--forest-bright)":k==="xl"?"var(--blood-bright)":"var(--line2)"):"transparent",color:on?(k==="all"?"var(--bone)":"#fff"):"var(--bone-mute)",fontSize:12.5,fontWeight:700}}>{l}</button>;
+        })}
+      </div>
+
+      {/* golden boot — club one always, per-team when filtered */}
+      <GoldenBoot rows={rows} scopeLabel={scopeLabel}/>
+
+      {/* leaderboards */}
+      <StatLeader label="Top scorers" rows={rows} pick={r=>tot(r.goals)} color="var(--blood-bright)"/>
+      <StatLeader label="Most assists" rows={rows} pick={r=>tot(r.assists)} color="var(--forest-bright)"/>
+      <StatLeader label="Most appearances" rows={rows} pick={r=>tot(r.apps)} color="var(--info)"/>
+      <StatLeader label="Man of the match" rows={rows} pick={r=>tot(r.motm)} color="var(--gold)"/>
+
+      {/* full FM-style table */}
+      <div className="eyebrow" style={{margin:"22px 0 12px"}}>Full squad stats</div>
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {[["goals","Goals"],["assists","Assists"],["apps","Apps"],["motm","MOTM"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setSortKey(k)} className="chip" style={{padding:"7px 13px",...(sortKey===k?{borderColor:"var(--blood-bright)",background:"var(--blood-dim2)",color:"var(--blood-bright)",fontWeight:700}:{})}}>{l}</button>
+        ))}
+      </div>
+      {table.length===0
+        ?<div className="surface" style={{padding:32,textAlign:"center",color:"var(--bone-mute)"}}>No stats yet this season.</div>
+        :<div className="surface" style={{padding:0,overflow:"hidden"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1.6fr repeat(4,1fr)",padding:"11px 14px",borderBottom:"1px solid var(--line)",background:"var(--ink)"}}>
+            {["Player","Apps","Gls","Ast","MOTM"].map((h,i)=><div key={h} className="mono" style={{fontSize:10,color:"var(--bone-dim)",letterSpacing:".06em",textAlign:i===0?"left":"center"}}>{h.toUpperCase()}</div>)}
+          </div>
+          {table.map(r=>(
+            <div key={r.name} style={{display:"grid",gridTemplateColumns:"1.6fr repeat(4,1fr)",padding:"11px 14px",borderBottom:"1px solid var(--line)",alignItems:"center"}}>
+              <div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}{!r.active&&<span className="mono" style={{fontSize:9,color:"var(--bone-dim)",marginLeft:5}}>·INACT</span>}</div></div>
+              {[r.apps,r.goals,r.assists,r.motm].map((v,i)=>(
+                <div key={i} style={{textAlign:"center"}}>
+                  <div className="disp" style={{fontSize:18}}>{tot(v)}</div>
+                  <div className="mono" style={{fontSize:9,color:"var(--bone-dim)"}}>{v.l}L · {v.f}F</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      }
+      <div style={{fontSize:11,color:"var(--bone-dim)",marginTop:12,lineHeight:1.5}}>L = league · F = friendly. Appearances count anyone marked available for a played fixture. Stats build automatically from results.</div>
+    </div>
+  );
+}
+
+/* LEAGUE TABLE PAGE */
+function LeagueTable({tables,setTables,season,isAdmin}){
+  const [teamView,setTeamView]=useState("xl");
+  const [editing,setEditing]=useState(false);
+  const seasonTables=tables[season]||{};
+  const rows=(seasonTables[teamView]||[]).map(r=>({...r,gd:r.gf-r.ga})).sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf);
+  const leagueName=LEAGUES[teamView];
+
+  function setCell(idx,key,val){
+    setTables(p=>{const s={...(p[season]||{})};const arr=[...(s[teamView]||[])];arr[idx]={...arr[idx],[key]:key==="name"?val:(parseInt(val)||0)};s[teamView]=arr;return{...p,[season]:s};});
+  }
+  function addRow(){setTables(p=>{const s={...(p[season]||{})};const arr=[...(s[teamView]||[]),{name:"New team",p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}];s[teamView]=arr;return{...p,[season]:s};});}
+  function delRow(idx){setTables(p=>{const s={...(p[season]||{})};const arr=(s[teamView]||[]).filter((_,j)=>j!==idx);s[teamView]=arr;return{...p,[season]:s};});}
+
+  return(
+    <div>
+      <div className="disp" style={{fontSize:40,marginBottom:4}}>League Table</div>
+      <div className="mono" style={{fontSize:12,color:"var(--bone-mute)",marginBottom:16}}>{season} · {leagueName.toUpperCase()}</div>
+      <div style={{display:"flex",gap:5,background:"var(--smoke)",padding:5,borderRadius:13,border:"1px solid var(--line)",marginBottom:18}}>
+        {Object.values(TEAMS).map(t=>(<button key={t.id} onClick={()=>setTeamView(t.id)} style={{flex:1,padding:"10px",borderRadius:9,background:teamView===t.id?t.c:"transparent",color:teamView===t.id?"#fff":"var(--bone-mute)",fontSize:13,fontWeight:700}}>{t.label}</button>))}
+      </div>
+
+      {isAdmin&&(
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          <button className="btn-ghost" style={{flex:1}} onClick={()=>setEditing(e=>!e)}>{editing?"Done editing":"Edit table"}</button>
+          {editing&&<button className="btn-ghost" onClick={addRow}>+ Row</button>}
+        </div>
+      )}
+
+      {rows.length===0
+        ?<div className="surface" style={{padding:32,textAlign:"center",color:"var(--bone-mute)"}}>No table for this team yet. {isAdmin&&"Tap Edit table to add it."}</div>
+        :<div className="surface" style={{padding:0,overflow:"hidden",overflowX:"auto"}}>
+          <div style={{minWidth:editing?560:340}}>
+            <div style={{display:"grid",gridTemplateColumns:editing?"24px 2fr repeat(7,1fr) 30px":"24px 2fr repeat(4,1fr)",padding:"10px 12px",borderBottom:"1px solid var(--line)",background:"var(--ink)",gap:4}}>
+              {(editing?["#","Team","P","W","D","L","GF","GA","Pts",""]:["#","Team","P","GD","Pts","Form"]).map((h,i)=><div key={i} className="mono" style={{fontSize:10,color:"var(--bone-dim)",textAlign:i<2?"left":"center"}}>{h}</div>)}
+            </div>
+            {rows.map((r,i)=>{
+              const us=r.name.toLowerCase().includes("nottingham");
+              if(editing){
+                const realIdx=(seasonTables[teamView]||[]).findIndex(x=>x.name===r.name);
+                return(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"24px 2fr repeat(7,1fr) 30px",padding:"7px 12px",borderBottom:"1px solid var(--line)",gap:4,alignItems:"center"}}>
+                    <div className="mono" style={{fontSize:12,color:"var(--bone-dim)"}}>{i+1}</div>
+                    <input value={r.name} onChange={e=>setCell(realIdx,"name",e.target.value)} style={{padding:"6px 8px",fontSize:13}}/>
+                    {["p","w","d","l","gf","ga","pts"].map(k=><input key={k} type="number" inputMode="numeric" value={r[k]} onChange={e=>setCell(realIdx,k,e.target.value)} style={{padding:"6px 4px",fontSize:13,textAlign:"center"}}/>)}
+                    <button onClick={()=>delRow(realIdx)} style={{background:"transparent",color:"var(--blood-bright)",fontSize:16,padding:0}}>×</button>
+                  </div>
+                );
+              }
+              return(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"24px 2fr repeat(4,1fr)",padding:"11px 12px",borderBottom:"1px solid var(--line)",gap:4,alignItems:"center",background:us?"var(--blood-dim)":"transparent"}}>
+                  <div className="disp" style={{fontSize:16,color:i<3?"var(--forest-bright)":"var(--bone-mute)"}}>{i+1}</div>
+                  <div style={{fontSize:14,fontWeight:us?700:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:us?"var(--blood-bright)":"var(--bone)"}}>{r.name}</div>
+                  <div className="mono" style={{fontSize:13,textAlign:"center",color:"var(--bone-mute)"}}>{r.p}</div>
+                  <div className="mono" style={{fontSize:13,textAlign:"center",color:"var(--bone-mute)"}}>{r.gd>0?"+":""}{r.gd}</div>
+                  <div className="disp" style={{fontSize:18,textAlign:"center"}}>{r.pts}</div>
+                  <div style={{textAlign:"center"}}><span className="mono" style={{fontSize:10,color:"var(--bone-dim)"}}>{r.w}-{r.d}-{r.l}</span></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      }
+      <div style={{fontSize:11,color:"var(--bone-dim)",marginTop:12,lineHeight:1.5}}>Table is kept up to date by an admin from the league's own standings. {isAdmin?"Scroll the edit grid sideways for all columns.":""}</div>
+    </div>
+  );
+}
+
+/* CLUB PAGE — combines stats + table under one tab */
+function Club({users,fixtures,results,avail,tables,setTables,season,isAdmin}){
+  const [sub,setSub]=useState("table");
+  return(
+    <div>
+      <div style={{display:"flex",gap:5,background:"var(--smoke)",padding:5,borderRadius:13,border:"1px solid var(--line)",marginBottom:22}}>
+        {[["table","League Table"],["stats","Club Stats"]].map(([k,l])=>(<button key={k} onClick={()=>setSub(k)} style={{flex:1,padding:"11px",borderRadius:9,background:sub===k?"var(--blood-bright)":"transparent",color:sub===k?"#fff":"var(--bone-mute)",fontSize:13,fontWeight:700}}>{l}</button>))}
+      </div>
+      {sub==="table"
+        ?<LeagueTable tables={tables} setTables={setTables} season={season} isAdmin={isAdmin}/>
+        :<Stats users={users} fixtures={fixtures} results={results} avail={avail} season={season}/>}
+    </div>
+  );
+}
+
+/* ROOT */
+function App(){
+  const [users,setUsers]=useState(SEED_USERS);const [fixtures,setFixtures]=useState(SEED_FIXTURES);const [avail,setAvail]=useState(SEED_AVAIL);const [results,setResults]=useState(SEED_RESULTS);const [tables,setTables]=useState(SEED_TABLES);
+  const [season,setSeason]=useState(CURRENT_SEASON);
+  const [meId,setMeId]=useState(null);const [tab,setTab]=useState("fixtures");const [availDetail,setAvailDetail]=useState(null);
+  const me=users.find(u=>u.id===meId)||null;const isAdmin=me?.role==="admin";
+  if(!me)return <Auth users={users} setUsers={setUsers} onLogin={u=>{setMeId(u.id);setTab("fixtures");}}/>;
+  // fixtures filtered to selected season for the content pages
+  const seasonFixtures=fixtures.filter(f=>(f.season||CURRENT_SEASON)===season);
+  const resultsTab={id:"results",l:"Results",i:"M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"};
+  const clubTab={id:"club",l:"Club",i:"M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 12v.01M9 15v.01"};
+  const TABS=isAdmin
+    ?[{id:"fixtures",l:"Fixtures",i:"M4 5h16M4 12h16M4 19h10"},resultsTab,clubTab,{id:"availability",l:"Who's In",i:"M5 13l4 4L19 7"},{id:"players",l:"Players",i:"M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 100-8 4 4 0 000 8z"},{id:"profile",l:"You",i:"M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"}]
+    :[{id:"fixtures",l:"Fixtures",i:"M4 5h16M4 12h16M4 19h10"},resultsTab,clubTab,{id:"profile",l:"You",i:"M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"}];
+  return(
+    <div style={{minHeight:"100vh",paddingBottom:"calc(96px + var(--safe-b))"}}>
+      <div className="grain"/>
+      <header style={{background:"rgba(12,15,13,.85)",backdropFilter:"blur(12px)",borderBottom:"1px solid var(--line)",position:"sticky",top:0,zIndex:100,paddingTop:"var(--safe-t)"}}>
+        <div style={{maxWidth:780,margin:"0 auto",padding:"0 18px",display:"flex",alignItems:"center",height:58,gap:10}}>
+          <Crest size={34}/>
+          <div className="disp" style={{fontSize:20,flex:1}}>Notts MvF</div>
+          <select value={season} onChange={e=>setSeason(e.target.value)} style={{width:"auto",padding:"7px 10px",fontSize:13,background:"var(--smoke)"}}>{SEASONS.map(s=><option key={s}>{s}</option>)}</select>
+          <button className="btn-ghost" style={{fontSize:12,padding:"8px 12px"}} onClick={()=>{if(confirm("Sign out?"))setMeId(null);}}>Out</button>
+        </div>
+      </header>
+      <main style={{maxWidth:780,margin:"0 auto",padding:"22px 18px"}}>
+        {tab==="fixtures"&&<Fixtures me={me} users={users} fixtures={seasonFixtures} setFixtures={setFixtures} avail={avail} setAvail={setAvail} isAdmin={isAdmin} season={season}/>}
+        {tab==="results"&&<Results me={me} users={users} fixtures={seasonFixtures} results={results} avail={avail} setResults={setResults} isAdmin={isAdmin}/>}
+        {tab==="club"&&<Club users={users} fixtures={fixtures} results={results} avail={avail} tables={tables} setTables={setTables} season={season} isAdmin={isAdmin}/>}
+        {tab==="availability"&&isAdmin&&<AdminAvail users={users} fixtures={seasonFixtures} avail={avail} onOpen={f=>setAvailDetail(f)}/>}
+        {tab==="players"&&isAdmin&&<AdminPlayers me={me} users={users} setUsers={setUsers}/>}
+        {tab==="profile"&&<Profile me={me} setUsers={setUsers}/>}
+      </main>
+      {availDetail&&<FixtureDetail fix={availDetail} me={me} users={users} avail={avail} setAvail={setAvail} isAdmin={isAdmin} onClose={()=>setAvailDetail(null)} onEdit={()=>setAvailDetail(null)}/>}
+      <nav style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(12,15,13,.92)",backdropFilter:"blur(12px)",borderTop:"1px solid var(--line)",zIndex:100,paddingBottom:"var(--safe-b)"}}>
+        <div style={{maxWidth:780,margin:"0 auto",display:"flex"}}>
+          {TABS.map(t=>{const on=tab===t.id;return(<button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,minWidth:0,background:"transparent",border:"none",padding:"11px 2px",display:"flex",flexDirection:"column",alignItems:"center",gap:4,color:on?"var(--blood-bright)":"var(--bone-dim)"}}>
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.i}/></svg>
+            <span className="mono" style={{fontSize:9.5,fontWeight:on?700:500,letterSpacing:".02em",whiteSpace:"nowrap"}}>{t.l}</span>
+          </button>);})}
+        </div>
+      </nav>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

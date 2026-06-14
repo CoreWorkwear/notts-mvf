@@ -1,0 +1,22 @@
+# Secrets — never commit. RLS is the security; the anon key is safe to ship,
+# but the service_role key and the db password must never leave your machine.
+.env
+.env.local
+.env.*.local
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
