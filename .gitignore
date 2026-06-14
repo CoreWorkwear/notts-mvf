@@ -4,6 +4,9 @@
 .env.local
 .env.*.local
 
+# Holds a Supabase personal access token (write-scoped) — must never commit.
+.mcp.json
+
 # Node / Vite
 node_modules/
 dist/

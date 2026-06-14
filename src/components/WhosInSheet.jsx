@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
-// list — the XI filling up, a big count, and a one-tap chase for the lads who
+// list — the XI filling up, a big count, and a one-tap chase for the players who
 // haven't replied. Chase = a plain WhatsApp-ready message to copy (push lands
 // at the notifications step; AI drafting is post-MVP).
 export default function WhosInSheet({ open, onClose, fixture }) {
@@ -60,7 +60,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     const them = f.opponent?.name
     const matchup = f.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
     const msg =
-      `Oi lads 👊 ${matchup} — ${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO at ${f.venue}.\n` +
+      `Players 👊 ${matchup} — ${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO at ${f.venue}.\n` +
       `Still waiting on: ${names}.\nYou in? Give us a shout.`
     try {
       await navigator.clipboard.writeText(msg)

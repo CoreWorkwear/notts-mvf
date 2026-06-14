@@ -3,7 +3,7 @@ import Crest from './Crest'
 import { fmtDateLong, fmtKO, relativeWhen } from '../lib/format'
 
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
-// Player: in/maybe/out inline, the lead. Gaffer: squad state leads, tappable
+// Player: in/maybe/out inline, the lead. Manager: squad state leads, tappable
 // to who's-in; their own in/out is still there but secondary.
 export default function FixtureHero({ fixture, isAdmin, onSetAvail, onOpenWhosIn, onEdit }) {
   const f = fixture

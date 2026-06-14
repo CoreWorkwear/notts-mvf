@@ -7,7 +7,7 @@ export default function Players() {
       <h1 className="display mt-2" style={{ fontSize: 30 }}>Players</h1>
       <div className="empty mt-5">
         <p className="empty-title">Squad management's on the way</p>
-        <p>Add lads, edit records, sign off XL, reset passwords — all landing here.</p>
+        <p>Add players, edit records, sign off XL, reset passwords — all landing here.</p>
       </div>
     </div>
   )

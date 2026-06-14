@@ -8,7 +8,7 @@ The real, multi-user, deployable team-management app for **Nottinghamshire MvF**
 
 `Docs/` is the source of truth and the spec — read it before building. On any conflict: **HANDOVER.md** leads on data/security/scope and holds the numbered build order (§8); **UX-AND-IA.md** leads on layout/flow; **DESIGN-SYSTEM.md** leads on look (tokens, fonts, palette); **GLOSSARY.md** locks the domain terms; **PERSONAS-AND-STORIES.md** holds the "done when…" acceptance criteria. `Docs/notts-mvf.html` is the original clickable prototype — a behaviour/copy reference only (its fonts/palette are superseded by DESIGN-SYSTEM, and its in-memory state/fake auth/placeholder crest are ignored).
 
-**British football vernacular throughout — never Americanised** (fixtures/results, pitch, kit, the lads, gaffer, nil; never soccer/field/schedule/roster). This is a hard rule for all UI copy, empty states, and notifications.
+**British football vernacular throughout — never Americanised** (fixtures/results, pitch, kit, nil; never soccer/field/schedule/roster). This is a hard rule for all UI copy, empty states, and notifications. **Club preference (overrides the older GLOSSARY wording): use "Manager" not "Gaffer", and "players" not "the lads".**
 
 ## Commands
 
@@ -38,7 +38,7 @@ The anon key ships in the client (`.env` → `VITE_SUPABASE_*`); every rule is e
 
 ### Frontend
 - Provider order (in `src/main.jsx`) matters: `ErrorBoundary > ThemeProvider > AuthProvider > SeasonProvider > App`. Season queries depend on Auth; the season scopes most data fetches.
-- **Fixtures is the landing/action surface for everyone** (no Home tab). The next-game hero is persona-tuned: player = one-tap in/maybe/out inline; gaffer = squad-state. Nav is role-gated (admins also get Who's In + Players).
+- **Fixtures is the landing/action surface for everyone** (no Home tab). The next-game hero is persona-tuned: player = one-tap in/maybe/out inline; manager = squad-state. Nav is role-gated (admins also get Who's In + Players).
 - **Design tokens are the single source of truth** in `src/styles/tokens.css`: dark is default, `[data-theme="light"]` is the on-brand alternate, brand red (XL) / green (Community). Reference CSS vars (`var(--red)`, `var(--coal)`, etc.) — don't hardcode or re-derive colours per component.
 - Data hooks `src/hooks/useFixtures.js` and `useResults.js` do the season-scoped fetches and enrich rows; first-cut "realtime" is refetch-on-focus.
 

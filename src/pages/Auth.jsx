@@ -128,7 +128,7 @@ export default function Auth() {
                   >{TEAMS[k].label}</button>
                 ))}
               </div>
-              <span className="dim" style={{ fontSize: 12 }}>New lads land in the squad as a player — the gaffer signs you off for XL.</span>
+              <span className="dim" style={{ fontSize: 12 }}>You'll join as a player — the manager signs you off for XL.</span>
             </div>
 
             <div className="field">

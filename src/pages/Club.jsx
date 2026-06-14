@@ -15,7 +15,7 @@ export default function Club() {
       {view === 'table' ? (
         <div className="empty mt-5">
           <p className="empty-title">Table's empty</p>
-          <p>The gaffer keeps this current from the league's own source. Nothing in it yet.</p>
+          <p>The manager keeps this current from the league's own source. Nothing in it yet.</p>
         </div>
       ) : (
         <div className="empty mt-5">

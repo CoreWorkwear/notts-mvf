@@ -90,7 +90,7 @@ export function useFixtures(seasonId) {
 
   // A fixture stays in Fixtures until kickoff + 4h (London). A logged result
   // moves it to Results immediately. "past" here = concluded scheduled games
-  // still awaiting a result (drives the gaffer's "needs doing" strip).
+  // still awaiting a result (drives the manager's "needs doing" strip).
   const upcoming = fixtures.filter((f) => !f.concluded && !f.hasResult)
   const past = fixtures.filter((f) => f.concluded && !f.hasResult && !f.postponed)
 

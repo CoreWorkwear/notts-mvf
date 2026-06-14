@@ -21,7 +21,7 @@ export default function Profile() {
           </span>
         ))}
         {xlEligible && <span className="chip" aria-pressed="true">XL eligible</span>}
-        {isAdmin && <span className="chip" aria-pressed="true">Gaffer</span>}
+        {isAdmin && <span className="chip" aria-pressed="true">Manager</span>}
       </div>
 
       <div className="card mt-5" style={{ padding: 16 }}>
@@ -31,7 +31,7 @@ export default function Profile() {
         <Row label="Preferred" value={profile.preferred || '—'} last />
       </div>
       <p className="dim mt-3" style={{ fontSize: 12 }}>
-        Editing your details lands soon. Email is your login — the gaffer changes that.
+        Editing your details lands soon. Email is your login — the manager changes that.
       </p>
     </div>
   )

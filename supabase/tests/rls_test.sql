@@ -129,19 +129,39 @@ reset role;
 select set_config('request.jwt.claims',
   '{"sub":"a0000002-0000-0000-0000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
+-- Assert on the SPECIFIC seeded fixtures, not on a total count — the live DB
+-- may already hold other Community fixtures this lad can legitimately see.
+-- We ALSO print the exact list of fixtures RLS lets him receive, so you can
+-- read it with your own eyes and confirm the seeded XL game is not in it.
 do $$
-declare n int; xl_visible boolean;
+declare xl_visible boolean; comm_visible boolean; r record;
 begin
-  select count(*) into n from fixtures;
+  raise notice '----- Fixtures the Community-only lad can actually SEE -----';
+  for r in
+    select f.id, t.key as team_key, t.label as team_label, o.name as opponent, f.match_date
+    from fixtures f
+    join teams t on t.id = f.team_id
+    join opponents o on o.id = f.opponent_id
+    order by f.match_date, t.label
+  loop
+    raise notice '  VISIBLE -> % v %   [team=% | id=%]', r.team_label, r.opponent, r.team_key, r.id;
+  end loop;
+  raise notice '-----------------------------------------------------------';
+
   select exists(select 1 from fixtures
                 where id = 'c0000001-0000-0000-0000-000000000001') into xl_visible;
+  select exists(select 1 from fixtures
+                where id = 'c0000002-0000-0000-0000-000000000002') into comm_visible;
+  raise notice 'Seeded XL fixture  (XL 11s v Carlton Town, id c0000001...) visible to him? %', xl_visible;
+  raise notice 'Seeded Community   (Community v Carlton Town, id c0000002...) visible to him? %', comm_visible;
+
   if xl_visible then
     raise exception 'TEST 2 FAIL: Community-only lad can SEE the XL fixture';
   end if;
-  if n <> 1 then
-    raise exception 'TEST 2 FAIL: Community-only lad sees % fixtures, expected 1', n;
+  if not comm_visible then
+    raise exception 'TEST 2 FAIL: Community-only lad cannot see his own Community fixture';
   end if;
-  raise notice 'TEST 2 PASS: Community-only lad sees only the Community fixture (XL invisible)';
+  raise notice 'TEST 2 PASS: XL fixture named above and ABSENT from his visible list; Community fixture present';
 end $$;
 
 -- ----------------------------------------------------------------------------
@@ -192,16 +212,19 @@ select set_config('request.jwt.claims',
   '{"sub":"a0000003-0000-0000-0000-000000000003","role":"authenticated"}', true);
 set local role authenticated;
 do $$
-declare n int;
+declare xl_visible boolean; comm_visible boolean;
 begin
-  select count(*) into n from fixtures;
-  if n <> 2 then
-    raise exception 'TEST 5 FAIL: eligible XL lad sees % fixtures, expected 2', n;
+  select exists(select 1 from fixtures
+                where id = 'c0000001-0000-0000-0000-000000000001') into xl_visible;
+  select exists(select 1 from fixtures
+                where id = 'c0000002-0000-0000-0000-000000000002') into comm_visible;
+  if not (xl_visible and comm_visible) then
+    raise exception 'TEST 5 FAIL: eligible XL lad cannot see both fixtures (xl=%, comm=%)', xl_visible, comm_visible;
   end if;
   insert into availability (fixture_id, profile_id, status)
   values ('c0000001-0000-0000-0000-000000000001',
           'a0000003-0000-0000-0000-000000000003', 'in');
-  raise notice 'TEST 5 PASS: eligible XL lad sees both fixtures and marked himself in for the XL game';
+  raise notice 'TEST 5 PASS: eligible XL lad sees both seeded fixtures and marked himself in for the XL game';
 end $$;
 
 -- ----------------------------------------------------------------------------

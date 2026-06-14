@@ -69,7 +69,7 @@ export default function Fixtures() {
     <div className="page">
       <div className="row spread" style={{ alignItems: 'flex-end' }}>
         <div>
-          <p className="kicker"><span className="kicker-rule">{isAdmin ? 'THE GAFFER' : 'NEXT UP'}</span></p>
+          <p className="kicker"><span className="kicker-rule">{isAdmin ? 'THE MANAGER' : 'NEXT UP'}</span></p>
           <h1 className="display mt-2" style={{ fontSize: 28 }}>
             {isAdmin ? 'Run the day' : `Alright${profile?.first_name ? ', ' + profile.first_name : ''}`}
           </h1>
@@ -101,7 +101,7 @@ export default function Fixtures() {
       ) : filtered.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">Nothing in the diary yet</p>
-          <p>Season's coming. {isAdmin ? 'Add the first fixture and the lads can mark themselves in.' : 'First fixture lands here when the gaffer sets it.'}</p>
+          <p>Season's coming. {isAdmin ? 'Add the first fixture and the players can mark themselves in.' : 'First fixture lands here when the manager sets it.'}</p>
         </div>
       ) : (
         <>

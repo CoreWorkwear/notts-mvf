@@ -13,7 +13,7 @@ Companion to HANDOVER.md. Locks the club's terms and the language rules so the b
 
 ## Roles & permissions
 
-- **Gaffer / Admin** — manages everything. "Gaffer" in player-facing copy, "Admin" in UI labels. Created only by other admins.
+- **Manager / Admin** — manages everything. "Manager" in player-facing copy, "Admin" in UI labels. Created only by other admins. (Club preference, set 2026-06: use **Manager**, not "Gaffer".)
 - **Player** — default role. Sets own availability, edits own profile.
 - **XL eligibility** — a flag that lets a player see and respond to **XL 11s** fixtures. Granted by an admin, never self-claimed. Without it, XL games are invisible to that player.
 - **Active / Inactive** — inactive players (left the club, etc.) drop off squad lists but stay on past results. Never hard-deleted.
@@ -29,7 +29,7 @@ Companion to HANDOVER.md. Locks the club's terms and the language rules so the b
 - **Availability** — In / Maybe / Can't make it. Who's marked "in" is "who's in".
 - **MOTM** — man of the match.
 - **Golden Boot** — top scorer (club-wide or per team).
-- **The squad / the lads** — the players. Friendly, informal.
+- **The squad / the players** — the players. Friendly, informal. (Club preference, set 2026-06: use **players**, not "lads".)
 - **Pitch** — where it's played (never "field"). 3G/4G artificial.
 - **Kit** — the strip (never "uniform" / "jersey").
 
@@ -42,10 +42,10 @@ Companion to HANDOVER.md. Locks the club's terms and the language rules so the b
 | football | soccer |
 | pitch | field |
 | fixtures / results | schedule |
-| squad / the lads | roster |
+| squad / players | roster, the lads |
 | kit | uniform, jersey |
 | boots | cleats |
-| gaffer / manager | coach |
+| manager | coach, gaffer |
 | nil (spoken scores) | zero |
 | match / game | matchup |
 | table | standings (US sense) |
