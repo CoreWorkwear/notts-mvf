@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildStats } from '../lib/stats'
+import { firstRow } from '../lib/embed'
 
 // Loads everything the Club tab needs for a season: the manual league tables,
 // the teams, and the derived stats (golden boot / leaderboards / squad table).
@@ -38,7 +39,7 @@ export function useClub(seasonId) {
       id: f.id,
       fixture_type: f.fixture_type,
       team: f.team,
-      result: Array.isArray(f.result) ? f.result[0] : f.result,
+      result: firstRow(f.result),
       goals: f.goals ?? [],
     }))
     const playedSet = new Set(played.map((f) => f.id))

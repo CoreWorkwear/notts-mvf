@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
+import { firstRow } from '../lib/embed'
 
 // Loads everything the Fixtures screen needs for a season. RLS does the
 // eligibility gate for us: a non-eligible player simply never receives XL
@@ -67,7 +68,7 @@ export function useFixtures(seasonId) {
         replied,
         noReply: Math.max(0, rosterSize - replied),
         rosterSize,
-        hasResult: (f.results ?? []).length > 0,
+        hasResult: !!firstRow(f.results),
         postponed: f.status === 'postponed',
         concluded: fixtureConcluded(f.match_date, f.kickoff),
       }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fixtureConcluded } from '../lib/format'
+import { firstRow } from '../lib/embed'
 
 // Results data for a season. We resolve scorer/assist/MOTM display names from
 // the squad map client-side (keyed by profile_id, free-typed name as fallback)
@@ -40,7 +41,7 @@ export function useResults(seasonId) {
 
     const all = (fixRes.data ?? []).map((f) => ({
       ...f,
-      result: (f.result ?? [])[0] ?? null,
+      result: firstRow(f.result),
       goals: (f.goals ?? []).slice().sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999)),
       squadById,
     }))
