@@ -1,0 +1,91 @@
+import { StrictMode, useState } from 'react'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { render, screen, act, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import Sheet from './Sheet'
+import FixtureForm from './FixtureForm'
+
+const { calls } = vi.hoisted(() => ({ calls: [] }))
+vi.mock('../lib/supabase', () => {
+  const make = (table) => ({
+    insert: (...a) => {
+      calls.push(['insert', table, ...a])
+      const p = Promise.resolve({ data: { id: 'new-opp' }, error: null })
+      p.select = () => ({ single: () => Promise.resolve({ data: { id: 'new-opp' }, error: null }) })
+      return p
+    },
+    update: (...a) => { calls.push(['update', table, ...a]); return { eq: () => Promise.resolve({ error: null }) } },
+    delete: () => ({ eq: (...a) => { calls.push(['delete', table, ...a]); return Promise.resolve({ error: null }) } }),
+  })
+  return { supabase: { from: (t) => make(t) } }
+})
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ profile: { club_id: 'club-1' } }) }))
+
+const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 60)) })
+
+const TEAMS = [
+  { id: 't-xl', key: 'xl', label: 'XL 11s', colour: '#E11D2A', is_first_team: true, league_name: 'MvF XL National League' },
+  { id: 't-co', key: 'community', label: 'Community', colour: '#2FA84F', is_first_team: false, league_name: 'MvF Community League' },
+]
+const OPPONENTS = [{ id: 'opp-1', name: 'Long Eaton' }]
+const EXISTING = {
+  id: 'fix-9', team_id: 't-xl', opponent_id: 'opp-1', match_date: '2026-03-08',
+  kickoff: '13:00:00', home_away: 'Home', fixture_type: 'League', venue: 'Forest Rec 3G',
+  address: null, w3w: null, league_name: 'MvF XL National League',
+}
+
+// Mirrors Fixtures.jsx: detail sheet open, then a button closes it and opens
+// the fixture form in the same handler (the onEdit / add transition).
+function Harness({ fixture = null }) {
+  const [detailOpen, setDetailOpen] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
+  return (
+    <>
+      <Sheet open={detailOpen} onClose={() => setDetailOpen(false)}>
+        <div>FIXTURE DETAIL</div>
+        <button onClick={() => { setDetailOpen(false); setFormOpen(true) }}>Open form</button>
+      </Sheet>
+      <FixtureForm
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSaved={() => {}}
+        teams={TEAMS}
+        opponents={OPPONENTS}
+        seasonId="season-1"
+        fixture={fixture}
+      />
+    </>
+  )
+}
+
+beforeEach(() => { calls.length = 0 })
+
+describe('FixtureForm — shares the sheet/back mechanism', () => {
+  test('ADD: opens from a transition, STAYS open, saves a new fixture', async () => {
+    render(<StrictMode><Harness /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    expect(screen.getByText('NEW FIXTURE')).toBeInTheDocument() // didn't snap shut
+
+    await userEvent.type(screen.getByPlaceholderText('New opponent name'), 'Carlton Town')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec 3G')
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+
+    await waitFor(() => expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeTruthy())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins[2]).toMatchObject({ venue: 'Forest Rec 3G', season_id: 'season-1', team_id: 't-xl', opponent_id: 'new-opp' })
+  })
+
+  test('EDIT: opens from a transition, STAYS open, prefilled with the fixture', async () => {
+    render(<StrictMode><Harness fixture={EXISTING} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    expect(screen.getByText('EDIT FIXTURE')).toBeInTheDocument() // didn't snap shut
+    expect(screen.getByDisplayValue('Forest Rec 3G')).toBeInTheDocument() // prefilled
+
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => expect(calls.find((c) => c[0] === 'update' && c[1] === 'fixtures')).toBeTruthy())
+  })
+})
