@@ -21,6 +21,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Set theme before paint to avoid a flash of the wrong theme. Dark default. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('theme') || 'dark'
+          document.documentElement.dataset.theme = t
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', t === 'light' ? '#F3F1EC' : '#0c0f0d')
+        } catch (e) {}
+      })()
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

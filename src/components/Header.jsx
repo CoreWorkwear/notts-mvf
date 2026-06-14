@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Crest from './Crest'
 import { IconLogout } from './Icons'
+import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 
@@ -28,6 +29,8 @@ export default function Header() {
           ))}
         </select>
       )}
+
+      <ThemeToggle />
 
       <button
         className="nav-item"

@@ -2,16 +2,22 @@
    Notts MvF — design tokens + base
    Single source of truth (DESIGN-SYSTEM.md). Don't re-derive colours per
    component. Dark-first, charcoal base + red (XL/first team) & green
-   (Community/reserves) as the only two accents.
+   (Community/reserves) as the only two accents. Light theme is an on-brand
+   alternate under [data-theme="light"]; dark is the default.
    ============================================================================ */
 
 :root {
-  /* BASE — near-black charcoal, faint cool/green undertone */
+  /* BASE — near-black charcoal, faint cool/green undertone (DARK = default) */
   --ink:      #0c0f0d;   /* app background */
   --coal:     #141815;   /* raised surface / cards */
   --slate:    #1c211e;   /* higher surface / inputs / muted badge bg */
   --line:     #2a2f2b;   /* borders, dividers */
   --line-2:   #3a423c;   /* hover/active borders, grab handles */
+
+  /* Themed surfaces that swap (translucent header/nav, modal scrim, shadow) */
+  --glass:     rgba(12,15,13,.72);
+  --scrim:     rgba(0,0,0,.55);
+  --card-shadow: 0 8px 24px -16px rgba(0,0,0,.8);
 
   /* XL 11s — FIRST TEAM — red, the lead accent */
   --red:        #E11D2A;
@@ -64,6 +70,28 @@
   --maxw: 780px;
 }
 
+/* LIGHT THEME — on-brand alternate. Warm off-white base, charcoal text; the
+   red/green brand accents and gradients are unchanged so identity holds. */
+[data-theme="light"] {
+  --ink:      #F3F1EC;   /* app background — warm off-white */
+  --coal:     #FFFFFF;   /* cards */
+  --slate:    #EBE8E1;   /* inputs / muted badge bg */
+  --line:     #DEDAD1;
+  --line-2:   #C7C2B7;
+
+  --bone:      #181C19;  /* primary text — charcoal */
+  --bone-mute: #59615A;  /* secondary */
+  --bone-dim:  #8A918A;  /* tertiary / placeholders */
+
+  --red-dim:    rgba(225,29,42,0.12);
+  --green-dim:  rgba(47,168,79,0.12);
+  --amber-dim:  rgba(245,166,35,0.16);
+
+  --glass:     rgba(243,241,236,.72);
+  --scrim:     rgba(20,18,15,.4);
+  --card-shadow: 0 6px 18px -14px rgba(0,0,0,.22);
+}
+
 /* Reset ------------------------------------------------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; }
@@ -114,6 +142,7 @@ input, select, textarea { font-family: inherit; }
   opacity: .04;
   mix-blend-mode: soft-light;
 }
+[data-theme="light"] .grain { opacity: .025; mix-blend-mode: multiply; }
 
 /* Buttons ----------------------------------------------------------------- */
 .btn {
@@ -169,7 +198,7 @@ input, select, textarea { font-family: inherit; }
   background: var(--coal);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
-  box-shadow: 0 8px 24px -16px rgba(0,0,0,.8);
+  box-shadow: var(--card-shadow);
 }
 .spine { position: relative; overflow: hidden; }
 .spine::before {
@@ -184,7 +213,7 @@ input, select, textarea { font-family: inherit; }
   height: calc(58px + var(--safe-t)); padding-top: var(--safe-t);
   display: flex; align-items: center; gap: 12px;
   padding-inline: 18px;
-  background: rgba(12,15,13,.72);
+  background: var(--glass);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
@@ -196,7 +225,7 @@ input, select, textarea { font-family: inherit; }
   max-width: var(--maxw); margin: 0 auto;
   display: flex; justify-content: space-around;
   padding: 8px 6px calc(8px + var(--safe-b));
-  background: rgba(12,15,13,.82);
+  background: var(--glass);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--line);
 }
@@ -213,7 +242,7 @@ input, select, textarea { font-family: inherit; }
 /* Bottom sheet ------------------------------------------------------------ */
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 100;
-  background: rgba(0,0,0,.55);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
   display: flex; align-items: flex-end; justify-content: center;
   animation: fade var(--t-fast);
