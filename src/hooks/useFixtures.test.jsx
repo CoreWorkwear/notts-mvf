@@ -40,4 +40,30 @@ describe('useFixtures — one-to-one results embed', () => {
     expect(f).toBeTruthy()
     expect(f.hasResult).toBe(true)
   })
+
+  test('an XL game\'s roster/no-reply excludes non-eligible and inactive members', async () => {
+    store.tables = {
+      fixtures: [{
+        id: 'xl-1', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
+        fixture_type: 'League', league_name: null, venue: 'X', address: null, w3w: null,
+        season_id: 's1', team_id: 't-xl',
+        team: { id: 't-xl', key: 'xl', label: 'XL 11s', colour: '#E11D2A', is_first_team: true },
+        opponent: { id: 'o1', name: 'Carlton Town', badge_url: null },
+        availability: [], results: null,
+      }],
+      teams: [{ id: 't-xl', key: 'xl', label: 'XL 11s', colour: '#E11D2A', is_first_team: true, league_name: null }],
+      opponents: [],
+      team_memberships: [
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'a', active: true, xl_eligible: true } },   // counts
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'b', active: true, xl_eligible: false } },  // not eligible
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'c', active: false, xl_eligible: true } },  // inactive
+      ],
+    }
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const f = result.current.fixtures.find((x) => x.id === 'xl-1')
+    expect(f.rosterSize).toBe(1)
+    expect(f.noReply).toBe(1)
+  })
 })

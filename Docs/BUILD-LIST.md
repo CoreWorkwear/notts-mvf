@@ -35,6 +35,44 @@ The club's Instagram look (NEXT UP / FULL TIME poster graphics) is the visual ta
 
 ---
 
+## A2. Opponents admin panel (NEW — agreed this session)
+
+The `opponents` table already exists in the schema (a badge attaches to the opponent, not each fixture — set Carlton once, every Carlton game reuses it). What's missing is the admin *screen* to manage it, the same shape as the Players admin. So this is a CRUD screen over an existing table plus the badge upload, not new architecture.
+
+**What it does**
+- List all opponents the club knows: ones pre-loaded for the current league, ones we've played before (kept in history), and any added ad hoc.
+- Add a new opponent; edit an existing one (name, home ground / venue, and **team logo/badge** via upload — ties into the media system, `media_assets` type `opponent_badge`, replacing the dashed-monogram placeholder).
+- Opponents persist across seasons — playing a team again reuses the same record (and its badge), building up history rather than re-typing.
+
+**Product nuance (don't skip this):** opponents come in two flavours. **League teams** you'll play repeatedly — worth full detail and a badge. **One-off friendly opponents** you may never face again — minimal detail. The panel should let you add a quick name-only opponent without forcing a full profile + badge on every casual fixture, but allow enriching one later if it becomes a regular. That distinction is what makes the panel feel tailored rather than a chore.
+
+**Schema:** `opponents` already has id, club_id, name, badge_url. Add (if not present) `home_venue text` and optionally `is_league_team boolean default false` to drive the league-vs-one-off distinction. Admin-only write (RLS).
+
+**Where it lives:** an admin screen, reachable like Players. Add-fixture's opponent field becomes a pick-from-opponents (with "add new" inline) rather than free text, so fixtures link to a real opponent record.
+
+---
+
+## A3. Seasons admin + season rollover (NEW — agreed this session)
+
+Seasons already exist in the data (everything is stamped with one; there's a season picker). What's missing is the admin journey to *create* a season and define when it runs — and to roll over cleanly into a new one.
+
+**What it does**
+- Admin can **create a new season** with a label (e.g. "2026/27") and **start + end dates**.
+- Set which season is current (`is_current`). Knowing the dates makes other things smarter: new fixtures auto-default to the right season; the app can show "season's coming" vs "season's on" empty/cold states (already called for in UX-AND-IA §5); stats/table scope correctly.
+- Past seasons stay viewable in history via the existing season picker.
+
+**The meaty bit — season rollover (design deliberately, don't just add a date field):** when you start a new season, decide what carries and what resets.
+- **Players carry forward** — the squad persists across seasons (with an optional prompt to mark who's left → `active=false`, so leavers drop off without losing history).
+- **Opponents carry forward** — they're season-independent (see A2).
+- **Fixtures, results, goals, league table, stats start fresh** for the new season, while the old season's data stays intact and viewable in history (everything's already keyed by `season_id`, so this is about *scoping views to the current season*, not deleting anything).
+- The league table is per-season already (manual grid) — a new season starts with an empty table to fill in.
+
+**Schema:** `seasons` already has id, club_id, label, is_current. Add `start_date date` and `end_date date`. Admin-only write (RLS).
+
+**Sequencing:** build *after* the core MVP screens are solid. Opponents admin (A2) pairs naturally with the Players admin work (Step 9) since it's the same CRUD pattern; seasons admin can follow. Neither should interrupt the core spine.
+
+---
+
 ## B. Deferred from earlier sessions (agreed, parked)
 
 **Player season stats (player-facing)**
@@ -72,8 +110,9 @@ The club's Instagram look (NEXT UP / FULL TIME poster graphics) is the visual ta
 
 ## E. Data model additions implied by this session (for the schema)
 
-- `opponents` table: id, club_id, name, badge_url.
-- `media_assets` table: id, club_id, type ('photo'|'crest'), url, uploaded_by, created_at.
+- `opponents` table: id, club_id, name, badge_url — **add** `home_venue text`, `is_league_team boolean default false` (A2).
+- `seasons` table: id, club_id, label, is_current — **add** `start_date date`, `end_date date` (A3).
+- `media_assets` table: id, club_id, type ('photo'|'crest'|'player_photo'|'opponent_badge'), url, uploaded_by, created_at.
 - `fixtures`: add optional `pinned_image_id` (FK to media_assets, null = random).
 - `profiles`: add `photo_url`, plus the already-agreed `dob`, `ec_name`, `ec_phone`, `active`.
 - Club crest: a row in media_assets (type 'crest') or a field on the `clubs` table.
