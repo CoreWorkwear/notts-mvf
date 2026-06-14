@@ -112,10 +112,9 @@ export default function Results() {
         onClose={() => setCentre(null)}
         onEdit={() => { const c = centre; setCentre(null); setEditing(c) }}
       />
-      {/* Conditional render + key so the form remounts fresh per fixture. */}
-      {isAdmin && editing && (
+      {/* Always mounted; resets on open so prefill is correct per fixture. */}
+      {isAdmin && (
         <ResultForm
-          key={editing.id}
           open={!!editing} fixture={editing} squad={squad}
           onClose={() => setEditing(null)} onSaved={refetch}
         />

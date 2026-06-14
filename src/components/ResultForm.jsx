@@ -1,29 +1,39 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import { supabase } from '../lib/supabase'
 
 // Admin: log or edit a result. FT + HT scores, goals added one at a time
 // (scorer + optional minute + optional assist, squad-pick-or-free-type), MOTM.
 // Names resolve to profile_id when they match a squad member, else free text
-// (HANDOVER §3 — stats key by profile_id).
+// (HANDOVER §3 — stats key by profile_id). Stays mounted; resets on open.
 export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
   const existing = fixture?.result
-  const [usScore, setUsScore] = useState(existing?.us ?? 0)
-  const [themScore, setThemScore] = useState(existing?.them ?? 0)
-  const [htUs, setHtUs] = useState(existing?.ht_us ?? 0)
-  const [htThem, setHtThem] = useState(existing?.ht_them ?? 0)
-  const [motm, setMotm] = useState(
-    existing?.motm_profile_id ? squad.find((s) => s.id === existing.motm_profile_id)?.name ?? '' : existing?.motm_name ?? ''
-  )
-  const [goals, setGoals] = useState(
-    (fixture?.goals ?? []).map((g) => ({
-      scorer: g.scorer_profile_id ? squad.find((s) => s.id === g.scorer_profile_id)?.name ?? '' : g.scorer_name ?? '',
-      minute: g.minute ?? '',
-      assist: g.assist_profile_id ? squad.find((s) => s.id === g.assist_profile_id)?.name ?? '' : g.assist_name ?? '',
-    }))
-  )
+  const [usScore, setUsScore] = useState(0)
+  const [themScore, setThemScore] = useState(0)
+  const [htUs, setHtUs] = useState(0)
+  const [htThem, setHtThem] = useState(0)
+  const [motm, setMotm] = useState('')
+  const [goals, setGoals] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+
+  const nameFor = (id, free) => (id ? squad.find((s) => s.id === id)?.name ?? '' : free ?? '')
+
+  useEffect(() => {
+    if (!open) return
+    setError(null)
+    setUsScore(existing?.us ?? 0)
+    setThemScore(existing?.them ?? 0)
+    setHtUs(existing?.ht_us ?? 0)
+    setHtThem(existing?.ht_them ?? 0)
+    setMotm(nameFor(existing?.motm_profile_id, existing?.motm_name))
+    setGoals((fixture?.goals ?? []).map((g) => ({
+      scorer: nameFor(g.scorer_profile_id, g.scorer_name),
+      minute: g.minute ?? '',
+      assist: nameFor(g.assist_profile_id, g.assist_name),
+    })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   function match(name) {
     const n = (name || '').trim().toLowerCase()

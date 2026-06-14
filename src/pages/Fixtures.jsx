@@ -179,11 +179,10 @@ export default function Fixtures() {
         onLogResult={() => { const d = detail; setDetail(null); setResultFor(d) }}
       />
 
-      {/* Conditional render + key so the form remounts fresh per target — fixes
-          edit showing stale/empty fields and saving nothing. */}
-      {isAdmin && formOpen && (
+      {/* Always mounted (open toggled) so the sheet's hardware-back stays sane;
+          the forms reset their fields on open, so Edit prefills correctly. */}
+      {isAdmin && (
         <FixtureForm
-          key={editing?.id ?? 'new'}
           open={formOpen}
           onClose={() => setFormOpen(false)}
           onSaved={refetch}
@@ -194,9 +193,8 @@ export default function Fixtures() {
         />
       )}
 
-      {isAdmin && resultFor && (
+      {isAdmin && (
         <ResultForm
-          key={resultFor.id}
           open={!!resultFor}
           fixture={resultFor}
           squad={squad}

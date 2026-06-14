@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -8,26 +8,47 @@ import { todayISO } from '../lib/format'
 // Admin create/edit a fixture. Opponent is picked from the opponents table or
 // added inline (so the badge attaches to the opponent, reused across fixtures).
 // League name shows only for League type, auto-filled from the team, overridable.
+// The form stays mounted (so the bottom-sheet's hardware-back stays sane); we
+// reset the fields each time it opens so Edit prefills the right fixture.
 export default function FixtureForm({ open, onClose, onSaved, teams, opponents, seasonId, fixture }) {
   const { profile } = useAuth()
   const editing = !!fixture
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const [teamId, setTeamId] = useState(fixture?.team_id ?? teams[0]?.id ?? '')
-  const [opponentId, setOpponentId] = useState(fixture?.opponent_id ?? '')
+  const [teamId, setTeamId] = useState('')
+  const [opponentId, setOpponentId] = useState('')
   const [newOpponent, setNewOpponent] = useState('')
-  const [matchDate, setMatchDate] = useState(fixture?.match_date ?? todayISO())
-  const [kickoff, setKickoff] = useState((fixture?.kickoff ?? '13:00').slice(0, 5))
-  const [homeAway, setHomeAway] = useState(fixture?.home_away ?? 'Home')
-  const [type, setType] = useState(fixture?.fixture_type ?? 'League')
-  const [venue, setVenue] = useState(fixture?.venue ?? '')
-  const [address, setAddress] = useState(fixture?.address ?? '')
-  const [w3w, setW3w] = useState(fixture?.w3w ?? '')
-  const [status, setStatus] = useState(fixture?.status ?? 'scheduled')
+  const [matchDate, setMatchDate] = useState(todayISO())
+  const [kickoff, setKickoff] = useState('13:00')
+  const [homeAway, setHomeAway] = useState('Home')
+  const [type, setType] = useState('League')
+  const [venue, setVenue] = useState('')
+  const [address, setAddress] = useState('')
+  const [w3w, setW3w] = useState('')
+  const [status, setStatus] = useState('scheduled')
+  const [leagueName, setLeagueName] = useState('')
+
+  // Prefill (or clear) when the sheet opens.
+  useEffect(() => {
+    if (!open) return
+    setError(null)
+    setTeamId(fixture?.team_id ?? teams[0]?.id ?? '')
+    setOpponentId(fixture?.opponent_id ?? '')
+    setNewOpponent('')
+    setMatchDate(fixture?.match_date ?? todayISO())
+    setKickoff((fixture?.kickoff ?? '13:00').slice(0, 5))
+    setHomeAway(fixture?.home_away ?? 'Home')
+    setType(fixture?.fixture_type ?? 'League')
+    setVenue(fixture?.venue ?? '')
+    setAddress(fixture?.address ?? '')
+    setW3w(fixture?.w3w ?? '')
+    setStatus(fixture?.status ?? 'scheduled')
+    setLeagueName(fixture?.league_name ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const team = teams.find((t) => t.id === teamId)
-  const [leagueName, setLeagueName] = useState(fixture?.league_name ?? '')
   // League name defaults from the team when League type and not yet set.
   const effectiveLeague = leagueName || (type === 'League' ? team?.league_name ?? '' : '')
 
