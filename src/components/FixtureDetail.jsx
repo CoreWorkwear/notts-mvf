@@ -8,7 +8,7 @@ import { fmtDateLong, fmtKO } from '../lib/format'
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
 // (Full who's-in team-sheet + no-reply chase land at step 6; this is the
 // fuller-picture sheet the strips/calendar open into.)
-export default function FixtureDetail({ open, onClose, fixture, isAdmin, onSetAvail, onEdit }) {
+export default function FixtureDetail({ open, onClose, fixture, isAdmin, canLogResult, onSetAvail, onEdit, onLogResult }) {
   const { user } = useAuth()
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
@@ -45,6 +45,12 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, onSetAv
         </p>
         {isAdmin && <button className="btn btn-ghost det-edit" onClick={onEdit}>Edit fixture</button>}
       </div>
+
+      {canLogResult && (
+        <button className="btn btn-primary btn-block mt-4" onClick={onLogResult}>
+          Log the result
+        </button>
+      )}
 
       <div className="row gap-2 mt-4">
         <button className={'btn grow ' + (tab === 'me' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('me')}>My availability</button>

@@ -24,6 +24,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const [venue, setVenue] = useState(fixture?.venue ?? '')
   const [address, setAddress] = useState(fixture?.address ?? '')
   const [w3w, setW3w] = useState(fixture?.w3w ?? '')
+  const [status, setStatus] = useState(fixture?.status ?? 'scheduled')
 
   const team = teams.find((t) => t.id === teamId)
   const [leagueName, setLeagueName] = useState(fixture?.league_name ?? '')
@@ -72,6 +73,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         venue: venue.trim(),
         address: address.trim() || null,
         w3w: w3w.trim() || null,
+        status,
       }
 
       const res = editing
@@ -157,6 +159,17 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         <div className="field">
           <label className="label">what3words</label>
           <input className="input" value={w3w} onChange={(e) => setW3w(e.target.value)} placeholder="///filled.count.soap" />
+        </div>
+
+        <div className="field">
+          <label className="label">Status</label>
+          <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="scheduled">On as scheduled</option>
+            <option value="postponed">Postponed (P-P)</option>
+          </select>
+          {status === 'postponed' && (
+            <span className="dim" style={{ fontSize: 12 }}>Stays in Fixtures with a P-P tag until kickoff passes, then archives to Results.</span>
+          )}
         </div>
 
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>

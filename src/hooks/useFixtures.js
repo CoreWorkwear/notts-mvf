@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { todayISO } from '../lib/format'
+import { fixtureConcluded } from '../lib/format'
 
 // Loads everything the Fixtures screen needs for a season. RLS does the
 // eligibility gate for us: a non-eligible player simply never receives XL
@@ -24,7 +24,7 @@ export function useFixtures(seasonId) {
         .from('fixtures')
         .select(`
           id, match_date, kickoff, home_away, fixture_type, league_name,
-          venue, address, w3w, season_id, team_id, opponent_id,
+          venue, address, w3w, season_id, team_id, opponent_id, status,
           team:teams(id, key, label, colour, is_first_team),
           opponent:opponents(id, name, badge_url),
           availability(profile_id, status),
@@ -68,6 +68,8 @@ export function useFixtures(seasonId) {
         noReply: Math.max(0, rosterSize - replied),
         rosterSize,
         hasResult: (f.results ?? []).length > 0,
+        postponed: f.status === 'postponed',
+        concluded: fixtureConcluded(f.match_date, f.kickoff),
       }
     })
 
@@ -86,9 +88,11 @@ export function useFixtures(seasonId) {
     return () => window.removeEventListener('focus', onFocus)
   }, [load])
 
-  const today = todayISO()
-  const upcoming = fixtures.filter((f) => f.match_date >= today)
-  const past = fixtures.filter((f) => f.match_date < today)
+  // A fixture stays in Fixtures until kickoff + 4h (London). A logged result
+  // moves it to Results immediately. "past" here = concluded scheduled games
+  // still awaiting a result (drives the gaffer's "needs doing" strip).
+  const upcoming = fixtures.filter((f) => !f.concluded && !f.hasResult)
+  const past = fixtures.filter((f) => f.concluded && !f.hasResult && !f.postponed)
 
   return { fixtures, upcoming, past, teams, opponents, loading, refetch: load }
 }

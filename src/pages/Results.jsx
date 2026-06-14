@@ -13,11 +13,11 @@ const OUTCOME_LABEL = { W: 'Won', D: 'Drawn', L: 'Lost' }
 export default function Results() {
   const { isAdmin } = useAuth()
   const { seasonId } = useSeason()
-  const { played, needsResult, squad, loading, refetch } = useResults(seasonId)
+  const { played, needsResult, postponed, squad, loading, refetch } = useResults(seasonId)
   const [centre, setCentre] = useState(null)   // fixture for match centre
   const [editing, setEditing] = useState(null) // fixture for result form
 
-  if (loading && played.length === 0 && needsResult.length === 0) return <Loader label="Fetching the results…" />
+  if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader label="Fetching the results…" />
 
   const [latest, ...earlier] = played
 
@@ -89,13 +89,33 @@ export default function Results() {
         </>
       )}
 
+      {/* Postponed (P-P) games whose slot has passed — archived here, no score. */}
+      {postponed.length > 0 && (
+        <div className="mt-5">
+          <p className="kicker" style={{ color: 'var(--bone-mute)' }}>POSTPONED</p>
+          <div className="col gap-2 mt-2">
+            {postponed.map((f) => (
+              <div key={f.id} className={'card spine res-strip' + (f.team?.key === 'community' ? ' community' : '')}>
+                <span className="flash sm D">P-P</span>
+                <div className="grow">
+                  <div className="res-match">{f.team?.label} v {f.opponent?.name}</div>
+                  <div className="mono res-when">{fmtDate(f.match_date)} · postponed</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <MatchCentre
         open={!!centre} fixture={centre} isAdmin={isAdmin}
         onClose={() => setCentre(null)}
         onEdit={() => { const c = centre; setCentre(null); setEditing(c) }}
       />
-      {isAdmin && (
+      {/* Conditional render + key so the form remounts fresh per fixture. */}
+      {isAdmin && editing && (
         <ResultForm
+          key={editing.id}
           open={!!editing} fixture={editing} squad={squad}
           onClose={() => setEditing(null)} onSaved={refetch}
         />

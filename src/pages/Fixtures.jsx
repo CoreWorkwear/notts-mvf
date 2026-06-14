@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useFixtures, setAvailability } from '../hooks/useFixtures'
-import { todayISO } from '../lib/format'
+import { todayISO, fmtDate, hasKickedOff } from '../lib/format'
 import FixtureHero from '../components/FixtureHero'
 import FixtureStrip from '../components/FixtureStrip'
 import FixtureDetail from '../components/FixtureDetail'
 import FixtureForm from '../components/FixtureForm'
+import ResultForm from '../components/ResultForm'
 import CalendarView from '../components/CalendarView'
 import Loader from '../components/Loader'
 
@@ -23,6 +25,15 @@ export default function Fixtures() {
   const [detail, setDetail] = useState(null)     // fixture being viewed
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)   // fixture being edited
+  const [resultFor, setResultFor] = useState(null) // fixture to log a result for
+  const [squad, setSquad] = useState([])         // for the result form
+
+  // Admin needs the squad for the result form's scorer/MOTM pickers.
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.from('profiles').select('id, first_name, last_name').eq('active', true)
+      .then(({ data }) => setSquad((data ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, first: p.first_name }))))
+  }, [isAdmin])
 
   // Team filter only for admins or players in both squads.
   const showFilter = isAdmin || teamKeys.length > 1
@@ -31,8 +42,11 @@ export default function Fixtures() {
     () => (teamFilter === 'all' ? upcoming : upcoming.filter((f) => f.team?.key === teamFilter)),
     [upcoming, teamFilter]
   )
-  const hero = filtered[0]
-  const rest = filtered.slice(1)
+  // The hero leads with a real, on game — postponed ones show as strips below.
+  const active = filtered.filter((f) => !f.postponed)
+  const hero = active[0]
+  const rest = active.slice(1)
+  const postponedList = filtered.filter((f) => f.postponed)
 
   async function handleSetAvail(fixtureId, status) {
     const { error } = await setAvailability(fixtureId, user.id, status)
@@ -84,22 +98,24 @@ export default function Fixtures() {
         <div className="mt-4">
           <CalendarView fixtures={teamFilter === 'all' ? fixtures : fixtures.filter((f) => f.team?.key === teamFilter)} onOpen={setDetail} />
         </div>
-      ) : !hero ? (
+      ) : filtered.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">Nothing in the diary yet</p>
           <p>Season's coming. {isAdmin ? 'Add the first fixture and the lads can mark themselves in.' : 'First fixture lands here when the gaffer sets it.'}</p>
         </div>
       ) : (
         <>
-          <div className="mt-4">
-            <FixtureHero
-              fixture={hero}
-              isAdmin={isAdmin}
-              onSetAvail={(s) => handleSetAvail(hero.id, s)}
-              onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
-              onEdit={() => openEdit(hero)}
-            />
-          </div>
+          {hero && (
+            <div className="mt-4">
+              <FixtureHero
+                fixture={hero}
+                isAdmin={isAdmin}
+                onSetAvail={(s) => handleSetAvail(hero.id, s)}
+                onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
+                onEdit={() => openEdit(hero)}
+              />
+            </div>
+          )}
 
           {/* status line / needs-doing */}
           {isAdmin ? (
@@ -131,6 +147,24 @@ export default function Fixtures() {
               ))}
             </div>
           )}
+
+          {postponedList.length > 0 && (
+            <div className="mt-5">
+              <p className="kicker" style={{ color: 'var(--bone-mute)' }}>POSTPONED</p>
+              <div className="col gap-2 mt-2">
+                {postponedList.map((f) => (
+                  <button key={f.id} className={'card spine ppd-row' + (f.team?.key === 'community' ? ' community' : '')}
+                    onClick={() => (isAdmin ? openEdit(f) : setDetail(f))}>
+                    <span className="flash D ppd-badge">P-P</span>
+                    <span className="grow" style={{ textAlign: 'left' }}>
+                      {f.home_away === 'Home' ? `${f.team?.label} v ${f.opponent?.name}` : `${f.opponent?.name} v ${f.team?.label}`}
+                    </span>
+                    <span className="mono muted">{fmtDate(f.match_date)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -138,13 +172,18 @@ export default function Fixtures() {
         open={!!detail}
         fixture={detail}
         isAdmin={isAdmin}
+        canLogResult={!!detail && isAdmin && hasKickedOff(detail.match_date, detail.kickoff)}
         onClose={() => setDetail(null)}
         onSetAvail={async (s) => { await handleSetAvail(detail.id, s) }}
         onEdit={() => { const d = detail; setDetail(null); openEdit(d) }}
+        onLogResult={() => { const d = detail; setDetail(null); setResultFor(d) }}
       />
 
-      {isAdmin && (
+      {/* Conditional render + key so the form remounts fresh per target — fixes
+          edit showing stale/empty fields and saving nothing. */}
+      {isAdmin && formOpen && (
         <FixtureForm
+          key={editing?.id ?? 'new'}
           open={formOpen}
           onClose={() => setFormOpen(false)}
           onSaved={refetch}
@@ -155,10 +194,25 @@ export default function Fixtures() {
         />
       )}
 
+      {isAdmin && resultFor && (
+        <ResultForm
+          key={resultFor.id}
+          open={!!resultFor}
+          fixture={resultFor}
+          squad={squad}
+          onClose={() => setResultFor(null)}
+          onSaved={refetch}
+        />
+      )}
+
       <style>{`
         .status-line { color: var(--bone-mute); font-size: 14px; }
         .needs { font-size: 14px; color: var(--amber); background: var(--amber-dim);
           border: 1px solid rgba(245,166,35,.25); border-radius: 12px; padding: 10px 14px; }
+        .ppd-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 18px;
+          background: var(--coal); color: var(--bone); border: 1px solid var(--line); }
+        .ppd-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .05em;
+          padding: 3px 8px; border-radius: 7px; background: var(--slate); color: var(--bone-mute); }
       `}</style>
     </div>
   )

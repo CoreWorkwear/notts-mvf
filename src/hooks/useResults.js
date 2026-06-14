@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { todayISO } from '../lib/format'
+import { fixtureConcluded } from '../lib/format'
 
 // Results data for a season. We resolve scorer/assist/MOTM display names from
 // the squad map client-side (keyed by profile_id, free-typed name as fallback)
@@ -8,6 +8,7 @@ import { todayISO } from '../lib/format'
 export function useResults(seasonId) {
   const [played, setPlayed] = useState([])
   const [needsResult, setNeedsResult] = useState([])
+  const [postponed, setPostponed] = useState([]) // concluded P-P games, archived
   const [squad, setSquad] = useState([])      // [{id, name, first}]
   const [loading, setLoading] = useState(true)
 
@@ -19,7 +20,7 @@ export function useResults(seasonId) {
       supabase
         .from('fixtures')
         .select(`
-          id, match_date, kickoff, home_away, fixture_type, league_name, venue, team_id,
+          id, match_date, kickoff, home_away, fixture_type, league_name, venue, team_id, status,
           team:teams(id, key, label, colour),
           opponent:opponents(id, name, badge_url),
           result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name),
@@ -44,16 +45,17 @@ export function useResults(seasonId) {
       squadById,
     }))
 
-    const today = todayISO()
+    const concluded = (f) => fixtureConcluded(f.match_date, f.kickoff)
     setPlayed(all.filter((f) => f.result))
-    setNeedsResult(all.filter((f) => !f.result && f.match_date < today))
+    setNeedsResult(all.filter((f) => !f.result && f.status !== 'postponed' && concluded(f)))
+    setPostponed(all.filter((f) => !f.result && f.status === 'postponed' && concluded(f)))
     setSquad(squadList)
     setLoading(false)
   }, [seasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { played, needsResult, squad, loading, refetch: load }
+  return { played, needsResult, postponed, squad, loading, refetch: load }
 }
 
 // W / D / L from our perspective.

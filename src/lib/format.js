@@ -46,4 +46,40 @@ export function relativeWhen(iso) {
   return `${Math.abs(days)} days ago`
 }
 
+// --- Match lifecycle timing (always reckoned in UK / Europe-London time) -----
+// Fixtures store a wall-clock date + kickoff entered in London time. We compare
+// against "now" also read as London wall-clock, so GMT/BST is handled correctly
+// without any manual offset maths.
+function londonNowParts() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date())
+  const get = (t) => Number(parts.find((p) => p.type === t).value)
+  return { y: get('year'), mo: get('month'), d: get('day'), h: get('hour'), mi: get('minute') }
+}
+
+// Comparable nominal-instant for the current London wall-clock.
+function londonNowMs() {
+  const n = londonNowParts()
+  return Date.UTC(n.y, n.mo - 1, n.d, n.h, n.mi)
+}
+
+// True once kickoff has passed (London time).
+export function hasKickedOff(matchDate, kickoff) {
+  const [y, mo, d] = matchDate.split('-').map(Number)
+  const [h, mi] = (kickoff || '00:00').split(':').map(Number)
+  return londonNowMs() >= Date.UTC(y, mo - 1, d, h, mi)
+}
+
+// A game is "concluded" (drops out of Fixtures into Results) once kickoff + N
+// hours has passed. Default 4h covers an 11-a-side game plus slack.
+export function fixtureConcluded(matchDate, kickoff, hoursAfter = 4) {
+  const [y, mo, d] = matchDate.split('-').map(Number)
+  const [h, mi] = (kickoff || '00:00').split(':').map(Number)
+  const endMs = Date.UTC(y, mo - 1, d, h, mi) + hoursAfter * 3600 * 1000
+  return londonNowMs() >= endMs
+}
+
 export { MONTHS, MONTHS_FULL, DAYS }
