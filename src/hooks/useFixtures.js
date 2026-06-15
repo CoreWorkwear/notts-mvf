@@ -28,7 +28,7 @@ export function useFixtures(seasonId) {
           id, match_date, kickoff, home_away, fixture_type, league_name,
           venue, address, postcode, w3w, venue_lat, venue_lng,
           season_id, team_id, opponent_id, status, pinned_image_id,
-          team:teams(id, key, label, colour, is_first_team),
+          team:teams(id, key, label, match_name, colour, is_first_team),
           opponent:opponents(id, name, badge_url),
           pinned:media_assets(url),
           availability(profile_id, status),
@@ -37,7 +37,7 @@ export function useFixtures(seasonId) {
         .eq('season_id', seasonId)
         .order('match_date', { ascending: true })
         .order('kickoff', { ascending: true }),
-      supabase.from('teams').select('id, key, label, colour, is_first_team, league_name'),
+      supabase.from('teams').select('id, key, label, match_name, colour, is_first_team, league_name'),
       supabase.from('opponents').select('id, name, badge_url, home_venue, home_address, home_postcode').order('name'),
       // Eligible roster per team: approved, active squad players (and for XL
       // only the eligible). Supporters + pending players don't count.

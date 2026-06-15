@@ -9,6 +9,7 @@ import { setPinnedImage } from '../hooks/useFixtures'
 import WeatherStrip from './WeatherStrip'
 import { inForecastWindow } from '../lib/weather'
 import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
+import { teamMatchName } from '../lib/teams'
 import LineupBoard from './LineupBoard'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
@@ -55,7 +56,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
   return (
     <Sheet open={open} onClose={onClose}>
       <div className="det-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
-        <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>{f.team?.label} · {f.home_away} · {f.fixture_type}</span>
+        <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>{teamMatchName(f.team)}{f.team?.is_first_team ? ' · First Team' : ''} · {f.home_away} · {f.fixture_type}</span>
         <h2 className="display" style={{ fontSize: 32, color: '#fff', marginTop: 6 }}>{f.opponent?.name}</h2>
         <p className="mono" style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, marginTop: 4 }}>
           {fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO

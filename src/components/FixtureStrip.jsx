@@ -1,6 +1,7 @@
 import AvailControl from './AvailControl'
 import WeatherStrip from './WeatherStrip'
 import { fmtDate, fmtKO } from '../lib/format'
+import { fixtureMatchup } from '../lib/teams'
 
 // One upcoming game as a strip row: team-colour spine, the matchup (home team
 // named first), tags, and the viewer's availability at a glance + settable
@@ -8,14 +9,15 @@ import { fmtDate, fmtKO } from '../lib/format'
 export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSetAvail, onOpen }) {
   const f = fixture
   const community = f.team?.key === 'community'
-  const us = f.team?.label
-  const them = f.opponent?.name
-  const matchup = f.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
+  const matchup = fixtureMatchup(f)
 
   return (
     <div className={'card spine strip' + (community ? ' community' : '')}>
       <button className="strip-main" onClick={onOpen}>
-        <div className="strip-line">{matchup}</div>
+        <div className="strip-line">
+          {matchup}
+          {f.team?.is_first_team && <span className="pill-first">First Team</span>}
+        </div>
         <div className="strip-tags mono">
           <span>{fmtDate(f.match_date)}</span>
           <span>{fmtKO(f.kickoff)}</span>
@@ -52,7 +54,11 @@ export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSe
         .strip { display: flex; align-items: stretch; padding: 0; overflow: hidden; }
         .strip-main { flex: 1; text-align: left; background: none; border: none; color: var(--bone);
           padding: 14px 14px 14px 18px; display: flex; flex-direction: column; gap: 6px; }
-        .strip-line { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.05; }
+        .strip-line { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.05;
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .pill-first { font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: .05em;
+          text-transform: uppercase; color: var(--red-bright); background: var(--red-dim-2);
+          border: 1px solid var(--red); border-radius: 999px; padding: 2px 7px; }
         .strip-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--bone-mute); }
         .strip-tags span { background: var(--slate); border-radius: 6px; padding: 2px 7px; letter-spacing: .03em; }
         .strip-venue { font-size: 12px; color: var(--bone-dim); }

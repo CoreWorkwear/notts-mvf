@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MONTHS_FULL, parseDate, fmtKO, todayISO } from '../lib/format'
+import { fixtureMatchup } from '../lib/teams'
 
 // Month grid with team-coloured tappable dots + a "this month" agenda list.
 export default function CalendarView({ fixtures, onOpen }) {
@@ -55,9 +56,7 @@ export default function CalendarView({ fixtures, onOpen }) {
         {monthFixtures.map((f) => (
           <button key={f.id} className={'card spine cal-agenda' + (f.team?.key === 'community' ? ' community' : '')} onClick={() => onOpen(f)}>
             <span className="mono cal-ag-date">{parseDate(f.match_date).getDate()}</span>
-            <span className="grow" style={{ textAlign: 'left' }}>
-              {f.home_away === 'Home' ? `${f.team?.label} v ${f.opponent?.name}` : `${f.opponent?.name} v ${f.team?.label}`}
-            </span>
+            <span className="grow" style={{ textAlign: 'left' }}>{fixtureMatchup(f)}</span>
             <span className="mono muted">{fmtKO(f.kickoff)}</span>
           </button>
         ))}

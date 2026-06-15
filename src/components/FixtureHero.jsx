@@ -3,6 +3,7 @@ import Crest from './Crest'
 import WeatherStrip from './WeatherStrip'
 import { fmtDateLong, fmtKO, relativeWhen } from '../lib/format'
 import { heroBackground } from '../lib/media'
+import { teamMatchName } from '../lib/teams'
 
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
 // Player: in/maybe/out inline, the lead. Manager: squad state leads, tappable
@@ -32,7 +33,7 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
 
       <h2 className="hero-opp display">{f.opponent?.name}</h2>
       <p className="hero-meta mono">
-        {f.team?.label} · {f.home_away} · {f.fixture_type}
+        {teamMatchName(f.team)}{f.team?.is_first_team && <span className="pill-first">First Team</span>} · {f.home_away} · {f.fixture_type}
       </p>
       <p className="hero-when mono">{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO · {f.venue}</p>
       <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
@@ -87,6 +88,8 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
           border: 1.5px dashed rgba(255,255,255,.5); font-weight: 700; }
         .hero-opp { font-size: clamp(34px, 11vw, 56px); line-height: .92; margin-top: 8px; }
         .hero-meta { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; opacity: .9; margin-top: 8px; }
+        .hero-meta .pill-first { font-size: 9px; font-weight: 600; background: rgba(255,255,255,.18);
+          border-radius: 999px; padding: 2px 7px; margin-left: 6px; }
         .hero-when { font-size: 13px; opacity: .92; margin-top: 4px; }
         .hero-action { margin-top: 18px; background: rgba(0,0,0,.28); border-radius: 14px; padding: 14px;
           backdrop-filter: blur(4px); }

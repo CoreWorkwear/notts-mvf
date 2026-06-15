@@ -1,5 +1,6 @@
 import { fmtKO } from './format'
 import { MATCH_FEE } from './constants'
+import { teamMatchName } from './teams'
 
 // Per-fixture CSV export (HANDOVER §10), built client-side. Header line(s) with
 // the fixture details, then one row per player marked IN: full name, preferred
@@ -12,7 +13,7 @@ function esc(v) {
 
 // players: [{ name, preferred, paid }]
 export function buildFixtureCsv(fixture, players) {
-  const us = fixture.team?.label ?? ''
+  const us = teamMatchName(fixture.team)
   const them = fixture.opponent?.name ?? ''
   const matchup = fixture.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
   const typeLine =

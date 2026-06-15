@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSeason } from '../context/SeasonContext'
 import { useFixtures } from '../hooks/useFixtures'
 import { fmtDate, fmtKO } from '../lib/format'
+import { fixtureMatchup } from '../lib/teams'
 import WhosInSheet from '../components/WhosInSheet'
 import Loader from '../components/Loader'
 
@@ -31,9 +32,7 @@ export default function AdminAvailability() {
             return (
               <button key={f.id} className={'card spine wi-row' + (community ? ' community' : '')} onClick={() => setOpen(f)}>
                 <div className="wi-main">
-                  <div className="wi-match">
-                    {f.home_away === 'Home' ? `${f.team?.label} v ${f.opponent?.name}` : `${f.opponent?.name} v ${f.team?.label}`}
-                  </div>
+                  <div className="wi-match">{fixtureMatchup(f)}</div>
                   <div className="mono wi-when">{fmtDate(f.match_date)} · {fmtKO(f.kickoff)}</div>
                 </div>
                 <div className="wi-counts mono">

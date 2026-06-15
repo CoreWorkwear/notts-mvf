@@ -19,7 +19,7 @@ export function useClub(seasonId) {
 
     const [tblRes, teamRes, fixRes, lineupRes, profRes] = await Promise.all([
       supabase.from('league_tables').select('*').eq('season_id', seasonId),
-      supabase.from('teams').select('id, key, label, colour, is_first_team'),
+      supabase.from('teams').select('id, key, label, match_name, colour, is_first_team, league_name'),
       supabase
         .from('fixtures')
         .select('id, fixture_type, team:teams(key), result:results!inner(motm_profile_id), goals(scorer_profile_id, assist_profile_id)')

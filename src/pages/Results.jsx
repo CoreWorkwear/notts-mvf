@@ -5,6 +5,7 @@ import { useResults, outcome } from '../hooks/useResults'
 import { usePhotoPool } from '../hooks/useMedia'
 import { fmtDate } from '../lib/format'
 import { heroBackground } from '../lib/media'
+import { fixtureMatchup } from '../lib/teams'
 import ScoreBug from '../components/ScoreBug'
 import MatchCentre from '../components/MatchCentre'
 import ResultForm from '../components/ResultForm'
@@ -37,7 +38,7 @@ export default function Results() {
             {needsResult.map((f) => (
               <button key={f.id} className="card needs-row" onClick={() => setEditing(f)}>
                 <span className="grow" style={{ textAlign: 'left' }}>
-                  {f.team?.label} v {f.opponent?.name}
+                  {fixtureMatchup(f)}
                 </span>
                 <span className="mono muted">{fmtDate(f.match_date)}</span>
                 <span className="needs-cta">Log it →</span>
@@ -80,7 +81,7 @@ export default function Results() {
                   <button key={f.id} className={'card spine res-strip' + (community ? ' community' : '')} onClick={() => setCentre(f)}>
                     <span className={'flash sm ' + o}>{o}</span>
                     <div className="grow" style={{ textAlign: 'left' }}>
-                      <div className="res-match">{f.team?.label} v {f.opponent?.name}</div>
+                      <div className="res-match">{fixtureMatchup(f)}</div>
                       <div className="mono res-when">{fmtDate(f.match_date)} · {f.fixture_type}</div>
                     </div>
                     <span className="mono res-score">{f.result.us}–{f.result.them}</span>
@@ -101,7 +102,7 @@ export default function Results() {
               <div key={f.id} className={'card spine res-strip' + (f.team?.key === 'community' ? ' community' : '')}>
                 <span className="flash sm D">P-P</span>
                 <div className="grow">
-                  <div className="res-match">{f.team?.label} v {f.opponent?.name}</div>
+                  <div className="res-match">{fixtureMatchup(f)}</div>
                   <div className="mono res-when">{fmtDate(f.match_date)} · postponed</div>
                 </div>
               </div>

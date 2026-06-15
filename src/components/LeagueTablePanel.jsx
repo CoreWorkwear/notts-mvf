@@ -2,17 +2,22 @@ import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useOpponents } from '../hooks/useOpponents'
 import { sortStandings } from '../lib/stats'
+import { teamMatchName } from '../lib/teams'
 
 // Manual league table, per team / per season (HANDOVER §5). View shows pos,
-// team, P, GD, Pts, W-D-L with our row highlighted. Admin edits the grid; we
-// re-sort by pts → GD → GF on display.
+// team, P, GD, Pts, W-D-L with our row highlighted. Admin edits the grid (team
+// names free-typed or picked from opponents) + names the league; we re-sort by
+// pts → GD → GF on display.
 export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
   const { isAdmin } = useAuth()
+  const { opponents } = useOpponents()
   const [teamKey, setTeamKey] = useState(teams[0]?.key ?? 'xl')
   const [editing, setEditing] = useState(false)
 
   const team = teams.find((t) => t.key === teamKey) ?? teams[0]
+  const ourName = teamMatchName(team)
   const rows = sortStandings(table.filter((r) => r.team_id === team?.id))
 
   return (
@@ -25,6 +30,8 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
           ))}
         </div>
       )}
+
+      {team?.league_name && <p className="lt-league mt-3">{team.league_name}</p>}
 
       {isAdmin && (
         <button className="btn btn-ghost btn-block mt-3" onClick={() => setEditing(true)}>
@@ -44,7 +51,7 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const ours = r.team_name === team?.label
+              const ours = r.team_name === ourName || r.team_name === team?.label
               return (
                 <tr key={r.id} className={ours ? 'lt-ours' : ''}>
                   <td className="mono">{i + 1}</td>
@@ -63,7 +70,7 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
       {isAdmin && (
         <LeagueTableEdit
           open={editing} onClose={() => setEditing(false)} onSaved={onSaved}
-          team={team} seasonId={seasonId}
+          team={team} seasonId={seasonId} opponents={opponents} ourName={ourName}
           rows={table.filter((r) => r.team_id === team?.id)}
         />
       )}
@@ -78,23 +85,27 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
         .lt-ours { background: var(--slate); }
         .lt-ours .lt-team { font-weight: 700; color: var(--bone); }
         .lt-form { color: var(--bone-mute); }
+        .lt-league { font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+          color: var(--bone-mute); }
       `}</style>
     </div>
   )
 }
 
-function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows }) {
+function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows, opponents = [], ourName }) {
   const { profile } = useAuth()
   const [draft, setDraft] = useState([])
+  const [leagueName, setLeagueName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!open) return
     setError(null)
+    setLeagueName(team?.league_name ?? '')
     setDraft(rows.length
       ? rows.map((r) => ({ team_name: r.team_name, played: r.played, won: r.won, drawn: r.drawn, lost: r.lost, gf: r.gf, ga: r.ga, pts: r.pts }))
-      : [{ team_name: team?.label ?? '', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 }])
+      : [{ team_name: ourName ?? team?.label ?? '', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -105,6 +116,12 @@ function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows }) {
   async function save() {
     setError(null); setBusy(true)
     try {
+      // Name the league on the team — this is what new fixtures default to.
+      const nextLeague = leagueName.trim() || null
+      if (nextLeague !== (team?.league_name ?? null)) {
+        const { error } = await supabase.from('teams').update({ league_name: nextLeague }).eq('id', team.id)
+        if (error) throw error
+      }
       // Replace this division's rows wholesale — simplest correct approach.
       await supabase.from('league_tables').delete().eq('season_id', seasonId).eq('team_id', team.id)
       const payload = draft
@@ -133,11 +150,24 @@ function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows }) {
       <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Straight off the league's own site. GD sorts itself.</p>
       {error && <p className="field-error mt-3">{error}</p>}
 
-      <div className="col gap-2 mt-4">
+      <div className="field mt-4">
+        <label className="label">League name</label>
+        <input className="input" value={leagueName} onChange={(e) => setLeagueName(e.target.value)}
+          placeholder="e.g. MvF XL National League" />
+        <span className="dim" style={{ fontSize: 12 }}>New fixtures for this team default to this league name.</span>
+      </div>
+
+      {/* Pick from your saved opponents, or free-type a team. */}
+      <datalist id="lt-teamnames">
+        {ourName && <option value={ourName} />}
+        {opponents.map((o) => <option key={o.id} value={o.name} />)}
+      </datalist>
+
+      <div className="col gap-2 mt-2">
         {draft.map((r, i) => (
           <div key={i} className="card lte-row" style={{ padding: 10 }}>
             <div className="row gap-2">
-              <input className="input grow" placeholder="Team name" value={r.team_name} onChange={(e) => setCell(i, 'team_name', e.target.value)} />
+              <input className="input grow" placeholder="Team name" list="lt-teamnames" value={r.team_name} onChange={(e) => setCell(i, 'team_name', e.target.value)} />
               <button type="button" className="btn btn-ghost" onClick={() => rmRow(i)} aria-label="Remove row">✕</button>
             </div>
             <div className="lte-nums mt-2">

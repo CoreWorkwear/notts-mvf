@@ -1,4 +1,5 @@
 import Crest from './Crest'
+import { teamMatchName } from '../lib/teams'
 
 // Broadcast-bug scoreline (DESIGN-SYSTEM §6.3): crests flanking a big mono
 // score on a dark grained card — a mini TV score bug. Our crest left, opponent
@@ -13,7 +14,7 @@ export default function ScoreBug({ fixture, size = 'lg' }) {
     <div className={'bug' + (big ? ' lg' : '')}>
       <div className="bug-side">
         <Crest size={big ? 40 : 30} />
-        <span className="bug-team mono">{f.team?.label}</span>
+        <span className="bug-team mono">{teamMatchName(f.team)}</span>
       </div>
 
       <div className="bug-score mono">

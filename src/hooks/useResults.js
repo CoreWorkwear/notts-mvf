@@ -22,7 +22,7 @@ export function useResults(seasonId) {
         .from('fixtures')
         .select(`
           id, match_date, kickoff, home_away, fixture_type, league_name, venue, team_id, status,
-          team:teams(id, key, label, colour),
+          team:teams(id, key, label, match_name, colour),
           opponent:opponents(id, name, badge_url),
           pinned:media_assets(url),
           result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name),

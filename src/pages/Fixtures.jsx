@@ -13,6 +13,7 @@ import FixtureForm from '../components/FixtureForm'
 import ResultForm from '../components/ResultForm'
 import CalendarView from '../components/CalendarView'
 import Loader from '../components/Loader'
+import { fixtureMatchup } from '../lib/teams'
 
 // The landing + primary action surface (UX-AND-IA §1). Everyone lands here.
 export default function Fixtures() {
@@ -174,9 +175,7 @@ export default function Fixtures() {
                   <button key={f.id} className={'card spine ppd-row' + (f.team?.key === 'community' ? ' community' : '')}
                     onClick={() => setDetail(f)}>
                     <span className="flash D ppd-badge">P-P</span>
-                    <span className="grow" style={{ textAlign: 'left' }}>
-                      {f.home_away === 'Home' ? `${f.team?.label} v ${f.opponent?.name}` : `${f.opponent?.name} v ${f.team?.label}`}
-                    </span>
+                    <span className="grow" style={{ textAlign: 'left' }}>{fixtureMatchup(f)}</span>
                     <span className="mono muted">{fmtDate(f.match_date)}</span>
                   </button>
                 ))}

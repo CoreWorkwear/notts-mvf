@@ -6,6 +6,7 @@ import { fmtDateLong, fmtKO } from '../lib/format'
 import { MATCH_FEE } from '../lib/constants'
 import { buildFixtureCsv, csvFilename, downloadCsv } from '../lib/csv'
 import { isSquadMember } from '../lib/players'
+import { fixtureMatchup } from '../lib/teams'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
 // list — the XI filling up, a big count, and a one-tap chase for the players who
@@ -89,7 +90,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       const { data, error } = await supabase.functions.invoke('send-push', {
         body: {
           fixtureId: f.id, withAvailability: true,
-          title: `${f.team?.label} v ${f.opponent?.name}`,
+          title: fixtureMatchup(f),
           body: `${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO — you in?`,
         },
       })
@@ -105,9 +106,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
 
   async function chase() {
     const names = groups.noReply.map((p) => p.first).join(', ')
-    const us = f.team?.label
-    const them = f.opponent?.name
-    const matchup = f.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
+    const matchup = fixtureMatchup(f)
     const msg =
       `Players 👊 ${matchup} — ${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO at ${f.venue}.\n` +
       `Still waiting on: ${names}.\nYou in? Give us a shout.`
@@ -125,9 +124,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   return (
     <Sheet open={open} onClose={onClose}>
       <p className="kicker"><span className={'kicker-rule' + (isCommunity ? ' community' : '')}>WHO'S IN</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>
-        {f.home_away === 'Home' ? `${f.team?.label} v ${f.opponent?.name}` : `${f.opponent?.name} v ${f.team?.label}`}
-      </h2>
+      <h2 className="display mt-2" style={{ fontSize: 24 }}>{fixtureMatchup(f)}</h2>
       <p className="mono muted" style={{ fontSize: 13 }}>{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO</p>
 
       {!groups ? (
