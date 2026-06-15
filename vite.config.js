@@ -1,11 +1,42 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
-// PWA bits (manifest, service worker) land at build order step 13.
+// Installable PWA on Cloudflare Pages (HANDOVER §8.13 / BUILD-LIST C): manifest,
+// crest icons, service worker (offline app shell), auto-update.
 export default defineConfig({
-  plugins: [react()],
-  // Honour an assigned PORT (the preview harness sets one) else default to 5173.
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'Nottinghamshire MvF',
+        short_name: 'Notts MvF',
+        description: 'Fixtures, availability, results and stats for Nottinghamshire MvF.',
+        theme_color: '#0c0f0d',
+        background_color: '#0c0f0d',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        navigateFallback: '/index.html',
+        // Supabase API/auth is always network — never serve it from the SW cache.
+        navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
+        cleanupOutdatedCaches: true,
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   server: { port: Number(process.env.PORT) || 5173 },
   test: {
     environment: 'jsdom',
