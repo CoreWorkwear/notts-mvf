@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single()
     if (me?.role !== 'admin') return json({ error: 'forbidden' }, 403)
 
-    const { title = 'Nottinghamshire MvF', body = '', fixtureId = null, withAvailability = false, profileIds = null } = await req.json()
+    const { title = 'Nottinghamshire MvF', body = '', fixtureId = null, withAvailability = false, profileIds = null, url = '/fixtures' } = await req.json()
 
     let targets: string[] | null = profileIds
     if (!targets && fixtureId) {
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     if (targets) q = q.in('profile_id', targets)
     const { data: tokens } = await q
 
-    const payload = JSON.stringify({ title, body, fixtureId, withAvailability, url: '/fixtures' })
+    const payload = JSON.stringify({ title, body, fixtureId, withAvailability, url })
     let sent = 0
     await Promise.all((tokens ?? []).map(async (t: any) => {
       try { await webpush.sendNotification(JSON.parse(t.token), payload); sent++ }

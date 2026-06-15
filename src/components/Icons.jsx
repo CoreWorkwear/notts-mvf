@@ -35,6 +35,9 @@ export const IconSeasons = (p) => (
 export const IconMedia = (p) => (
   <svg {...base} {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-4.5-4.5L5 21" /></svg>
 )
+export const IconBell = (p) => (
+  <svg {...base} {...p} width={p.width ?? 18} height={p.height ?? 18}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+)
 export const IconChevron = (p) => (
   <svg {...base} {...p} width={p.width ?? 16} height={p.height ?? 16}><path d="m6 9 6 6 6-6" /></svg>
 )

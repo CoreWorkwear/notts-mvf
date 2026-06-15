@@ -11,6 +11,7 @@ import Club from './pages/Club'
 import Profile from './pages/Profile'
 import AdminAvailability from './pages/AdminAvailability'
 import Players from './pages/Players'
+import News from './pages/News'
 import Manage from './pages/Manage'
 import Opponents from './pages/Opponents'
 import Seasons from './pages/Seasons'
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/results" element={<Results />} />
           <Route path="/club" element={<Club />} />
           <Route path="/you" element={<Profile />} />
+          <Route path="/news" element={<News />} />
           <Route path="/manage" element={adminOnly(<Manage />)} />
           <Route path="/whos-in" element={adminOnly(<AdminAvailability />)} />
           <Route path="/players" element={adminOnly(<Players />)} />

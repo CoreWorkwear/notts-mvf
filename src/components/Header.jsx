@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import Crest from './Crest'
-import { IconLogout } from './Icons'
+import { IconLogout, IconBell } from './Icons'
 import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
@@ -29,6 +30,15 @@ export default function Header() {
           ))}
         </select>
       )}
+
+      <NavLink
+        to="/news"
+        className="nav-item"
+        style={{ flex: 'none', color: 'var(--bone-mute)' }}
+        aria-label="Club news"
+      >
+        <IconBell />
+      </NavLink>
 
       <ThemeToggle />
 
