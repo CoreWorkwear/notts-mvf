@@ -55,7 +55,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, pool = 
         <p className="mono" style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, marginTop: 4 }}>
           {fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO
         </p>
-        <div className="mt-2"><WeatherStrip fixture={f} light /></div>
+        <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
         {isAdmin && <button className="btn btn-ghost det-edit" onClick={onEdit}>Edit fixture</button>}
       </div>
 

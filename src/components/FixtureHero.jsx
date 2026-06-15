@@ -35,7 +35,7 @@ export default function FixtureHero({ fixture, isAdmin, pool = [], onSetAvail, o
         {f.team?.label} · {f.home_away} · {f.fixture_type}
       </p>
       <p className="hero-when mono">{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO · {f.venue}</p>
-      <div className="mt-2"><WeatherStrip fixture={f} light /></div>
+      <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
 
       <div className="hero-action">
         {isAdmin ? (

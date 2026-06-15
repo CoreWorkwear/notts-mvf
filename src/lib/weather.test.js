@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { inForecastWindow, weatherLabel, parseDailyForecast, FORECAST_DAYS } from './weather'
+import { inForecastWindow, weatherLabel, weatherCategory, weatherVerdict, parseDailyForecast, FORECAST_DAYS } from './weather'
 import { todayISO } from './format'
 
 function plusDays(n) {
@@ -30,17 +30,45 @@ describe('weatherLabel', () => {
   })
 })
 
+describe('weatherCategory', () => {
+  test('maps codes to drawing categories', () => {
+    expect(weatherCategory(0)).toBe('clear')
+    expect(weatherCategory(2)).toBe('partly')
+    expect(weatherCategory(61)).toBe('rain')
+    expect(weatherCategory(75)).toBe('snow')
+    expect(weatherCategory(95)).toBe('storm')
+  })
+})
+
+describe('weatherVerdict', () => {
+  test('storm and snow take priority', () => {
+    expect(weatherVerdict({ category: 'storm', feelsLike: 10, precip: 90 })).toMatch(/storm/i)
+    expect(weatherVerdict({ category: 'snow', feelsLike: 1 })).toMatch(/snow/i)
+  })
+  test('reads cold, hot, wet and windy', () => {
+    expect(weatherVerdict({ category: 'rain', precip: 80, feelsLike: 10 })).toMatch(/brolly/i)
+    expect(weatherVerdict({ category: 'clear', feelsLike: 1 })).toMatch(/freezing/i)
+    expect(weatherVerdict({ category: 'clear', feelsLike: 27 })).toMatch(/scorcher/i)
+    expect(weatherVerdict({ category: 'cloud', feelsLike: 12, wind: 30 })).toMatch(/blustery/i)
+    expect(weatherVerdict({ category: 'clear', feelsLike: 16, wind: 5, precip: 0 })).toMatch(/grand/i)
+  })
+})
+
 describe('parseDailyForecast', () => {
   const json = {
     daily: {
       time: ['2026-03-07', '2026-03-08'],
       weather_code: [3, 61],
       temperature_2m_max: [9.4, 7.8],
+      apparent_temperature_max: [6.6, 4.2],
       precipitation_probability_max: [20, 80],
+      wind_speed_10m_max: [12.3, 28.7],
     },
   }
-  test('pulls the matching day and rounds the temp', () => {
-    expect(parseDailyForecast(json, '2026-03-08')).toMatchObject({ code: 61, tempMax: 8, precip: 80, text: 'Rain' })
+  test('pulls the matching day: temp, feels-like, wind, rain, category, verdict', () => {
+    expect(parseDailyForecast(json, '2026-03-08')).toMatchObject({
+      code: 61, tempMax: 8, feelsLike: 4, precip: 80, wind: 29, category: 'rain', text: 'Rain', verdict: 'Bring a brolly',
+    })
   })
   test('returns null when the date is not in the response', () => {
     expect(parseDailyForecast(json, '2026-03-09')).toBeNull()

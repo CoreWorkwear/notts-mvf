@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { inForecastWindow, fetchForecast } from '../lib/weather'
+import WeatherIcon from './WeatherIcon'
 
 // Small weather strip on a fixture (icon · temp · rain%). Only renders inside
 // the forecast window; forecast cached 6h in localStorage.
@@ -21,7 +22,7 @@ function resolveLatLng(fixture) {
   return CLUB_DEFAULT
 }
 
-export default function WeatherStrip({ fixture, light = false }) {
+export default function WeatherStrip({ fixture, light = false, detailed = false }) {
   const [wx, setWx] = useState(null)
 
   useEffect(() => {
@@ -43,16 +44,23 @@ export default function WeatherStrip({ fixture, light = false }) {
   }, [fixture?.id, fixture?.match_date])
 
   if (!wx) return null
+  const temp = wx.feelsLike ?? wx.tempMax
   return (
-    <span className={'wx' + (light ? ' wx-light' : '')} title={wx.text}>
-      <span className="wx-icon">{wx.icon}</span>
-      {wx.tempMax != null && <span className="wx-temp mono">{wx.tempMax}°</span>}
-      {wx.precip != null && <span className="wx-rain mono">{wx.precip}%</span>}
+    <span className={'wx' + (light ? ' wx-light' : '') + (detailed ? ' wx-detailed' : '')} title={wx.text}>
+      <WeatherIcon category={wx.category} size={detailed ? 30 : 20} />
+      {temp != null && <span className="wx-temp mono">{detailed ? 'Feels ' : ''}{temp}°</span>}
+      {detailed && wx.wind != null && <span className="wx-bit mono">💨 {wx.wind}mph</span>}
+      {wx.precip != null && <span className="wx-bit mono">💧 {wx.precip}%</span>}
+      {detailed && wx.verdict && <span className="wx-verdict">{wx.verdict}</span>}
       <style>{`
-        .wx { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--bone-mute); }
-        .wx-light { color: rgba(255,255,255,.9); }
-        .wx-icon { font-size: 14px; }
-        .wx-rain { opacity: .85; }
+        .wx { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--bone-mute); }
+        .wx-light { color: rgba(255,255,255,.92); }
+        .wx-detailed { flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
+        .wx-temp { font-weight: 600; }
+        .wx-bit { opacity: .9; }
+        .wx-verdict { font-family: var(--font-body); font-style: italic; opacity: .95;
+          width: 100%; }
+        .wx:not(.wx-detailed) .wx-verdict { display: none; }
       `}</style>
     </span>
   )
