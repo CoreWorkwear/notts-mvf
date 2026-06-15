@@ -59,5 +59,6 @@ describe('PlayerForm', () => {
     expect(h.calls.find((c) => c[0] === 'update' && c[1] === 'profiles')).toBeFalsy()
     expect(screen.getByRole('alert')).toHaveTextContent(/email/i)
     expect(emailInput).toHaveAttribute('aria-invalid', 'true')
+    expect(emailInput).toHaveFocus() // jumps to the first flagged field
   })
 })

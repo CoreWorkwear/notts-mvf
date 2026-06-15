@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
 import { supabase, makeSignupClient } from '../lib/supabase'
@@ -34,6 +34,14 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
   const [notice, setNotice] = useState(null)
   const [invalid, setInvalid] = useState(new Set())
   const clearInvalid = (k) => setInvalid((s) => { if (!s.has(k)) return s; const n = new Set(s); n.delete(k); return n })
+  const formRef = useRef(null)
+
+  // On a failed save, jump to (and focus) the first flagged field.
+  useEffect(() => {
+    if (invalid.size === 0) return
+    const el = formRef.current?.querySelector('[aria-invalid="true"]')
+    if (el) { el.scrollIntoView?.({ behavior: 'smooth', block: 'center' }); el.focus?.({ preventScroll: true }) }
+  }, [invalid])
 
   useEffect(() => {
     if (!open) return
@@ -133,7 +141,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
       <p className="kicker"><span className="kicker-rule">{adding ? 'ADD PLAYER' : 'EDIT PLAYER'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{adding ? 'New player' : `${firstName} ${lastName}`}</h2>
 
-      <form className="col gap-3 mt-4" onSubmit={onSubmit}>
+      <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="row gap-2">
           <div className="field grow"><label className="label">First name</label>
             <input className="input" value={firstName} aria-invalid={invalid.has('first') || undefined}

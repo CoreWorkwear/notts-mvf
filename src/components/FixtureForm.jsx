@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
 import { supabase } from '../lib/supabase'
@@ -18,6 +18,15 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const [error, setError] = useState(null)
   const [invalid, setInvalid] = useState(new Set())
   const clearInvalid = (k) => setInvalid((s) => { if (!s.has(k)) return s; const n = new Set(s); n.delete(k); return n })
+  const formRef = useRef(null)
+
+  // On a failed save, jump to (and focus) the first flagged field so it's
+  // obvious what to fix. scrollIntoView is guarded — jsdom doesn't implement it.
+  useEffect(() => {
+    if (invalid.size === 0) return
+    const el = formRef.current?.querySelector('[aria-invalid="true"]')
+    if (el) { el.scrollIntoView?.({ behavior: 'smooth', block: 'center' }); el.focus?.({ preventScroll: true }) }
+  }, [invalid])
 
   const [teamId, setTeamId] = useState('')
   const [opponentId, setOpponentId] = useState('')
@@ -133,7 +142,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
       <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT FIXTURE' : 'NEW FIXTURE'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 26 }}>{editing ? 'Edit the game' : 'Add a game'}</h2>
 
-      <form className="col gap-3 mt-4" onSubmit={onSubmit}>
+      <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="field">
           <label className="label">Team</label>
           <select className="select" value={teamId} aria-invalid={invalid.has('team') || undefined}

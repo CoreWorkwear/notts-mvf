@@ -125,8 +125,11 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeFalsy()
     // …pop up a prominent error naming the missing field…
     expect(screen.getByRole('alert')).toHaveTextContent(/venue/i)
-    // …and flag the venue input itself.
-    expect(screen.getByPlaceholderText(/Harvey Hadden/i)).toHaveAttribute('aria-invalid', 'true')
+    // …flag the venue input itself…
+    const venue = screen.getByPlaceholderText(/Harvey Hadden/i)
+    expect(venue).toHaveAttribute('aria-invalid', 'true')
+    // …and jump focus to it so it's obvious what to fix.
+    expect(venue).toHaveFocus()
   })
 
   test('save is blocked (not a silent no-op) when no season is selected', async () => {
