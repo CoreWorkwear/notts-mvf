@@ -50,3 +50,9 @@ export function useSponsors() {
 export function byTier(sponsors, tier) {
   return (sponsors ?? []).filter((s) => s.active && s.tier === tier && s.logo_url)
 }
+
+// A clickable URL for a sponsor's (possibly scheme-less) website, or null.
+export function sponsorWebsite(url) {
+  if (!url) return null
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`
+}

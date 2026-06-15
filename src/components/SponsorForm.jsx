@@ -4,9 +4,10 @@ import Toast from './Toast'
 import ImageUpload from './ImageUpload'
 
 export const SPONSOR_TIERS = [
-  { key: 'main', label: 'Main / team sponsor', blurb: 'Most prominent — leads the banner.' },
-  { key: 'kit',  label: 'Kit sponsor',         blurb: 'Smaller, beneath the main sponsor.' },
-  { key: 'motm', label: 'Man of the Match',    blurb: 'A small line by the MOTM on results.' },
+  { key: 'main',    label: 'Main / team sponsor', blurb: 'Most prominent — leads the banner.' },
+  { key: 'kit',     label: 'Kit sponsor',         blurb: 'Smaller, beneath the main sponsor.' },
+  { key: 'motm',    label: 'Man of the Match',    blurb: 'A small line by the MOTM on results.' },
+  { key: 'partner', label: 'Club partner',        blurb: 'Listed on the Club page among the partners.' },
 ]
 
 // Admin add/edit a sponsor: name, tier (prominence), website, logo (picture).

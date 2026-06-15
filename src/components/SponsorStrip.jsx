@@ -1,11 +1,10 @@
-import { useSponsors, byTier } from '../hooks/useSponsors'
-
-const withHttp = (url) => (/^https?:\/\//i.test(url) ? url : `https://${url}`)
+import { useSponsors, byTier, sponsorWebsite } from '../hooks/useSponsors'
 
 function Logo({ s, size }) {
   const img = <img src={s.logo_url} alt={s.name} style={{ height: size }} />
-  return s.website
-    ? <a className="sp-logo" href={withHttp(s.website)} target="_blank" rel="noreferrer" title={s.name}>{img}</a>
+  const href = sponsorWebsite(s.website)
+  return href
+    ? <a className="sp-logo" href={href} target="_blank" rel="noreferrer" title={s.name}>{img}</a>
     : <span className="sp-logo" title={s.name}>{img}</span>
 }
 
