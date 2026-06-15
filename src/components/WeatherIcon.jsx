@@ -1,6 +1,6 @@
 // Small animated SVG weather icon by category. Animations are CSS keyframes
 // scoped to a unique class; all respect prefers-reduced-motion.
-export default function WeatherIcon({ category = 'cloud', size = 30 }) {
+export default function WeatherIcon({ category = 'cloud', size = 30, windy = false }) {
   const cloud = (
     <path className="wi-cloud" d="M8 20 a5 5 0 0 1 1-9.9 a7 7 0 0 1 13 2 a4.5 4.5 0 0 1 -1 9 Z"
       fill="#c7d0d8" stroke="#aab4bd" strokeWidth="0.6" />
@@ -39,6 +39,12 @@ export default function WeatherIcon({ category = 'cloud', size = 30 }) {
       {category === 'storm' && (<g>{cloud}
         <path className="wi-bolt" d="M18 22 L14 30 H18 L15 35 L23 27 H19 L22 22 Z" fill="#FFC83D" stroke="#e0a91f" strokeWidth="0.5" />
       </g>)}
+      {windy && (
+        <g className="wi-wind" stroke="#dfe8f0" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.95">
+          <path className="g1" d="M4 13 q7 -3 13 0" />
+          <path className="g2" d="M5 19 q7 -3 13 0" />
+        </g>
+      )}
 
       <style>{`
         .wi-cloud { animation: wi-drift 4s var(--ease) infinite; }
@@ -48,6 +54,9 @@ export default function WeatherIcon({ category = 'cloud', size = 30 }) {
         .wi-rain .d2, .wi-snow .d2 { animation-delay: .25s; }
         .wi-rain .d3, .wi-snow .d3 { animation-delay: .5s; }
         .wi-bolt { animation: wi-flash 2.2s steps(1) infinite; }
+        .wi-wind .g1, .wi-wind .g2 { animation: wi-gust 2s var(--ease) infinite; }
+        .wi-wind .g2 { animation-delay: .4s; }
+        @keyframes wi-gust { 0%{ opacity:0; transform: translateX(-3px) } 35%{ opacity:.95 } 100%{ opacity:0; transform: translateX(4px) } }
         @keyframes wi-spin { to { transform: rotate(360deg); } }
         @keyframes wi-pulse { 0%,100%{ transform: scale(1) } 50%{ transform: scale(1.08) } }
         @keyframes wi-drift { 0%,100%{ transform: translateX(0) } 50%{ transform: translateX(1.5px) } }

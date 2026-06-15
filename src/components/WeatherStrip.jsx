@@ -47,9 +47,9 @@ export default function WeatherStrip({ fixture, light = false, detailed = false 
   const temp = wx.feelsLike ?? wx.tempMax
   return (
     <span className={'wx' + (light ? ' wx-light' : '') + (detailed ? ' wx-detailed' : '')} title={wx.text}>
-      <WeatherIcon category={wx.category} size={detailed ? 30 : 20} />
+      <WeatherIcon category={wx.category} size={detailed ? 30 : 20} windy={wx.wind != null && wx.wind >= 16} />
       {temp != null && <span className="wx-temp mono">{detailed ? 'Feels ' : ''}{temp}°</span>}
-      {detailed && wx.wind != null && <span className="wx-bit mono">💨 {wx.wind}mph</span>}
+      {wx.wind != null && <span className="wx-bit mono">💨 {wx.wind}mph</span>}
       {wx.precip != null && <span className="wx-bit mono">💧 {wx.precip}%</span>}
       {detailed && wx.verdict && <span className="wx-verdict">{wx.verdict}</span>}
       <style>{`
