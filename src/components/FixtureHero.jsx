@@ -39,12 +39,20 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
 
       <div className="hero-action">
         {isAdmin ? (
-          <button className="squad-state" onClick={onOpenWhosIn}>
-            <span className="ss-counts mono">
-              <b>{f.counts.in}</b> in · <b>{f.counts.maybe}</b> maybe · <b>{f.noReply}</b> not replied
-            </span>
-            <span className="ss-cta">See who's in →</span>
-          </button>
+          <>
+            <button className="squad-state" onClick={onOpenWhosIn}>
+              <span className="ss-counts mono">
+                <b>{f.counts.in}</b> in · <b>{f.counts.maybe}</b> maybe · <b>{f.noReply}</b> not replied
+              </span>
+              <span className="ss-cta">See who's in →</span>
+            </button>
+            {canRespond && (
+              <div className="hero-you">
+                <span className="hero-you-lbl mono">You</span>
+                <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
+              </div>
+            )}
+          </>
         ) : canRespond ? (
           <>
             <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>YOU IN?</span>
@@ -83,6 +91,9 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
         .ss-counts { font-size: 17px; }
         .ss-counts b { font-weight: 600; }
         .ss-cta { font-size: 13px; opacity: .85; }
+        .hero-you { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px;
+          border-top: 1px solid rgba(255,255,255,.18); flex-wrap: wrap; }
+        .hero-you-lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
       `}</style>
     </div>
   )

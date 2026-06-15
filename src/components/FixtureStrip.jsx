@@ -27,12 +27,20 @@ export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSe
 
       <div className="strip-side" onClick={(e) => e.stopPropagation()}>
         {isAdmin ? (
-          <button className="strip-counts mono" onClick={onOpen}>
-            <span className="sc in">{f.counts.in}</span>
-            <span className="sc maybe">{f.counts.maybe}</span>
-            <span className="sc no">{f.noReply}</span>
-            <span className="sc-label">in · maybe · left</span>
-          </button>
+          <div className="strip-admin-side">
+            <button className="strip-counts mono" onClick={onOpen}>
+              <span className="sc in">{f.counts.in}</span>
+              <span className="sc maybe">{f.counts.maybe}</span>
+              <span className="sc no">{f.noReply}</span>
+              <span className="sc-label">in · maybe · left</span>
+            </button>
+            {canRespond && (
+              <div className="strip-you">
+                <span className="strip-you-lbl mono">You</span>
+                <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
+              </div>
+            )}
+          </div>
         ) : canRespond ? (
           <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
         ) : (
@@ -50,6 +58,9 @@ export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSe
         .strip-venue { font-size: 12px; color: var(--bone-dim); }
         .strip-side { display: flex; align-items: center; padding: 12px 14px; border-left: 1px solid var(--line); }
         .strip-locked { font-size: 11px; color: var(--bone-dim); max-width: 90px; line-height: 1.2; }
+        .strip-admin-side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+        .strip-you { display: flex; align-items: center; gap: 8px; }
+        .strip-you-lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--bone-dim); }
         .strip-counts { background: none; border: none; display: grid;
           grid-template-columns: repeat(3, auto); gap: 0 10px; align-items: center; color: var(--bone); }
         .strip-counts .sc { font-size: 19px; font-weight: 600; }
