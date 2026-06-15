@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLineup } from '../hooks/useLineup'
 import { FORMATION_NAMES, stateToRows, filledCount } from '../lib/lineup'
+import { fixtureMatchup } from '../lib/teams'
+import { supabase } from '../lib/supabase'
 import PitchView, { initials } from './PitchView'
 import Toast from './Toast'
 
@@ -16,6 +18,33 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [pushing, setPushing] = useState(false)
+  const [pushMsg, setPushMsg] = useState(null)
+
+  // Push the named line-up to the picked players (starters + subs). Uses the
+  // admin-gated send-push function; fails gracefully if it's unavailable.
+  async function notifySquad() {
+    const ids = [...Object.values(saved.starters).filter(Boolean), ...saved.subs]
+    if (!ids.length) return
+    setPushing(true); setPushMsg(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('send-push', {
+        body: {
+          profileIds: ids,
+          title: fixtureMatchup(fixture),
+          body: "Team news — you're named in the squad 👕. Tap for the line-up.",
+          url: '/fixtures',
+        },
+      })
+      if (error) throw error
+      setPushMsg(`Sent to ${data?.sent ?? 0}`)
+    } catch {
+      setPushMsg('Push unavailable')
+    } finally {
+      setPushing(false)
+      setTimeout(() => setPushMsg(null), 2800)
+    }
+  }
 
   // Sync local editor state whenever the saved line-up (re)loads.
   useEffect(() => {
@@ -65,9 +94,16 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
           </>
         )}
         {isAdmin && (
-          <button className="btn btn-primary btn-block mt-4" onClick={() => setEditing(true)}>
-            {hasLineup ? 'Edit the line-up' : 'Pick the line-up'}
-          </button>
+          hasLineup ? (
+            <div className="col gap-2 mt-4">
+              <button className="btn btn-primary btn-block" disabled={pushing} onClick={notifySquad}>
+                {pushing ? 'Sending…' : pushMsg || 'Push the line-up to the squad'}
+              </button>
+              <button className="btn btn-ghost btn-block" onClick={() => setEditing(true)}>Edit the line-up</button>
+            </div>
+          ) : (
+            <button className="btn btn-primary btn-block mt-4" onClick={() => setEditing(true)}>Pick the line-up</button>
+          )
         )}
       </div>
     )

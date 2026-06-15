@@ -3,13 +3,15 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const save = vi.fn().mockResolvedValue({ error: null })
+const invoke = vi.hoisted(() => vi.fn())
 let mock
 vi.mock('../hooks/useLineup', () => ({ useLineup: () => mock }))
+vi.mock('../lib/supabase', () => ({ supabase: { functions: { invoke } } }))
 
 import LineupBoard from './LineupBoard'
 
 beforeEach(() => {
-  save.mockClear()
+  save.mockClear(); invoke.mockReset(); invoke.mockResolvedValue({ data: { sent: 3 }, error: null })
   mock = {
     saved: { formation: '4-4-2', starters: {}, subs: [] },
     pool: [{ id: 'p1', name: 'Joe Bloggs', status: 'in' }, { id: 'p2', name: 'Sam Lee', status: 'maybe' }],
@@ -45,5 +47,24 @@ describe('LineupBoard', () => {
     await userEvent.click(screen.getByText('GK').closest('button'))
     expect(screen.getByText('Joe Bloggs')).toBeInTheDocument()
     expect(screen.getByText('Sam Lee')).toBeInTheDocument()
+  })
+
+  test('a manager can push the picked line-up to exactly the named players', async () => {
+    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: ['p2'] } }
+    const fixture = { id: 'f1', team: { match_name: 'Nottingham' }, opponent: { name: 'Boston' }, home_away: 'Home' }
+    render(<LineupBoard fixture={fixture} isAdmin open />)
+
+    await userEvent.click(screen.getByRole('button', { name: /push the line-up to the squad/i }))
+    await waitFor(() => expect(invoke).toHaveBeenCalled())
+    const [fn, opts] = invoke.mock.calls[0]
+    expect(fn).toBe('send-push')
+    expect(opts.body.profileIds.sort()).toEqual(['p1', 'p2'])
+    expect(opts.body.title).toBe('Nottingham v Boston')
+  })
+
+  test('players never see the push button', () => {
+    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] } }
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin={false} open />)
+    expect(screen.queryByRole('button', { name: /push the line-up/i })).not.toBeInTheDocument()
   })
 })
