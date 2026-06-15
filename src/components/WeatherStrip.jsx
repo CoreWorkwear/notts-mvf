@@ -28,20 +28,22 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
   useEffect(() => {
     if (!fixture || !inForecastWindow(fixture.match_date)) { setWx(null); return }
     let active = true
-    const key = `wx:${fixture.id}:${fixture.match_date}`
+    // Key includes the kickoff so the forecast is per match-hour (and so old
+    // day-summary caches from before the hourly switch are ignored).
+    const key = `wx:${fixture.id}:${fixture.match_date}:${fixture.kickoff ?? ''}`
     const cached = cacheGet(key)
     if (cached) { setWx(cached); return }
     ;(async () => {
       try {
         const ll = resolveLatLng(fixture)
-        const data = await fetchForecast(ll.lat, ll.lng, fixture.match_date)
+        const data = await fetchForecast(ll.lat, ll.lng, fixture.match_date, fixture.kickoff)
         if (!active || !data) return
         cacheSet(key, data)
         setWx(data)
       } catch { /* weather is best-effort */ }
     })()
     return () => { active = false }
-  }, [fixture?.id, fixture?.match_date])
+  }, [fixture?.id, fixture?.match_date, fixture?.kickoff])
 
   if (!wx) return null
   const temp = wx.feelsLike ?? wx.tempMax

@@ -51,6 +51,32 @@ export function weatherVerdict({ feelsLike, precip, wind, category } = {}) {
   return 'Grand for it'
 }
 
+// Pull the conditions AT KICKOFF out of an Open-Meteo hourly response — the
+// temp/feels/rain/wind for the actual match hour, not the day's max. London
+// timezone is requested so the hourly times line up with the kickoff clock.
+export function parseHourlyForecast(json, dateISO, kickoff) {
+  const h = json?.hourly
+  if (!h || !Array.isArray(h.time) || !kickoff) return null
+  const hh = String(kickoff).slice(0, 2).padStart(2, '0')
+  const i = h.time.indexOf(`${dateISO}T${hh}:00`)
+  if (i < 0) return null
+  const code = h.weather_code?.[i]
+  const temp = h.temperature_2m?.[i]
+  const feels = h.apparent_temperature?.[i]
+  const precip = h.precipitation_probability?.[i]
+  const wind = h.wind_speed_10m?.[i]
+  if (temp == null && code == null) return null
+  const r = (v) => (v == null ? null : Math.round(v))
+  const data = {
+    code, atKickoff: true,
+    category: weatherCategory(code),
+    tempMax: r(temp), feelsLike: r(feels), precip: r(precip), wind: r(wind),
+    ...weatherLabel(code),
+  }
+  data.verdict = weatherVerdict(data)
+  return data
+}
+
 // Pull the single day's numbers out of an Open-Meteo daily response.
 export function parseDailyForecast(json, dateISO) {
   const t = json?.daily?.time
@@ -88,12 +114,15 @@ export async function geocode(query) {
   return hit ? { lat: hit.latitude, lng: hit.longitude } : null
 }
 
-export async function fetchForecast(lat, lng, dateISO) {
+// Fetch the forecast for a fixture. Prefers the conditions AT KICKOFF (hourly);
+// falls back to the day's summary if the hour isn't available (or no kickoff).
+export async function fetchForecast(lat, lng, dateISO, kickoff) {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&daily=weather_code,temperature_2m_max,apparent_temperature_max,precipitation_probability_max,wind_speed_10m_max` +
+    `&hourly=weather_code,temperature_2m,apparent_temperature,precipitation_probability,wind_speed_10m` +
     `&wind_speed_unit=mph&timezone=Europe%2FLondon&start_date=${dateISO}&end_date=${dateISO}`
   const r = await fetch(url)
   const j = await r.json()
-  return parseDailyForecast(j, dateISO)
+  return parseHourlyForecast(j, dateISO, kickoff) ?? parseDailyForecast(j, dateISO)
 }

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { inForecastWindow, weatherLabel, weatherCategory, weatherVerdict, parseDailyForecast, FORECAST_DAYS } from './weather'
+import { inForecastWindow, weatherLabel, weatherCategory, weatherVerdict, parseDailyForecast, parseHourlyForecast, FORECAST_DAYS } from './weather'
 import { todayISO } from './format'
 
 function plusDays(n) {
@@ -73,5 +73,31 @@ describe('parseDailyForecast', () => {
   test('returns null when the date is not in the response', () => {
     expect(parseDailyForecast(json, '2026-03-09')).toBeNull()
     expect(parseDailyForecast({}, '2026-03-08')).toBeNull()
+  })
+})
+
+describe('parseHourlyForecast — conditions AT kickoff (not the day max)', () => {
+  const json = {
+    hourly: {
+      time: ['2026-03-08T12:00', '2026-03-08T13:00', '2026-03-08T14:00', '2026-03-08T15:00'],
+      weather_code: [3, 3, 61, 80],
+      temperature_2m: [6.1, 7.0, 8.4, 9.0],
+      apparent_temperature: [3.0, 4.0, 5.6, 6.0],
+      precipitation_probability: [10, 20, 75, 90],
+      wind_speed_10m: [9, 11, 22.4, 25],
+    },
+  }
+  test('picks the row for the kickoff hour', () => {
+    expect(parseHourlyForecast(json, '2026-03-08', '14:00:00')).toMatchObject({
+      atKickoff: true, code: 61, tempMax: 8, feelsLike: 6, precip: 75, wind: 22, category: 'rain', verdict: 'Bring a brolly',
+    })
+  })
+  test('a different kickoff hour gives different conditions', () => {
+    expect(parseHourlyForecast(json, '2026-03-08', '12:00:00')).toMatchObject({ code: 3, tempMax: 6, precip: 10 })
+  })
+  test('null when the hour is missing or no kickoff given', () => {
+    expect(parseHourlyForecast(json, '2026-03-08', '20:00:00')).toBeNull()
+    expect(parseHourlyForecast(json, '2026-03-08', null)).toBeNull()
+    expect(parseHourlyForecast({}, '2026-03-08', '14:00:00')).toBeNull()
   })
 })
