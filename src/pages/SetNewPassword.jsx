@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Crest from '../components/Crest'
+import Toast from '../components/Toast'
 
 // Shown when the user arrives via a password-reset email (recovery session).
 // They set a new password; on success we drop the recovery flag and the app
@@ -11,6 +12,7 @@ export default function SetNewPassword() {
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [done, setDone] = useState(false)
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -20,7 +22,9 @@ export default function SetNewPassword() {
     const { error } = await updatePassword(password)
     setBusy(false)
     if (error) { setError(error.message); return }
-    endRecovery() // signed in with the new password → app takes over
+    // Confirm, briefly, then the recovery flag drops and the app takes over.
+    setDone(true)
+    setTimeout(() => endRecovery(), 1500)
   }
 
   return (
@@ -32,6 +36,7 @@ export default function SetNewPassword() {
           <p className="kicker mt-2"><span className="kicker-rule">RESET</span></p>
         </div>
 
+        <Toast message={done ? "Password changed — you're in 👍" : null} tone="success" onDismiss={() => {}} />
         {error && <p className="field-error mt-4 center">{error}</p>}
 
         <form className="col gap-3 mt-4" onSubmit={onSubmit}>
