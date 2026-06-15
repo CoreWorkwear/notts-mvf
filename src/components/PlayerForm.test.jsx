@@ -14,7 +14,11 @@ vi.mock('../lib/supabase', () => {
     return b
   }
   return {
-    supabase: { from: (t) => qb(t), auth: { resetPasswordForEmail: () => Promise.resolve({ error: null }) } },
+    supabase: {
+      from: (t) => qb(t),
+      auth: { resetPasswordForEmail: () => Promise.resolve({ error: null }) },
+      functions: { invoke: (name, opts) => { h.calls.push(['invoke', name, opts]); return Promise.resolve({ data: { ok: true }, error: null }) } },
+    },
     makeSignupClient: () => ({ auth: { signUp: () => Promise.resolve({ error: null }) } }),
   }
 })
@@ -48,6 +52,24 @@ describe('PlayerForm', () => {
     render(<PlayerForm open onClose={() => {}} onSaved={() => {}} player={{ ...PLAYER, role: 'admin' }} teams={TEAMS} currentUserId="p1" />)
     expect(screen.getByText(/can't change your own role/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Active' })).toBeDisabled()
+  })
+
+  test('admin can permanently delete another player (calls the delete function)', async () => {
+    const onSaved = vi.fn()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<PlayerForm open onClose={() => {}} onSaved={onSaved} player={PLAYER} teams={TEAMS} currentUserId="admin" />)
+
+    await userEvent.click(screen.getByRole('button', { name: /delete permanently/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const inv = h.calls.find((c) => c[0] === 'invoke' && c[1] === 'admin-delete-player')
+    expect(inv).toBeTruthy()
+    expect(inv[2]).toMatchObject({ body: { id: 'p1' } })
+    confirmSpy.mockRestore()
+  })
+
+  test('the permanent-delete button is hidden on your own row', () => {
+    render(<PlayerForm open onClose={() => {}} onSaved={() => {}} player={{ ...PLAYER, role: 'admin' }} teams={TEAMS} currentUserId="p1" />)
+    expect(screen.queryByRole('button', { name: /delete permanently/i })).not.toBeInTheDocument()
   })
 
   test('NEGATIVE: clearing a required field blocks save, pops an error and flags the field', async () => {

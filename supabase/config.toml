@@ -10,6 +10,9 @@ verify_jwt = false
 [functions.admin-create-player]
 verify_jwt = false
 
+[functions.admin-delete-player]
+verify_jwt = false
+
 # Fired by pg_cron (no user JWT) — gated by its own x-cron-secret check instead.
 [functions.run-reminders]
 verify_jwt = false

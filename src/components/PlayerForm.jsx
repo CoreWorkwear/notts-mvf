@@ -78,6 +78,24 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
     else setNotice('Reset link sent to the player.')
   }
 
+  // Permanent delete (distinct from active/inactive). Removes the login + profile;
+  // goal/MOTM history stays under their name. Service-role Edge Function does it.
+  async function deletePlayer() {
+    const who = `${firstName} ${lastName}`.trim() || 'this player'
+    if (!confirm(`Permanently delete ${who}?\n\nThis removes their account and login for good. Their goals, assists and MOTM stay in the records under their name. This can't be undone.\n\nTo just take them out of the squad, use Inactive instead.`)) return
+    setBusy(true); setError(null); setNotice(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-delete-player', { body: { id: player.id } })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      onSaved(); onClose()
+    } catch (err) {
+      setError(err.message || 'Could not delete the player.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onSubmit(e) {
     e.preventDefault()
     const v = validatePlayer({ first_name: firstName, last_name: lastName, email, phone }, { needPassword: adding, password })
@@ -262,6 +280,12 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
             </div>
 
             <button type="button" className="btn btn-ghost btn-block" disabled={busy} onClick={resetPassword}>Reset password</button>
+            {!self && (
+              <button type="button" className="btn btn-ghost btn-block" disabled={busy} onClick={deletePlayer}
+                style={{ color: 'var(--red-bright)', borderColor: 'var(--red)' }}>
+                Delete permanently
+              </button>
+            )}
           </>
         )}
 
