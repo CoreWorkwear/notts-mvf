@@ -17,6 +17,8 @@ import Opponents from './pages/Opponents'
 import Seasons from './pages/Seasons'
 import Media from './pages/Media'
 import Reminders from './pages/Reminders'
+import Sponsors from './pages/Sponsors'
+import SponsorStrip from './components/SponsorStrip'
 
 export default function App() {
   const { loading, isAuthed, isAdmin, passwordRecovery } = useAuth()
@@ -45,8 +47,10 @@ export default function App() {
           <Route path="/seasons" element={adminOnly(<Seasons />)} />
           <Route path="/media" element={adminOnly(<Media />)} />
           <Route path="/reminders" element={adminOnly(<Reminders />)} />
+          <Route path="/sponsors" element={adminOnly(<Sponsors />)} />
           <Route path="*" element={<Navigate to="/fixtures" replace />} />
         </Routes>
+        <SponsorStrip />
       </main>
       <BottomNav />
     </BrowserRouter>

@@ -16,6 +16,13 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   const [played, setPlayed] = useState([])   // fallback: [{id, name}] marked in
   const [lineup, setLineup] = useState(null) // { formation, starters, subs } or null
   const [lineNames, setLineNames] = useState({}) // profile_id -> 'First Last'
+  const [motmSponsor, setMotmSponsor] = useState(null)
+
+  useEffect(() => {
+    if (!open) return
+    supabase.from('sponsors').select('name, logo_url, website').eq('tier', 'motm').eq('active', true)
+      .then(({ data }) => setMotmSponsor((data ?? [])[0] ?? null))
+  }, [open])
 
   useEffect(() => {
     if (!open || !fixture) return
@@ -92,7 +99,16 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
       {motm && (
         <div className="mc-motm mt-4">
           <span className="mc-star">★</span>
-          <div><span className="kicker">MAN OF THE MATCH</span><div style={{ fontWeight: 600 }}>{motm}</div></div>
+          <div className="grow">
+            <span className="kicker">MAN OF THE MATCH</span>
+            <div style={{ fontWeight: 600 }}>{motm}</div>
+            {motmSponsor && (
+              <div className="mc-motm-sponsor">
+                sponsored by {motmSponsor.name}
+                {motmSponsor.logo_url && <img src={motmSponsor.logo_url} alt={motmSponsor.name} />}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -157,6 +173,9 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         .mc-motm { display: flex; align-items: center; gap: 12px; background: var(--slate);
           border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
         .mc-star { color: var(--gold); font-size: 26px; }
+        .mc-motm-sponsor { display: flex; align-items: center; gap: 8px; margin-top: 6px;
+          font-size: 11px; color: var(--bone-dim); }
+        .mc-motm-sponsor img { height: 18px; width: auto; background: var(--bone); border-radius: 4px; padding: 2px 4px; }
         .mc-timeline { display: flex; flex-direction: column; }
         .mc-goal { display: grid; grid-template-columns: 40px 16px 1fr; align-items: center; gap: 8px; padding: 8px 0; }
         .mc-min { color: var(--bone-mute); font-size: 13px; }

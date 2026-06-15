@@ -38,6 +38,9 @@ export const IconMedia = (p) => (
 export const IconBell = (p) => (
   <svg {...base} {...p} width={p.width ?? 18} height={p.height ?? 18}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
 )
+export const IconSponsors = (p) => (
+  <svg {...base} {...p}><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>
+)
 export const IconReminders = (p) => (
   <svg {...base} {...p}><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M5 3 2 6M22 6l-3-3" /></svg>
 )

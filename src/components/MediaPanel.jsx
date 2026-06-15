@@ -25,9 +25,9 @@ export default function MediaPanel() {
 
       <div>
         <p className="kicker"><span className="kicker-rule">CLUB PHOTOS</span></p>
-        <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Used at random behind fixture & result heroes (pin one to a game from its detail).</p>
+        <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Used at random behind fixture & result heroes (pin one to a game from its detail). Pick several at once — picture files only.</p>
         <div className="mt-3">
-          <ImageUpload folder="photos" shape="square" label="Add a club photo" onUploaded={(url) => addPhoto(url)} />
+          <ImageUpload folder="photos" shape="square" multiple label="Add club photos" onUploaded={(url) => addPhoto(url)} />
         </div>
 
         {photos.length === 0 ? (

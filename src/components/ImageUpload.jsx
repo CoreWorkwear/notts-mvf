@@ -4,24 +4,30 @@ import Toast from './Toast'
 
 // Admin image picker → resize → upload → onUploaded(publicUrl). Shows the
 // current/just-uploaded image as a preview. round = crest/headshot, square = photo.
-export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200 }) {
+export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200, multiple = false }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(null)
   const [error, setError] = useState(null)
   const [preview, setPreview] = useState(current ?? null)
 
   async function onPick(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    // Picture files only (the input's accept already filters), uploaded one by
+    // one so a slow/oversized file doesn't lose the rest.
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))
+    if (!files.length) return
     setBusy(true); setError(null)
     try {
-      const url = await uploadMedia(file, folder, { maxDim })
-      setPreview(url)
-      onUploaded(url)
+      for (let i = 0; i < files.length; i++) {
+        if (multiple) setProgress(`${i + 1}/${files.length}`)
+        const url = await uploadMedia(files[i], folder, { maxDim })
+        if (!multiple) setPreview(url)
+        onUploaded(url)
+      }
     } catch (err) {
       setError(err.message || 'Upload failed.')
     } finally {
-      setBusy(false)
+      setBusy(false); setProgress(null)
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -29,13 +35,15 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
   return (
     <div className="iu">
       <Toast message={error} onDismiss={() => setError(null)} />
-      <div className={'iu-preview ' + shape}>
-        {preview ? <img src={preview} alt="" /> : <span className="iu-empty">—</span>}
-      </div>
+      {!multiple && (
+        <div className={'iu-preview ' + shape}>
+          {preview ? <img src={preview} alt="" /> : <span className="iu-empty">—</span>}
+        </div>
+      )}
       <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
-        {busy ? 'Uploading…' : label}
+        {busy ? (progress ? `Uploading ${progress}…` : 'Uploading…') : label}
       </button>
-      <input ref={inputRef} type="file" accept="image/*" hidden onChange={onPick} />
+      <input ref={inputRef} type="file" accept="image/*" multiple={multiple} hidden onChange={onPick} />
 
       <style>{`
         .iu { display: flex; align-items: center; gap: 12px; }
