@@ -13,7 +13,7 @@ export function useOpponents() {
     setLoading(true)
     const { data } = await supabase
       .from('opponents')
-      .select('id, name, badge_url, home_venue, is_league_team')
+      .select('id, name, badge_url, home_venue, home_address, home_postcode, is_league_team')
       .order('name', { ascending: true })
     setOpponents(data ?? [])
     setLoading(false)
@@ -21,8 +21,15 @@ export function useOpponents() {
 
   useEffect(() => { load() }, [load])
 
-  const save = useCallback(async ({ id, name, home_venue, is_league_team, badge_url }) => {
-    const row = { name: name.trim(), home_venue: home_venue?.trim() || null, is_league_team: !!is_league_team, badge_url: badge_url || null }
+  const save = useCallback(async ({ id, name, home_venue, home_address, home_postcode, is_league_team, badge_url }) => {
+    const row = {
+      name: name.trim(),
+      home_venue: home_venue?.trim() || null,
+      home_address: home_address?.trim() || null,
+      home_postcode: home_postcode?.trim().toUpperCase() || null,
+      is_league_team: !!is_league_team,
+      badge_url: badge_url || null,
+    }
     const res = id
       ? await supabase.from('opponents').update(row).eq('id', id)
       : await supabase.from('opponents').insert({ club_id: profile.club_id, ...row })

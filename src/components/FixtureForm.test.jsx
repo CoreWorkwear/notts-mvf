@@ -31,7 +31,10 @@ const TEAMS = [
   { id: 't-xl', key: 'xl', label: 'XL 11s', colour: '#E11D2A', is_first_team: true, league_name: 'MvF XL National League' },
   { id: 't-co', key: 'community', label: 'Community', colour: '#2FA84F', is_first_team: false, league_name: 'MvF Community League' },
 ]
-const OPPONENTS = [{ id: 'opp-1', name: 'Long Eaton' }]
+const OPPONENTS = [
+  { id: 'opp-1', name: 'Long Eaton' }, // name-only (existing tests rely on this)
+  { id: 'opp-2', name: 'Carlton Town', home_venue: 'Stoke Lane', home_address: 'Stoke Lane, Gedling', home_postcode: 'NG4 2QT' },
+]
 const EXISTING = {
   id: 'fix-9', team_id: 't-xl', opponent_id: 'opp-1', match_date: '2026-03-08',
   kickoff: '13:00:00', home_away: 'Home', fixture_type: 'League', venue: 'Forest Rec 3G',
@@ -112,6 +115,26 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
       opponent_id: 'opp-1', venue: 'Memorial Ground',
       club_id: 'club-1', season_id: 'season-1', team_id: 't-xl', status: 'scheduled',
     })
+  })
+
+  test('picking an opponent with a saved home ground auto-fills the venue/address/postcode', async () => {
+    const onSaved = vi.fn()
+    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Carlton Town'))
+    await userEvent.selectOptions(oppSelect, 'opp-2')
+
+    // the venue fields are filled from the opponent's home ground, no typing
+    expect(screen.getByPlaceholderText(/Harvey Hadden/i)).toHaveValue('Stoke Lane')
+    expect(screen.getByDisplayValue('Stoke Lane, Gedling')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('NG18 4YD')).toHaveValue('NG4 2QT')
+
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins[2]).toMatchObject({ opponent_id: 'opp-2', venue: 'Stoke Lane', address: 'Stoke Lane, Gedling', postcode: 'NG4 2QT' })
   })
 
   test('NEGATIVE: missing venue blocks the save, pops an error and flags the field', async () => {

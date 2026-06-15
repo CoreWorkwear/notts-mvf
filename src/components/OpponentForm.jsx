@@ -9,6 +9,8 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
   const editing = !!opponent
   const [name, setName] = useState('')
   const [homeVenue, setHomeVenue] = useState('')
+  const [homeAddress, setHomeAddress] = useState('')
+  const [homePostcode, setHomePostcode] = useState('')
   const [isLeague, setIsLeague] = useState(false)
   const [badgeUrl, setBadgeUrl] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -21,6 +23,8 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
     setError(null); setInvalid(false)
     setName(opponent?.name ?? '')
     setHomeVenue(opponent?.home_venue ?? '')
+    setHomeAddress(opponent?.home_address ?? '')
+    setHomePostcode(opponent?.home_postcode ?? '')
     setIsLeague(opponent?.is_league_team ?? false)
     setBadgeUrl(opponent?.badge_url ?? null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -35,7 +39,7 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
     if (!name.trim()) { setInvalid(true); setError('Give the opponent a name.'); return }
     setBusy(true); setError(null)
     try {
-      await onSave({ id: opponent?.id, name, home_venue: homeVenue, is_league_team: isLeague, badge_url: badgeUrl })
+      await onSave({ id: opponent?.id, name, home_venue: homeVenue, home_address: homeAddress, home_postcode: homePostcode, is_league_team: isLeague, badge_url: badgeUrl })
       onClose()
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
@@ -55,8 +59,20 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
 
         <div className="field">
           <label className="label">Home ground (optional)</label>
-          <input className="input" value={homeVenue} onChange={(e) => setHomeVenue(e.target.value)} />
+          <input className="input" value={homeVenue} onChange={(e) => setHomeVenue(e.target.value)} placeholder="e.g. Stoke Lane" />
         </div>
+        <div className="row gap-2">
+          <div className="field grow">
+            <label className="label">Home address</label>
+            <input className="input" value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="label">Postcode</label>
+            <input className="input" value={homePostcode} onChange={(e) => setHomePostcode(e.target.value)}
+              placeholder="NG18 4YD" style={{ textTransform: 'uppercase', maxWidth: 130 }} />
+          </div>
+        </div>
+        <span className="dim" style={{ fontSize: 12, marginTop: -6 }}>Saved here, this fills in the venue automatically when you add a game against them.</span>
 
         <div className="field">
           <label className="label">Type</label>

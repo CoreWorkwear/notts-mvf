@@ -65,6 +65,17 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // Selecting an existing opponent fills the venue from their saved home ground
+  // (still editable — overridden for a home/neutral game). Only fills fields the
+  // opponent actually has, so picking a name-only opponent won't wipe what's typed.
+  function pickOpponent(id) {
+    setOpponentId(id); clearInvalid('opponent')
+    const opp = opponents.find((o) => o.id === id)
+    if (opp?.home_venue) setVenue(opp.home_venue)
+    if (opp?.home_address) setAddress(opp.home_address)
+    if (opp?.home_postcode) setPostcode(opp.home_postcode)
+  }
+
   const team = teams.find((t) => t.id === teamId)
   // League defaults from the team but is shown as a placeholder hint, not a
   // pre-filled value (which reads as stale). The default is applied on save.
@@ -172,7 +183,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         <div className="field">
           <label className="label">Opponent</label>
           <select className="select" value={opponentId} aria-invalid={invalid.has('opponent') || undefined}
-            onChange={(e) => { setOpponentId(e.target.value); clearInvalid('opponent') }}>
+            onChange={(e) => pickOpponent(e.target.value)}>
             <option value="">— add a new one below —</option>
             {opponents.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>

@@ -38,7 +38,7 @@ export function useFixtures(seasonId) {
         .order('match_date', { ascending: true })
         .order('kickoff', { ascending: true }),
       supabase.from('teams').select('id, key, label, colour, is_first_team, league_name'),
-      supabase.from('opponents').select('id, name, badge_url').order('name'),
+      supabase.from('opponents').select('id, name, badge_url, home_venue, home_address, home_postcode').order('name'),
       // Eligible roster per team: approved, active squad players (and for XL
       // only the eligible). Supporters + pending players don't count.
       supabase
