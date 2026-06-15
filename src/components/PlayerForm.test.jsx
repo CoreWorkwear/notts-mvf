@@ -49,4 +49,15 @@ describe('PlayerForm', () => {
     expect(screen.getByText(/can't change your own role/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Active' })).toBeDisabled()
   })
+
+  test('NEGATIVE: clearing a required field blocks save and shows the error by the button', async () => {
+    render(<PlayerForm open onClose={() => {}} onSaved={() => {}} player={PLAYER} teams={TEAMS} currentUserId="admin" />)
+    await userEvent.clear(screen.getByDisplayValue('joe@notts.test'))
+    const submit = screen.getByRole('button', { name: /save changes/i })
+    await userEvent.click(submit)
+
+    expect(h.calls.find((c) => c[0] === 'update' && c[1] === 'profiles')).toBeFalsy()
+    const err = screen.getByText(/email is required/i)
+    expect(submit.previousElementSibling).toBe(err) // by the button, not off-screen at the top
+  })
 })

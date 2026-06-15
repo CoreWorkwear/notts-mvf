@@ -97,8 +97,6 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
       <p className="kicker"><span className="kicker-rule">{existing ? 'EDIT RESULT' : 'LOG RESULT'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{fixture.team?.label} v {them}</h2>
 
-      {error && <p className="field-error mt-3">{error}</p>}
-
       <form className="col gap-4 mt-4" onSubmit={onSubmit}>
         <div>
           <p className="label">Full time</p>
@@ -146,6 +144,8 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
           <input className="input" list="squad-names" placeholder="Pick or type a name" value={motm} onChange={(e) => setMotm(e.target.value)} />
         </div>
 
+        {/* Feedback by the action, not off-screen at the top of a long sheet. */}
+        {error && <p className="field-error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={busy}>
           {busy ? 'Saving…' : existing ? 'Save result' : 'Log result'}
         </button>

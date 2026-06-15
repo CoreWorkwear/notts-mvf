@@ -118,9 +118,6 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
       <p className="kicker"><span className="kicker-rule">{adding ? 'ADD PLAYER' : 'EDIT PLAYER'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{adding ? 'New player' : `${firstName} ${lastName}`}</h2>
 
-      {error && <p className="field-error mt-3">{error}</p>}
-      {notice && <p className="mt-3" style={{ color: 'var(--green-bright)', fontSize: 14 }}>{notice}</p>}
-
       <form className="col gap-3 mt-4" onSubmit={onSubmit}>
         <div className="row gap-2">
           <div className="field grow"><label className="label">First name</label>
@@ -195,6 +192,9 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
           </>
         )}
 
+        {/* Feedback by the action, not off-screen at the top of a long sheet. */}
+        {error && <p className="field-error" role="alert">{error}</p>}
+        {notice && <p role="status" style={{ color: 'var(--green-bright)', fontSize: 14 }}>{notice}</p>}
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>
           {busy ? 'Saving…' : adding ? 'Create player' : 'Save changes'}
         </button>

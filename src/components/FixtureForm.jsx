@@ -119,8 +119,6 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
       <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT FIXTURE' : 'NEW FIXTURE'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 26 }}>{editing ? 'Edit the game' : 'Add a game'}</h2>
 
-      {error && <p className="field-error mt-3">{error}</p>}
-
       <form className="col gap-3 mt-4" onSubmit={onSubmit}>
         <div className="field">
           <label className="label">Team</label>
@@ -197,6 +195,9 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           )}
         </div>
 
+        {/* Error sits right above the action so it's seen where the user clicks
+            (a long sheet scrolls the top out of view — "save does nothing"). */}
+        {error && <p className="field-error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>
           {busy ? 'Saving…' : editing ? 'Save changes' : 'Add fixture'}
         </button>
