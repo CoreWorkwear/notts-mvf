@@ -68,18 +68,17 @@ Deno.serve(async (req) => {
 
   const { data: settings } = await admin
     .from('reminder_settings')
-    .select('club_id, availability_enabled, match_enabled, offsets')
+    .select('club_id, availability_enabled, match_enabled, availability_offsets, match_offsets')
     .or('availability_enabled.eq.true,match_enabled.eq.true')
 
   let remindersSent = 0
   let pushes = 0
 
   for (const s of settings ?? []) {
-    const offsets: number[] = s.offsets ?? []
     const todayIso = new Date(now - 24 * 3_600_000).toISOString().slice(0, 10)
     const { data: fixtures } = await admin
       .from('fixtures')
-      .select('id, match_date, kickoff, team_id, home_away, venue, team:teams(key, label), opponent:opponents(name)')
+      .select('id, match_date, kickoff, team_id, home_away, venue, team:teams(key, label, match_name), opponent:opponents(name)')
       .eq('club_id', s.club_id)
       .eq('status', 'scheduled')
       .gte('match_date', todayIso)
@@ -92,13 +91,18 @@ Deno.serve(async (req) => {
       const sentAvail = (already ?? []).filter((r: any) => r.kind === 'availability').map((r: any) => r.hours_before)
       const sentMatch = (already ?? []).filter((r: any) => r.kind === 'match').map((r: any) => r.hours_before)
 
-      const us = (f as any).team?.label ?? 'Notts MvF'
+      const us = (f as any).team?.match_name || (f as any).team?.label || 'Notts MvF'
       const them = (f as any).opponent?.name ?? 'the opposition'
       const matchup = f.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
 
-      // 1) Availability nudges → the eligible roster.
+      // Everyone's current availability for this fixture (drives both audiences).
+      const { data: avail } = await admin.from('availability').select('profile_id, status').eq('fixture_id', f.id)
+      const statusById: Record<string, string> = {}
+      for (const a of avail ?? []) statusById[(a as any).profile_id] = (a as any).status
+
+      // 1) Availability nudges → eligible roster who've NOT replied or said maybe.
       if (s.availability_enabled) {
-        const due = dueOffsets(hoursToKO, offsets, sentAvail)
+        const due = dueOffsets(hoursToKO, s.availability_offsets ?? [], sentAvail)
         if (due.length) {
           await admin.from('reminders_sent').insert(due.map((o) => ({ fixture_id: f.id, hours_before: o, kind: 'availability' })))
           remindersSent += due.length
@@ -107,9 +111,11 @@ Deno.serve(async (req) => {
             .from('team_memberships')
             .select('profile_id, profiles!inner(active, approved, is_player, xl_eligible)')
             .eq('team_id', f.team_id)
-          const targets = (members ?? [])
+          const roster = (members ?? [])
             .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player && (!isXL || m.profiles?.xl_eligible))
             .map((m: any) => m.profile_id)
+          // undecided only: skip those already in or out
+          const targets = roster.filter((id: string) => statusById[id] !== 'in' && statusById[id] !== 'out')
           pushes += await sendTo(targets, {
             title: matchup, body: 'Coming up — are you in? Tap to set your availability.',
             fixtureId: f.id, withAvailability: true, url: '/fixtures',
@@ -117,14 +123,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 2) Match reminders → players who said in / maybe.
+      // 2) Match reminders → players who said in or maybe.
       if (s.match_enabled) {
-        const due = dueOffsets(hoursToKO, offsets, sentMatch)
+        const due = dueOffsets(hoursToKO, s.match_offsets ?? [], sentMatch)
         if (due.length) {
           await admin.from('reminders_sent').insert(due.map((o) => ({ fixture_id: f.id, hours_before: o, kind: 'match' })))
           remindersSent += due.length
-          const { data: avail } = await admin.from('availability').select('profile_id').eq('fixture_id', f.id).in('status', ['in', 'maybe'])
-          const targets = (avail ?? []).map((a: any) => a.profile_id)
+          const targets = Object.keys(statusById).filter((id) => statusById[id] === 'in' || statusById[id] === 'maybe')
           const where = f.venue && f.venue !== 'TBC' ? ` at ${f.venue}` : ''
           pushes += await sendTo(targets, {
             title: matchup,

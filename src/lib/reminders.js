@@ -40,3 +40,18 @@ export const CUTOFF_HOURS = 72
 export function offsetLabel(hours) {
   return OFFSET_CHOICES.find((c) => c.hours === hours)?.label ?? `${hours}h`
 }
+
+// --- who each reminder type goes to (mirrored in the run-reminders function) ---
+// Availability nudges chase the UNDECIDED: roster players who've not replied
+// (no status) or said maybe. Skips those already in or out.
+export function availabilityReminderTargets(rosterIds, statusById = {}) {
+  return (rosterIds ?? []).filter((id) => {
+    const s = statusById[id]
+    return s !== 'in' && s !== 'out'
+  })
+}
+
+// Match reminders go to players who said in or maybe.
+export function matchReminderTargets(statusById = {}) {
+  return Object.keys(statusById).filter((id) => statusById[id] === 'in' || statusById[id] === 'maybe')
+}

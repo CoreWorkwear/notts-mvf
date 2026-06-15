@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { hoursUntil, dueOffsets, offsetLabel } from './reminders'
+import { hoursUntil, dueOffsets, offsetLabel, OFFSET_CHOICES, availabilityReminderTargets, matchReminderTargets } from './reminders'
 
 describe('hoursUntil', () => {
   test('positive before kickoff, negative after', () => {
@@ -32,6 +32,30 @@ describe('dueOffsets', () => {
   })
   test('handles missing offsets/sent safely', () => {
     expect(dueOffsets({ hoursToKO: 10 })).toEqual([])
+  })
+})
+
+describe('OFFSET_CHOICES — the exact periods the club asked for', () => {
+  test('is precisely 2 weeks / 1 week / 5 / 4 / 3 / 2 / 1 day, in that order', () => {
+    expect(OFFSET_CHOICES.map((c) => c.hours)).toEqual([336, 168, 120, 96, 72, 48, 24])
+    expect(OFFSET_CHOICES.map((c) => c.label)).toEqual(['2 weeks', '1 week', '5 days', '4 days', '3 days', '2 days', '1 day'])
+  })
+})
+
+describe('availabilityReminderTargets — undecided only (not replied + maybe)', () => {
+  const roster = ['a', 'b', 'c', 'd', 'e']
+  test('keeps not-replied and maybe, drops in and out', () => {
+    const statusById = { a: 'in', b: 'out', c: 'maybe' /* d, e not replied */ }
+    expect(availabilityReminderTargets(roster, statusById).sort()).toEqual(['c', 'd', 'e'])
+  })
+  test('empty roster is safe', () => {
+    expect(availabilityReminderTargets([], {})).toEqual([])
+  })
+})
+
+describe('matchReminderTargets — in + maybe only', () => {
+  test('keeps in and maybe, drops out', () => {
+    expect(matchReminderTargets({ a: 'in', b: 'maybe', c: 'out' }).sort()).toEqual(['a', 'b'])
   })
 })
 
