@@ -1,12 +1,15 @@
 import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useClub } from '../hooks/useClub'
 import LeagueTablePanel from '../components/LeagueTablePanel'
 import StatsPanel from '../components/StatsPanel'
+import MediaPanel from '../components/MediaPanel'
 import Loader from '../components/Loader'
 
-// Sub-toggle between League Table and Club Stats (HANDOVER §5).
+// Sub-toggle between League Table, Club Stats and (admin) Media (HANDOVER §5/§6).
 export default function Club() {
+  const { isAdmin } = useAuth()
   const { seasonId } = useSeason()
   const { table, teams, stats, loading, refetch } = useClub(seasonId)
   const [view, setView] = useState('table')
@@ -19,11 +22,14 @@ export default function Club() {
       <div className="row gap-2 mt-3">
         <button className={'btn grow ' + (view === 'table' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('table')}>League Table</button>
         <button className={'btn grow ' + (view === 'stats' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('stats')}>Club Stats</button>
+        {isAdmin && (
+          <button className={'btn grow ' + (view === 'media' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('media')}>Media</button>
+        )}
       </div>
 
-      {view === 'table'
-        ? <LeagueTablePanel table={table} teams={teams} seasonId={seasonId} onSaved={refetch} />
-        : <StatsPanel stats={stats} />}
+      {view === 'table' && <LeagueTablePanel table={table} teams={teams} seasonId={seasonId} onSaved={refetch} />}
+      {view === 'stats' && <StatsPanel stats={stats} />}
+      {view === 'media' && isAdmin && <MediaPanel />}
     </div>
   )
 }

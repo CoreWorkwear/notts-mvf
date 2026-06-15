@@ -6,18 +6,23 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [club, setClub] = useState(null) // club row (name, crest_url)
   const [teamKeys, setTeamKeys] = useState([]) // ['xl','community']
   const [loading, setLoading] = useState(true)
 
-  // Pull the profile row + team memberships for the signed-in user.
+  // Pull the profile row + team memberships + club for the signed-in user.
   const loadProfile = useCallback(async (uid) => {
-    if (!uid) { setProfile(null); setTeamKeys([]); return }
+    if (!uid) { setProfile(null); setTeamKeys([]); setClub(null); return }
     const [{ data: prof }, { data: memberships }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).single(),
       supabase.from('team_memberships').select('teams(key)').eq('profile_id', uid),
     ])
     setProfile(prof ?? null)
     setTeamKeys((memberships ?? []).map((m) => m.teams?.key).filter(Boolean))
+    if (prof?.club_id) {
+      const { data: c } = await supabase.from('clubs').select('id, name, crest_url').eq('id', prof.club_id).single()
+      setClub(c ?? null)
+    } else setClub(null)
   }, [])
 
   useEffect(() => {
@@ -56,6 +61,7 @@ export function AuthProvider({ children }) {
     session,
     user: session?.user ?? null,
     profile,
+    club,
     teamKeys,
     loading,
     isAuthed: !!session,

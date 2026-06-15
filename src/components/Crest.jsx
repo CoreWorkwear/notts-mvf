@@ -1,11 +1,16 @@
-// Club crest. Real badge comes from Storage (clubs.crest_url) at the media step.
-// Until then: a modern monogram on the signature red/green diagonal split — a
-// place identity, NOT Robin Hood folklore (DESIGN-SYSTEM §8).
+import { useAuth } from '../context/AuthContext'
+
+// Club crest. Real badge comes from Storage (clubs.crest_url); defaults to the
+// signed-in club's crest when no explicit url is passed. Fallback: a modern
+// monogram on the signature red/green diagonal split — a place identity, NOT
+// Robin Hood folklore (DESIGN-SYSTEM §8).
 export default function Crest({ url, size = 30 }) {
-  if (url) {
+  const { club } = useAuth()
+  const src = url ?? club?.crest_url
+  if (src) {
     return (
       <img
-        src={url}
+        src={src}
         alt="Nottinghamshire MvF crest"
         width={size}
         height={size}
