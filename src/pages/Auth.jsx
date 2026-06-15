@@ -172,7 +172,7 @@ export default function Auth() {
                       >{TEAMS[k].label}</button>
                     ))}
                   </div>
-                  <span className="dim" style={{ fontSize: 12 }}>You'll join as a player — the manager signs you off for XL.</span>
+                  <span className="dim" style={{ fontSize: 12 }}>You'll join as a player — the manager signs you off for the First Team.</span>
                 </div>
 
                 <div className="field">

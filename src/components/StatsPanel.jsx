@@ -3,7 +3,7 @@ import { statRows, goldenBoot, leaders } from '../lib/stats'
 
 const SCOPES = [
   { key: 'whole', label: 'Whole Club' },
-  { key: 'xl', label: 'XL 11s' },
+  { key: 'xl', label: 'First Team' },
   { key: 'community', label: 'Community' },
 ]
 const METRICS = [

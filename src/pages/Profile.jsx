@@ -21,7 +21,7 @@ export default function Profile() {
             {TEAMS[k]?.label ?? k}
           </span>
         ))}
-        {xlEligible && <span className="chip" aria-pressed="true">XL eligible</span>}
+        {xlEligible && <span className="chip" aria-pressed="true">First-team eligible</span>}
         {isAdmin && <span className="chip" aria-pressed="true">Manager</span>}
       </div>
 

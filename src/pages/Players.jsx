@@ -88,9 +88,9 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
                 <span className="pl-tags">
                   {!p.is_player && <span className="tag tag-supporter">Supporter</span>}
                   {p.is_player && !p.approved && <span className="tag tag-pending">Pending</span>}
-                  {p.teamKeys.includes('xl') && <span className="tag tag-xl">XL</span>}
+                  {p.teamKeys.includes('xl') && <span className="tag tag-xl">First Team</span>}
                   {p.teamKeys.includes('community') && <span className="tag tag-co">Community</span>}
-                  {p.xl_eligible && <span className="tag">XL eligible</span>}
+                  {p.xl_eligible && <span className="tag">First-team eligible</span>}
                   {p.role === 'admin' && <span className="tag tag-admin">Manager</span>}
                 </span>
               </span>

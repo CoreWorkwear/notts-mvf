@@ -16,12 +16,12 @@ values ('22222222-2222-2222-2222-222222222222',
         '11111111-1111-1111-1111-111111111111', '2025/26', true)
 on conflict (id) do nothing;
 
--- Two teams: XL 11s (first team, red) listed first; Community (reserves, green)
+-- Two teams: First Team (key 'xl', red) listed first; Community (reserves, green)
 insert into teams (id, club_id, key, label, is_first_team, colour, league_name)
 values
   ('33333333-3333-3333-3333-333333333333',
    '11111111-1111-1111-1111-111111111111',
-   'xl', 'XL 11s', true, '#E11D2A', 'MvF XL National League'),
+   'xl', 'First Team', true, '#E11D2A', 'MvF XL National League'),
   ('44444444-4444-4444-4444-444444444444',
    '11111111-1111-1111-1111-111111111111',
    'community', 'Community', false, '#2FA84F', 'MvF Community League')

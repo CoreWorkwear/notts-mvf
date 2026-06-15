@@ -96,9 +96,12 @@ export function useFixtures(seasonId) {
     const onVisible = () => { if (document.visibilityState === 'visible') load() }
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', onVisible)
+    // A push-notification availability action just committed → show the new value.
+    window.addEventListener('mvf-availability-applied', refresh)
     return () => {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('mvf-availability-applied', refresh)
     }
   }, [load])
 

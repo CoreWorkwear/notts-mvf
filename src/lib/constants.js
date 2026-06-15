@@ -4,10 +4,11 @@ export const POSITIONS = [
   'GK', 'RB', 'CB', 'LB', 'CDM', 'CM', 'CAM', 'RM', 'LM', 'RW', 'LW', 'ST', 'CF',
 ]
 
-// Team keys + identity. XL (first team, red) listed first everywhere.
+// Team keys + identity. First Team (key 'xl', red) listed first everywhere.
+// NB: the key stays 'xl' (all code/RLS keys off it); only the label is "First Team".
 export const TEAMS = {
-  xl:        { key: 'xl',        label: 'XL 11s',    colour: '#E11D2A', isFirstTeam: true },
-  community: { key: 'community', label: 'Community', colour: '#2FA84F', isFirstTeam: false },
+  xl:        { key: 'xl',        label: 'First Team', colour: '#E11D2A', isFirstTeam: true },
+  community: { key: 'community', label: 'Community',  colour: '#2FA84F', isFirstTeam: false },
 }
 export const TEAM_ORDER = ['xl', 'community']
 

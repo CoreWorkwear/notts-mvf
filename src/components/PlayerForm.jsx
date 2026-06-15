@@ -245,7 +245,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
                   <option value="admin">Admin</option>
                 </select>
                 <button type="button" className="chip" aria-pressed={xlEligible} onClick={() => setXlEligible((x) => !x)}>
-                  {xlEligible ? 'XL eligible ✓' : 'XL eligible'}
+                  {xlEligible ? 'First-team eligible ✓' : 'First-team eligible'}
                 </button>
                 <button type="button" className="chip" aria-pressed={active} disabled={self} onClick={() => setActive((a) => !a)}
                   style={{ color: active ? 'var(--green-bright)' : 'var(--red-bright)' }}>

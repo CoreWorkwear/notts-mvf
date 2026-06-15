@@ -19,7 +19,7 @@
   --scrim:     rgba(0,0,0,.55);
   --card-shadow: 0 8px 24px -16px rgba(0,0,0,.8);
 
-  /* XL 11s — FIRST TEAM — red, the lead accent */
+  /* First Team (key 'xl') — red, the lead accent */
   --red:        #E11D2A;
   --red-bright: #FF3340;
   --red-dim:    rgba(225,29,42,0.14);
