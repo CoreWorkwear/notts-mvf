@@ -4,6 +4,7 @@ import './styles/tokens.css'
 import App from './App'
 import GrainOverlay from './components/GrainOverlay'
 import InstallPrompt from './components/InstallPrompt'
+import PushActions from './components/PushActions'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')).render(
             <App />
             <GrainOverlay />
             <InstallPrompt />
+            <PushActions />
           </SeasonProvider>
         </AuthProvider>
       </ThemeProvider>

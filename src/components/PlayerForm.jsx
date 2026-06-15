@@ -91,19 +91,25 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
     setError(null); setBusy(true)
     try {
       if (adding) {
-        // Create the login without disturbing the admin's session.
-        const tmp = makeSignupClient()
-        const { error } = await tmp.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { data: {
-            first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim(),
-            dob: dob || null, positions, preferred: preferred || null, teams: teamKeys,
-          } },
-        })
-        if (error) throw error
-        // role/eligibility are forced player/false by the trigger — admin can
-        // promote on a follow-up edit.
+        const meta = {
+          first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim(),
+          dob: dob || null, positions, preferred: preferred || null, teams: teamKeys,
+        }
+        // Prefer the admin Edge Function (proper server-side create). If it's
+        // not deployed yet, fall back to the throwaway signUp (which keeps the
+        // admin's session intact). Either way the trigger forces player/not-eligible.
+        let created = false
+        try {
+          const { data, error } = await supabase.functions.invoke('admin-create-player', {
+            body: { email: email.trim(), password, ...meta },
+          })
+          created = !error && !!data?.id
+        } catch { /* function not deployed — fall through */ }
+        if (!created) {
+          const tmp = makeSignupClient()
+          const { error } = await tmp.auth.signUp({ email: email.trim(), password, options: { data: meta } })
+          if (error) throw error
+        }
       } else {
         // Duplicate-email guard (excluding this player).
         const { data: dupe } = await supabase.from('profiles').select('id').eq('email', email.trim()).neq('id', player.id)

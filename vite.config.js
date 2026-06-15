@@ -33,6 +33,8 @@ export default defineConfig({
         // Supabase API/auth is always network — never serve it from the SW cache.
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
         cleanupOutdatedCaches: true,
+        // Web-push handlers live in a plain script imported into the SW.
+        importScripts: ['/push-sw.js'],
       },
       devOptions: { enabled: false },
     }),

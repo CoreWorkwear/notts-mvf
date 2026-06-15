@@ -1,5 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import { TEAMS } from '../lib/constants'
+import NotificationToggle from '../components/NotificationToggle'
 
 // You / Profile. Self-edit (name/phone/positions/preferred) lands at step 9;
 // for now it shows the real record + badges from the auth context.
@@ -33,6 +34,9 @@ export default function Profile() {
       <p className="dim mt-3" style={{ fontSize: 12 }}>
         Editing your details lands soon. Email is your login — the manager changes that.
       </p>
+
+      <p className="kicker mt-5"><span className="kicker-rule">NOTIFICATIONS</span></p>
+      <div className="mt-3"><NotificationToggle /></div>
     </div>
   )
 }
