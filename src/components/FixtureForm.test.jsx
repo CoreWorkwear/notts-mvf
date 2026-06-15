@@ -132,6 +132,26 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     expect(venue).toHaveFocus()
   })
 
+  test('league is a placeholder hint (not a pre-filled value) but still saves the team default', async () => {
+    const onSaved = vi.fn()
+    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    // the box looks EMPTY, with the team's league shown only as a hint
+    const league = screen.getByPlaceholderText('MvF XL National League')
+    expect(league).toHaveValue('')
+
+    const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Long Eaton'))
+    await userEvent.selectOptions(oppSelect, 'opp-1')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec 3G')
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins[2].league_name).toBe('MvF XL National League') // defaulted from the team on save
+  })
+
   test('save is blocked (not a silent no-op) when no season is selected', async () => {
     render(<StrictMode><Harness seasonId={null} /></StrictMode>)
     await userEvent.click(screen.getByText('Open form'))

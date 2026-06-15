@@ -62,8 +62,10 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   }, [open])
 
   const team = teams.find((t) => t.id === teamId)
-  // League name defaults from the team when League type and not yet set.
-  const effectiveLeague = leagueName || (type === 'League' ? team?.league_name ?? '' : '')
+  // League defaults from the team but is shown as a placeholder hint, not a
+  // pre-filled value (which reads as stale). The default is applied on save.
+  const leaguePlaceholder = (type === 'League' && team?.league_name) ? team.league_name : 'League name'
+  const leagueToSave = leagueName.trim() || (type === 'League' ? team?.league_name ?? '' : '')
 
   async function onDelete() {
     if (!confirm('Bin this fixture off? This removes it and any availability for it.')) return
@@ -116,7 +118,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         kickoff,
         home_away: homeAway,
         fixture_type: type,
-        league_name: type === 'League' ? (effectiveLeague || null) : null,
+        league_name: type === 'League' ? (leagueToSave || null) : null,
         venue: venue.trim(),
         address: address.trim() || null,
         w3w: w3w.trim() || null,
@@ -195,7 +197,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         {type === 'League' && (
           <div className="field">
             <label className="label">League</label>
-            <input className="input" value={effectiveLeague} onChange={(e) => setLeagueName(e.target.value)} placeholder="League name" />
+            <input className="input" value={leagueName} onChange={(e) => setLeagueName(e.target.value)} placeholder={leaguePlaceholder} />
           </div>
         )}
 
