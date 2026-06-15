@@ -50,14 +50,14 @@ describe('PlayerForm', () => {
     expect(screen.getByRole('button', { name: 'Active' })).toBeDisabled()
   })
 
-  test('NEGATIVE: clearing a required field blocks save and shows the error by the button', async () => {
+  test('NEGATIVE: clearing a required field blocks save, pops an error and flags the field', async () => {
     render(<PlayerForm open onClose={() => {}} onSaved={() => {}} player={PLAYER} teams={TEAMS} currentUserId="admin" />)
-    await userEvent.clear(screen.getByDisplayValue('joe@notts.test'))
-    const submit = screen.getByRole('button', { name: /save changes/i })
-    await userEvent.click(submit)
+    const emailInput = screen.getByDisplayValue('joe@notts.test')
+    await userEvent.clear(emailInput)
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
 
     expect(h.calls.find((c) => c[0] === 'update' && c[1] === 'profiles')).toBeFalsy()
-    const err = screen.getByText(/email is required/i)
-    expect(submit.previousElementSibling).toBe(err) // by the button, not off-screen at the top
+    expect(screen.getByRole('alert')).toHaveTextContent(/email/i)
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true')
   })
 })

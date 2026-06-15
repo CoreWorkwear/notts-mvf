@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
+import Toast from './Toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { FIXTURE_TYPES } from '../lib/constants'
@@ -15,6 +16,8 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const editing = !!fixture
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [invalid, setInvalid] = useState(new Set())
+  const clearInvalid = (k) => setInvalid((s) => { if (!s.has(k)) return s; const n = new Set(s); n.delete(k); return n })
 
   const [teamId, setTeamId] = useState('')
   const [opponentId, setOpponentId] = useState('')
@@ -33,6 +36,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   useEffect(() => {
     if (!open) return
     setError(null)
+    setInvalid(new Set())
     setTeamId(fixture?.team_id ?? teams[0]?.id ?? '')
     setOpponentId(fixture?.opponent_id ?? '')
     setNewOpponent('')
@@ -64,10 +68,19 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   async function onSubmit(e) {
     e.preventDefault()
     setError(null)
-    if (!teamId || !matchDate || !kickoff || !venue.trim()) {
-      setError('Team, date, kickoff and venue are all needed.'); return
+
+    // Collect every missing required field so we can flag them all at once.
+    const miss = []
+    if (!teamId) miss.push('team')
+    if (!opponentId && !newOpponent.trim()) miss.push('opponent')
+    if (!matchDate) miss.push('date')
+    if (!kickoff) miss.push('kickoff')
+    if (!venue.trim()) miss.push('venue')
+    if (miss.length) {
+      setInvalid(new Set(miss))
+      setError(`Still needs: ${miss.join(', ')}.`)
+      return
     }
-    if (!opponentId && !newOpponent.trim()) { setError('Pick an opponent or add a new one.'); return }
     // Guard the required FKs so a not-yet-loaded season/profile can't produce a
     // silent insert that the DB rejects ("save does nothing").
     if (!seasonId) { setError('No season selected yet — pick a season up top, then try again.'); return }
@@ -116,36 +129,42 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
 
   return (
     <Sheet open={open} onClose={onClose}>
+      <Toast message={error} onDismiss={() => setError(null)} />
       <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT FIXTURE' : 'NEW FIXTURE'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 26 }}>{editing ? 'Edit the game' : 'Add a game'}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit}>
         <div className="field">
           <label className="label">Team</label>
-          <select className="select" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+          <select className="select" value={teamId} aria-invalid={invalid.has('team') || undefined}
+            onChange={(e) => { setTeamId(e.target.value); clearInvalid('team') }}>
             {teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </div>
 
         <div className="field">
           <label className="label">Opponent</label>
-          <select className="select" value={opponentId} onChange={(e) => setOpponentId(e.target.value)}>
+          <select className="select" value={opponentId} aria-invalid={invalid.has('opponent') || undefined}
+            onChange={(e) => { setOpponentId(e.target.value); clearInvalid('opponent') }}>
             <option value="">— add a new one below —</option>
             {opponents.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
           {!opponentId && (
-            <input className="input mt-2" placeholder="New opponent name" value={newOpponent} onChange={(e) => setNewOpponent(e.target.value)} />
+            <input className="input mt-2" placeholder="New opponent name" value={newOpponent} aria-invalid={invalid.has('opponent') || undefined}
+              onChange={(e) => { setNewOpponent(e.target.value); clearInvalid('opponent') }} />
           )}
         </div>
 
         <div className="row gap-2">
           <div className="field grow">
             <label className="label">Date</label>
-            <input className="input" type="date" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} />
+            <input className="input" type="date" value={matchDate} aria-invalid={invalid.has('date') || undefined}
+              onChange={(e) => { setMatchDate(e.target.value); clearInvalid('date') }} />
           </div>
           <div className="field grow">
             <label className="label">Kickoff</label>
-            <input className="input" type="time" value={kickoff} onChange={(e) => setKickoff(e.target.value)} />
+            <input className="input" type="time" value={kickoff} aria-invalid={invalid.has('kickoff') || undefined}
+              onChange={(e) => { setKickoff(e.target.value); clearInvalid('kickoff') }} />
           </div>
         </div>
 
@@ -173,7 +192,8 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
 
         <div className="field">
           <label className="label">Venue</label>
-          <input className="input" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="e.g. Harvey Hadden 4G" />
+          <input className="input" value={venue} aria-invalid={invalid.has('venue') || undefined}
+            onChange={(e) => { setVenue(e.target.value); clearInvalid('venue') }} placeholder="e.g. Harvey Hadden 4G" />
         </div>
         <div className="field">
           <label className="label">Address</label>
@@ -195,9 +215,6 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           )}
         </div>
 
-        {/* Error sits right above the action so it's seen where the user clicks
-            (a long sheet scrolls the top out of view — "save does nothing"). */}
-        {error && <p className="field-error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>
           {busy ? 'Saving…' : editing ? 'Save changes' : 'Add fixture'}
         </button>

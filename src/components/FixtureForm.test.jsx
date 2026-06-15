@@ -110,7 +110,7 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     })
   })
 
-  test('NEGATIVE: missing venue blocks the save and shows the error next to the Save button', async () => {
+  test('NEGATIVE: missing venue blocks the save, pops an error and flags the field', async () => {
     render(<StrictMode><Harness /></StrictMode>)
     await userEvent.click(screen.getByText('Open form'))
     await flush()
@@ -118,15 +118,15 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     // pick an existing opponent but leave venue blank (the user's exact case)
     const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Long Eaton'))
     await userEvent.selectOptions(oppSelect, 'opp-1')
-    const submit = screen.getByRole('button', { name: /add fixture/i })
-    await userEvent.click(submit)
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
     await flush()
 
-    // it must NOT write, and must say what's missing…
+    // must NOT write…
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeFalsy()
-    const err = screen.getByText(/all needed/i)
-    // …right next to the button the user just pressed (not off-screen at the top)
-    expect(submit.previousElementSibling).toBe(err)
+    // …pop up a prominent error naming the missing field…
+    expect(screen.getByRole('alert')).toHaveTextContent(/venue/i)
+    // …and flag the venue input itself.
+    expect(screen.getByPlaceholderText(/Harvey Hadden/i)).toHaveAttribute('aria-invalid', 'true')
   })
 
   test('save is blocked (not a silent no-op) when no season is selected', async () => {
@@ -141,6 +141,6 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
 
     // must NOT fire an insert with a null season_id, and must tell the user why
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeFalsy()
-    expect(screen.getByText(/season/i)).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/season/i)
   })
 })

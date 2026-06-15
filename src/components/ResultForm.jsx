@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
+import Toast from './Toast'
 import { supabase } from '../lib/supabase'
 
 // Admin: log or edit a result. FT + HT scores, goals added one at a time
@@ -90,6 +91,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
 
   return (
     <Sheet open={open} onClose={onClose}>
+      <Toast message={error} onDismiss={() => setError(null)} />
       <datalist id="squad-names">
         {squad.map((s) => <option key={s.id} value={s.name} />)}
       </datalist>
@@ -144,8 +146,6 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
           <input className="input" list="squad-names" placeholder="Pick or type a name" value={motm} onChange={(e) => setMotm(e.target.value)} />
         </div>
 
-        {/* Feedback by the action, not off-screen at the top of a long sheet. */}
-        {error && <p className="field-error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={busy}>
           {busy ? 'Saving…' : existing ? 'Save result' : 'Log result'}
         </button>

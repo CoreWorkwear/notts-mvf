@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
+import Toast from './Toast'
 import { supabase, makeSignupClient } from '../lib/supabase'
 import { POSITIONS } from '../lib/constants'
 import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
@@ -31,10 +32,12 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [invalid, setInvalid] = useState(new Set())
+  const clearInvalid = (k) => setInvalid((s) => { if (!s.has(k)) return s; const n = new Set(s); n.delete(k); return n })
 
   useEffect(() => {
     if (!open) return
-    setError(null); setNotice(null); setPassword('')
+    setError(null); setNotice(null); setPassword(''); setInvalid(new Set())
     setFirstName(player?.first_name ?? '')
     setLastName(player?.last_name ?? '')
     setEmail(player?.email ?? '')
@@ -65,7 +68,17 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
   async function onSubmit(e) {
     e.preventDefault()
     const v = validatePlayer({ first_name: firstName, last_name: lastName, email, phone }, { needPassword: adding, password })
-    if (v) { setError(v); return }
+    if (v) {
+      const bad = new Set()
+      if (!firstName.trim()) bad.add('first')
+      if (!lastName.trim()) bad.add('last')
+      if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) bad.add('email')
+      if (!phone.trim()) bad.add('phone')
+      if (adding && (!password || password.length < 6)) bad.add('password')
+      setInvalid(bad)
+      setError(v)
+      return
+    }
     setError(null); setBusy(true)
     try {
       if (adding) {
@@ -115,24 +128,31 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
 
   return (
     <Sheet open={open} onClose={onClose}>
+      <Toast message={error} tone="error" onDismiss={() => setError(null)} />
+      <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
       <p className="kicker"><span className="kicker-rule">{adding ? 'ADD PLAYER' : 'EDIT PLAYER'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{adding ? 'New player' : `${firstName} ${lastName}`}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit}>
         <div className="row gap-2">
           <div className="field grow"><label className="label">First name</label>
-            <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} /></div>
+            <input className="input" value={firstName} aria-invalid={invalid.has('first') || undefined}
+              onChange={(e) => { setFirstName(e.target.value); clearInvalid('first') }} /></div>
           <div className="field grow"><label className="label">Surname</label>
-            <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>
+            <input className="input" value={lastName} aria-invalid={invalid.has('last') || undefined}
+              onChange={(e) => { setLastName(e.target.value); clearInvalid('last') }} /></div>
         </div>
         <div className="field"><label className="label">Email {adding ? '(their login)' : ''}</label>
-          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <input className="input" type="email" value={email} aria-invalid={invalid.has('email') || undefined}
+            onChange={(e) => { setEmail(e.target.value); clearInvalid('email') }} /></div>
         <div className="field"><label className="label">Phone</label>
-          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+          <input className="input" value={phone} aria-invalid={invalid.has('phone') || undefined}
+            onChange={(e) => { setPhone(e.target.value); clearInvalid('phone') }} /></div>
 
         {adding && (
           <div className="field"><label className="label">Starter password (hand this over)</label>
-            <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="min 6 characters" /></div>
+            <input className="input" value={password} aria-invalid={invalid.has('password') || undefined}
+              onChange={(e) => { setPassword(e.target.value); clearInvalid('password') }} placeholder="min 6 characters" /></div>
         )}
 
         <div className="row gap-2">
@@ -192,9 +212,6 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
           </>
         )}
 
-        {/* Feedback by the action, not off-screen at the top of a long sheet. */}
-        {error && <p className="field-error" role="alert">{error}</p>}
-        {notice && <p role="status" style={{ color: 'var(--green-bright)', fontSize: 14 }}>{notice}</p>}
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>
           {busy ? 'Saving…' : adding ? 'Create player' : 'Save changes'}
         </button>
