@@ -63,7 +63,9 @@ function Section({ title, list, onEdit, meId, muted, empty }) {
         <div className="col gap-2 mt-2 stagger">
           {list.map((p) => (
             <button key={p.id} className="card pl-row" onClick={() => onEdit(p)} style={muted ? { opacity: 0.7 } : {}}>
-              <span className="pl-av mono">{`${(p.first_name?.[0] ?? '')}${(p.last_name?.[0] ?? '')}`.toUpperCase()}</span>
+              {p.photo_url
+                ? <img className="pl-av" src={p.photo_url} alt="" />
+                : <span className="pl-av mono">{`${(p.first_name?.[0] ?? '')}${(p.last_name?.[0] ?? '')}`.toUpperCase()}</span>}
               <span className="pl-main">
                 <span className="pl-name">{p.first_name} {p.last_name}{p.id === meId ? ' · you' : ''}</span>
                 <span className="pl-tags">
@@ -83,7 +85,8 @@ function Section({ title, list, onEdit, meId, muted, empty }) {
         .pl-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--coal);
           color: var(--bone); border: 1px solid var(--line); text-align: left; }
         .pl-av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
-          background: var(--slate); border: 1px solid var(--line-2); font-size: 13px; font-weight: 600; flex: none; }
+          background: var(--slate); border: 1px solid var(--line-2); font-size: 13px; font-weight: 600; flex: none;
+          object-fit: cover; }
         .pl-main { flex: 1; min-width: 0; }
         .pl-name { display: block; font-weight: 600; }
         .pl-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }

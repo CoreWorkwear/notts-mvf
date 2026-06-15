@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
+import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { FIXTURE_TYPES } from '../lib/constants'
@@ -163,6 +164,22 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           {!opponentId && (
             <input className="input mt-2" placeholder="New opponent name" value={newOpponent} aria-invalid={invalid.has('opponent') || undefined}
               onChange={(e) => { setNewOpponent(e.target.value); clearInvalid('opponent') }} />
+          )}
+          {opponentId && (
+            <div className="mt-2">
+              <span className="label">Badge (reused for every game vs them)</span>
+              <div className="mt-1">
+                <ImageUpload
+                  folder="opponents" shape="round" maxDim={256}
+                  current={opponents.find((o) => o.id === opponentId)?.badge_url}
+                  label={opponents.find((o) => o.id === opponentId)?.badge_url ? 'Replace badge' : 'Add badge'}
+                  onUploaded={async (url) => {
+                    const { error } = await supabase.from('opponents').update({ badge_url: url }).eq('id', opponentId)
+                    if (error) setError(error.message)
+                  }}
+                />
+              </div>
+            </div>
           )}
         </div>
 

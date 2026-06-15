@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
+import ImageUpload from './ImageUpload'
 import { supabase, makeSignupClient } from '../lib/supabase'
 import { POSITIONS } from '../lib/constants'
 import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
@@ -179,6 +180,21 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
               <input className="input" value={ecName} onChange={(e) => setEcName(e.target.value)} /></div>
             <div className="field grow"><label className="label">Emergency phone</label>
               <input className="input" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
+          </div>
+        )}
+
+        {!adding && (
+          <div className="field">
+            <label className="label">Headshot</label>
+            <ImageUpload
+              folder="players" shape="round" maxDim={512}
+              current={player?.photo_url}
+              label={player?.photo_url ? 'Replace headshot' : 'Add headshot'}
+              onUploaded={async (url) => {
+                const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', player.id)
+                if (error) setError(error.message)
+              }}
+            />
           </div>
         )}
 
