@@ -36,9 +36,11 @@ describe('dueOffsets', () => {
 })
 
 describe('offsetLabel', () => {
-  test('friendly labels for known offsets, fallback otherwise', () => {
+  test('friendly day-based labels for known offsets, fallback otherwise', () => {
+    expect(offsetLabel(336)).toBe('2 weeks')
+    expect(offsetLabel(168)).toBe('1 week')
+    expect(offsetLabel(72)).toBe('3 days')
     expect(offsetLabel(24)).toBe('1 day')
-    expect(offsetLabel(6)).toBe('6 hours')
-    expect(offsetLabel(99)).toBe('99h')
+    expect(offsetLabel(6)).toBe('6h') // not a standard choice → fallback
   })
 })

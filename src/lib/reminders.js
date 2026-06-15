@@ -21,15 +21,21 @@ export function dueOffsets({ hoursToKO, offsets, sent }) {
     .sort((a, b) => a - b)
 }
 
-// The offsets a manager can pick, in hours, with friendly labels.
+// The offsets a manager can pick, in hours, with friendly labels. Day-based:
+// from a fortnight out down to the day before. Availability usually closes ~3
+// days out (CUTOFF_HOURS) — the later two are the manager's discretion.
 export const OFFSET_CHOICES = [
-  { hours: 72, label: '3 days' },
-  { hours: 48, label: '2 days' },
-  { hours: 24, label: '1 day' },
-  { hours: 12, label: '12 hours' },
-  { hours: 6, label: '6 hours' },
-  { hours: 3, label: '3 hours' },
+  { hours: 336, label: '2 weeks' },
+  { hours: 168, label: '1 week' },
+  { hours: 120, label: '5 days' },
+  { hours: 96,  label: '4 days' },
+  { hours: 72,  label: '3 days' },
+  { hours: 48,  label: '2 days' },
+  { hours: 24,  label: '1 day' },
 ]
+
+// The suggested availability cut-off; later nudges are flagged as discretionary.
+export const CUTOFF_HOURS = 72
 
 export function offsetLabel(hours) {
   return OFFSET_CHOICES.find((c) => c.hours === hours)?.label ?? `${hours}h`

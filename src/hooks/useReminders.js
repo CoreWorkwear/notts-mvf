@@ -13,7 +13,7 @@ export function useReminders() {
     setLoading(true)
     const { data } = await supabase
       .from('reminder_settings')
-      .select('club_id, enabled, offsets')
+      .select('club_id, availability_enabled, match_enabled, offsets')
       .maybeSingle()
     setSettings(data ?? null)
     setLoading(false)
@@ -21,12 +21,12 @@ export function useReminders() {
 
   useEffect(() => { load() }, [load])
 
-  async function save({ enabled, offsets }) {
+  async function save({ availabilityEnabled, matchEnabled, offsets }) {
     const club_id = settings?.club_id ?? profile?.club_id
     if (!club_id) return { error: { message: 'No club found.' } }
     const { error } = await supabase
       .from('reminder_settings')
-      .upsert({ club_id, enabled, offsets }, { onConflict: 'club_id' })
+      .upsert({ club_id, availability_enabled: availabilityEnabled, match_enabled: matchEnabled, offsets }, { onConflict: 'club_id' })
     if (!error) await load()
     return { error }
   }
