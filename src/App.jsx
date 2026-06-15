@@ -4,6 +4,7 @@ import Header from './components/Header'
 import BottomNav from './components/BottomNav'
 import Loader from './components/Loader'
 import Auth from './pages/Auth'
+import SetNewPassword from './pages/SetNewPassword'
 import Fixtures from './pages/Fixtures'
 import Results from './pages/Results'
 import Club from './pages/Club'
@@ -12,9 +13,10 @@ import AdminAvailability from './pages/AdminAvailability'
 import Players from './pages/Players'
 
 export default function App() {
-  const { loading, isAuthed, isAdmin } = useAuth()
+  const { loading, isAuthed, isAdmin, passwordRecovery } = useAuth()
 
   if (loading) return <Loader label="Warming up…" />
+  if (passwordRecovery) return <SetNewPassword />
   if (!isAuthed) return <Auth />
 
   // Admin-only routes fall back to Fixtures for players.

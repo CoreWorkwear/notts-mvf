@@ -6,7 +6,7 @@ import Crest from '../components/Crest'
 // Login + Register. Register captures everything the trigger needs; the server
 // forces player / not-eligible regardless of what we send (HANDOVER §3).
 export default function Auth() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, sendPasswordReset } = useAuth()
   const [tab, setTab] = useState('login')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -32,6 +32,18 @@ export default function Auth() {
     const { error } = await signIn(email.trim(), password)
     setBusy(false)
     if (error) setError(error.message)
+  }
+
+  async function onReset(e) {
+    e.preventDefault()
+    setError(null); setNotice(null)
+    if (!email.trim()) { setError('Pop your email in first.'); return }
+    setBusy(true)
+    const { error } = await sendPasswordReset(email)
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    setNotice("If that email's registered, a reset link's on its way. Check your inbox.")
+    setTab('login')
   }
 
   async function onRegister(e) {
@@ -78,6 +90,7 @@ export default function Auth() {
 
         {notice && <p className="mt-4 center" style={{ color: 'var(--green-bright)' }}>{notice}</p>}
         {error && <p className="field-error mt-4 center">{error}</p>}
+        <style>{`.auth-link{ background:none; border:none; color:var(--bone-mute); text-decoration:underline; font-size:13px; cursor:pointer; align-self:center; }`}</style>
 
         {tab === 'login' ? (
           <form className="col gap-3 mt-4" onSubmit={onLogin}>
@@ -90,6 +103,16 @@ export default function Auth() {
               <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Hang on…' : 'Sign in'}</button>
+            <button type="button" className="auth-link" onClick={() => { setTab('reset'); setError(null); setNotice(null) }}>Forgot password?</button>
+          </form>
+        ) : tab === 'reset' ? (
+          <form className="col gap-3 mt-4" onSubmit={onReset}>
+            <div className="field">
+              <label className="label">Email</label>
+              <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
+            <button type="button" className="auth-link" onClick={() => { setTab('login'); setError(null) }}>← Back to sign in</button>
           </form>
         ) : (
           <form className="col gap-3 mt-4" onSubmit={onRegister}>

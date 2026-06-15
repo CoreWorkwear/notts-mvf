@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [club, setClub] = useState(null) // club row (name, crest_url)
   const [teamKeys, setTeamKeys] = useState([]) // ['xl','community']
   const [loading, setLoading] = useState(true)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   // Pull the profile row + team memberships + club for the signed-in user.
   const loadProfile = useCallback(async (uid) => {
@@ -35,6 +36,9 @@ export function AuthProvider({ children }) {
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, s) => {
+      // Clicking a reset-password email lands here with a recovery session —
+      // flag it so the app shows the set-new-password screen, not the app.
+      if (_e === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(s)
       await loadProfile(s?.user?.id)
     })
@@ -57,6 +61,16 @@ export function AuthProvider({ children }) {
 
   async function signOut() { return supabase.auth.signOut() }
 
+  // Send a reset link (logged-out "forgot password"). Lands back on the app via
+  // the recovery email; redirectTo must be an allowed Redirect URL in Supabase.
+  async function sendPasswordReset(email) {
+    return supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin })
+  }
+  // Set the new password once on the recovery session.
+  async function updatePassword(password) {
+    return supabase.auth.updateUser({ password })
+  }
+
   const value = {
     session,
     user: session?.user ?? null,
@@ -67,8 +81,10 @@ export function AuthProvider({ children }) {
     isAuthed: !!session,
     isAdmin: profile?.role === 'admin',
     xlEligible: !!profile?.xl_eligible,
+    passwordRecovery,
+    endRecovery: () => setPasswordRecovery(false),
     refreshProfile: () => loadProfile(session?.user?.id),
-    signIn, signUp, signOut,
+    signIn, signUp, signOut, sendPasswordReset, updatePassword,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
