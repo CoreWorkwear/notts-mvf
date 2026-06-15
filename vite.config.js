@@ -10,6 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // we register manually in main.jsx to poll for updates
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Nottinghamshire MvF',
