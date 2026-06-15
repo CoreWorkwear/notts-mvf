@@ -20,6 +20,10 @@ vi.mock('../lib/supabase', () => {
   return { supabase: { from: (t) => make(t) } }
 })
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ profile: { club_id: 'club-1' } }) }))
+vi.mock('../lib/geocode', () => ({
+  normalizePostcode: (s) => (s || '').toUpperCase().trim(),
+  geocodePostcode: vi.fn(async () => ({ lat: 52.95, lng: -1.15 })),
+}))
 
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 60)) })
 
@@ -130,6 +134,22 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     expect(venue).toHaveAttribute('aria-invalid', 'true')
     // …and jump focus to it so it's obvious what to fix.
     expect(venue).toHaveFocus()
+  })
+
+  test('a venue postcode is geocoded into venue_lat/lng on save', async () => {
+    render(<StrictMode><Harness /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Long Eaton'))
+    await userEvent.selectOptions(oppSelect, 'opp-1')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec 3G')
+    await userEvent.type(screen.getByPlaceholderText('NG18 4YD'), 'NG7 1AB')
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+
+    await waitFor(() => expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeTruthy())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins[2]).toMatchObject({ postcode: 'NG7 1AB', venue_lat: 52.95, venue_lng: -1.15 })
   })
 
   test('league is a placeholder hint (not a pre-filled value) but still saves the team default', async () => {

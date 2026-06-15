@@ -25,7 +25,8 @@ export function useFixtures(seasonId) {
         .from('fixtures')
         .select(`
           id, match_date, kickoff, home_away, fixture_type, league_name,
-          venue, address, w3w, season_id, team_id, opponent_id, status, pinned_image_id,
+          venue, address, postcode, w3w, venue_lat, venue_lng,
+          season_id, team_id, opponent_id, status, pinned_image_id,
           team:teams(id, key, label, colour, is_first_team),
           opponent:opponents(id, name, badge_url),
           pinned:media_assets(url),

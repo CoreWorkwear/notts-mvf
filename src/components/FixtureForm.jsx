@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { FIXTURE_TYPES } from '../lib/constants'
 import { todayISO } from '../lib/format'
+import { geocodePostcode, normalizePostcode } from '../lib/geocode'
 
 // Admin create/edit a fixture. Opponent is picked from the opponents table or
 // added inline (so the badge attaches to the opponent, reused across fixtures).
@@ -38,6 +39,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const [type, setType] = useState('League')
   const [venue, setVenue] = useState('')
   const [address, setAddress] = useState('')
+  const [postcode, setPostcode] = useState('')
   const [w3w, setW3w] = useState('')
   const [status, setStatus] = useState('scheduled')
   const [leagueName, setLeagueName] = useState('')
@@ -56,6 +58,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
     setType(fixture?.fixture_type ?? 'League')
     setVenue(fixture?.venue ?? '')
     setAddress(fixture?.address ?? '')
+    setPostcode(fixture?.postcode ?? '')
     setW3w(fixture?.w3w ?? '')
     setStatus(fixture?.status ?? 'scheduled')
     setLeagueName(fixture?.league_name ?? '')
@@ -110,6 +113,15 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         oppId = data.id
       }
 
+      // Geocode the postcode → venue coords for venue-precise weather. Non-fatal:
+      // a bad/unknown postcode just leaves coords null (weather falls back to
+      // the club city). Skip the lookup if the postcode is unchanged on an edit.
+      const pc = normalizePostcode(postcode)
+      let coords = { lat: fixture?.venue_lat ?? null, lng: fixture?.venue_lng ?? null }
+      if (pc !== normalizePostcode(fixture?.postcode ?? '')) {
+        coords = pc ? (await geocodePostcode(pc)) ?? { lat: null, lng: null } : { lat: null, lng: null }
+      }
+
       const payload = {
         club_id: profile.club_id,
         season_id: seasonId,
@@ -122,6 +134,9 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         league_name: type === 'League' ? (leagueToSave || null) : null,
         venue: venue.trim(),
         address: address.trim() || null,
+        postcode: pc || null,
+        venue_lat: coords.lat,
+        venue_lng: coords.lng,
         w3w: w3w.trim() || null,
         status,
       }
@@ -223,10 +238,18 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           <input className="input" value={venue} aria-invalid={invalid.has('venue') || undefined}
             onChange={(e) => { setVenue(e.target.value); clearInvalid('venue') }} placeholder="e.g. Harvey Hadden 4G" />
         </div>
-        <div className="field">
-          <label className="label">Address</label>
-          <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+        <div className="row gap-2">
+          <div className="field grow">
+            <label className="label">Address</label>
+            <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="label">Postcode</label>
+            <input className="input" value={postcode} onChange={(e) => setPostcode(e.target.value)}
+              placeholder="NG18 4YD" style={{ textTransform: 'uppercase', maxWidth: 130 }} />
+          </div>
         </div>
+        <span className="dim" style={{ fontSize: 12, marginTop: -6 }}>Postcode sets the weather for the right pitch.</span>
         <div className="field">
           <label className="label">what3words</label>
           <input className="input" value={w3w} onChange={(e) => setW3w(e.target.value)} placeholder="///filled.count.soap" />
