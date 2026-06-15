@@ -36,16 +36,22 @@ Deno.serve(async (req) => {
     }
     if (String(b.password).length < 6) return json({ error: 'password must be at least 6 characters' }, 400)
 
+    const isPlayer = b.is_player !== false
     const { data, error } = await admin.auth.admin.createUser({
       email: b.email,
       password: b.password,
       email_confirm: true,
       user_metadata: {
         first_name: b.first_name, last_name: b.last_name, phone: b.phone,
-        dob: b.dob ?? null, positions: b.positions ?? [], preferred: b.preferred ?? null, teams: b.teams ?? [],
+        dob: b.dob ?? null, positions: b.positions ?? [], preferred: b.preferred ?? null,
+        teams: b.teams ?? [], is_player: isPlayer,
       },
     })
     if (error) return json({ error: error.message }, 400)
+    // Manager-added → sign them off immediately (the trigger lands them pending).
+    if (data.user?.id) {
+      await admin.from('profiles').update({ approved: true, is_player: isPlayer }).eq('id', data.user.id)
+    }
     return json({ id: data.user?.id })
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500)

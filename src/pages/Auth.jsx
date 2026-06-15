@@ -22,6 +22,7 @@ export default function Auth() {
   const [positions, setPositions] = useState([])
   const [preferred, setPreferred] = useState('')
   const [teams, setTeams] = useState([])
+  const [isPlayer, setIsPlayer] = useState(true) // player vs supporter
 
   const toggle = (list, set, val) =>
     set(list.includes(val) ? list.filter((x) => x !== val) : [...list, val])
@@ -55,13 +56,14 @@ export default function Auth() {
       return
     }
     if (password.length < 6) { setError('Pick a password of at least 6 characters.'); return }
-    if (teams.length === 0) { setError('Pick at least one team.'); return }
+    if (isPlayer && teams.length === 0) { setError('Pick at least one team.'); return }
 
     setBusy(true)
     const { data, error } = await signUp({
       email: email.trim(), password,
       first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim(),
-      positions, preferred: preferred || null, teams,
+      positions: isPlayer ? positions : [], preferred: isPlayer ? (preferred || null) : null,
+      teams: isPlayer ? teams : [], is_player: isPlayer,
     })
     setBusy(false)
     if (error) { setError(error.message); return }
@@ -69,6 +71,10 @@ export default function Auth() {
       // Email confirmation is on for this project — tell them, in club voice.
       setNotice("You're signed up. Check your email to confirm, then sign in.")
       setTab('login')
+    } else {
+      setNotice(isPlayer
+        ? "You're in — confirm your email, then the manager will sign you off to start marking yourself available."
+        : "You're set up as a supporter. Confirm your email and you're good to follow the club.")
     }
   }
 
@@ -140,42 +146,59 @@ export default function Auth() {
             </div>
 
             <div className="field">
-              <label className="label">Which team(s)?</label>
-              <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
-                {TEAM_ORDER.map((k) => (
-                  <button
-                    type="button" key={k}
-                    className={'chip' + (k === 'community' ? ' community' : '')}
-                    aria-pressed={teams.includes(k)}
-                    onClick={() => toggle(teams, setTeams, k)}
-                  >{TEAMS[k].label}</button>
-                ))}
+              <label className="label">Joining as…</label>
+              <div className="row gap-2">
+                <button type="button" className="chip grow" aria-pressed={isPlayer} onClick={() => setIsPlayer(true)}>A player</button>
+                <button type="button" className="chip grow" aria-pressed={!isPlayer} onClick={() => setIsPlayer(false)}>A supporter</button>
               </div>
-              <span className="dim" style={{ fontSize: 12 }}>You'll join as a player — the manager signs you off for XL.</span>
+              <span className="dim" style={{ fontSize: 12 }}>
+                {isPlayer
+                  ? 'The manager signs you off before you can mark yourself available.'
+                  : "Follow fixtures & results — you won't be picked for the squad."}
+              </span>
             </div>
 
-            <div className="field">
-              <label className="label">Positions</label>
-              <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
-                {POSITIONS.map((p) => (
-                  <button
-                    type="button" key={p} className="chip"
-                    aria-pressed={positions.includes(p)}
-                    onClick={() => toggle(positions, setPositions, p)}
-                  >{p}</button>
-                ))}
-              </div>
-            </div>
+            {isPlayer && (
+              <>
+                <div className="field">
+                  <label className="label">Which team(s)?</label>
+                  <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+                    {TEAM_ORDER.map((k) => (
+                      <button
+                        type="button" key={k}
+                        className={'chip' + (k === 'community' ? ' community' : '')}
+                        aria-pressed={teams.includes(k)}
+                        onClick={() => toggle(teams, setTeams, k)}
+                      >{TEAMS[k].label}</button>
+                    ))}
+                  </div>
+                  <span className="dim" style={{ fontSize: 12 }}>You'll join as a player — the manager signs you off for XL.</span>
+                </div>
 
-            <div className="field">
-              <label className="label">Preferred position</label>
-              <select className="select" value={preferred} onChange={(e) => setPreferred(e.target.value)}>
-                <option value="">—</option>
-                {preferredOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
+                <div className="field">
+                  <label className="label">Positions</label>
+                  <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+                    {POSITIONS.map((p) => (
+                      <button
+                        type="button" key={p} className="chip"
+                        aria-pressed={positions.includes(p)}
+                        onClick={() => toggle(positions, setPositions, p)}
+                      >{p}</button>
+                    ))}
+                  </div>
+                </div>
 
-            <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Signing you up…' : 'Join the squad'}</button>
+                <div className="field">
+                  <label className="label">Preferred position</label>
+                  <select className="select" value={preferred} onChange={(e) => setPreferred(e.target.value)}>
+                    <option value="">—</option>
+                    {preferredOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+
+            <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Signing you up…' : isPlayer ? 'Join the squad' : 'Sign up'}</button>
           </form>
         )}
       </div>

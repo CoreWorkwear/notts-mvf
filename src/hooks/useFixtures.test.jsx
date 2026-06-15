@@ -41,7 +41,7 @@ describe('useFixtures — one-to-one results embed', () => {
     expect(f.hasResult).toBe(true)
   })
 
-  test('an XL game\'s roster/no-reply excludes non-eligible and inactive members', async () => {
+  test('an XL game\'s roster/no-reply excludes non-eligible, inactive, pending and supporter members', async () => {
     store.tables = {
       fixtures: [{
         id: 'xl-1', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
@@ -54,9 +54,11 @@ describe('useFixtures — one-to-one results embed', () => {
       teams: [{ id: 't-xl', key: 'xl', label: 'XL 11s', colour: '#E11D2A', is_first_team: true, league_name: null }],
       opponents: [],
       team_memberships: [
-        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'a', active: true, xl_eligible: true } },   // counts
-        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'b', active: true, xl_eligible: false } },  // not eligible
-        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'c', active: false, xl_eligible: true } },  // inactive
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'a', active: true, approved: true, is_player: true, xl_eligible: true } },   // counts
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'b', active: true, approved: true, is_player: true, xl_eligible: false } },  // not eligible
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'c', active: false, approved: true, is_player: true, xl_eligible: true } },  // inactive
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'd', active: true, approved: false, is_player: true, xl_eligible: true } },  // pending
+        { team_id: 't-xl', teams: { key: 'xl' }, profiles: { id: 'e', active: true, approved: true, is_player: false, xl_eligible: true } }, // supporter
       ],
     }
     const { result } = renderHook(() => useFixtures('s1'))

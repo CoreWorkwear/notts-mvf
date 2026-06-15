@@ -30,3 +30,30 @@ export function diffMemberships(currentTeamIds, selectedKeys, teams) {
 export function isSelf(player, currentUserId) {
   return !!player && player.id === currentUserId
 }
+
+// A squad member who counts for the team: an active, manager-approved player.
+// This is the single source of truth for who appears in who's-in / no-reply /
+// roster counts. Supporters (is_player=false) and unapproved/inactive players
+// are excluded. Mirrors the DB's is_active_player() used by the availability RLS.
+export function isSquadMember(p) {
+  return !!(p && p.active && p.approved && p.is_player)
+}
+
+// Can this profile set their own availability? Same gate as isSquadMember — the
+// DB enforces it via RLS, this just keeps the UI honest (view but can't act).
+export function canSetAvailability(profile) {
+  return isSquadMember(profile)
+}
+
+// Plain-English account state for banners + Players tags.
+//   supporter — an app user who isn't a player (view-only)
+//   pending   — a player awaiting the manager's sign-off (view, can't act)
+//   inactive  — a removed player (soft delete)
+//   active    — a signed-off, active squad player
+export function accountStatus(p) {
+  if (!p) return 'active'
+  if (!p.is_player) return 'supporter'
+  if (!p.active) return 'inactive'
+  if (!p.approved) return 'pending'
+  return 'active'
+}

@@ -16,7 +16,7 @@ import Loader from '../components/Loader'
 
 // The landing + primary action surface (UX-AND-IA §1). Everyone lands here.
 export default function Fixtures() {
-  const { user, profile, isAdmin, teamKeys } = useAuth()
+  const { user, profile, isAdmin, teamKeys, canRespond, accountStatus } = useAuth()
   const { seasonId } = useSeason()
   const { upcoming, past, teams, opponents, fixtures, loading, refetch } = useFixtures(seasonId)
   const pool = usePhotoPool()
@@ -51,6 +51,8 @@ export default function Fixtures() {
   const postponedList = filtered.filter((f) => f.postponed)
 
   async function handleSetAvail(fixtureId, status) {
+    // Pending players + supporters can view but not act (DB blocks it too).
+    if (!canRespond) return
     const { error } = await setAvailability(fixtureId, user.id, status)
     if (error) { alert(error.message); throw error }
     await refetch()
@@ -92,6 +94,16 @@ export default function Fixtures() {
         </div>
       )}
 
+      {!isAdmin && !canRespond && (
+        <div className="banner mt-3">
+          {accountStatus === 'supporter'
+            ? "You're set up as a supporter — you can follow the fixtures and results, but you won't be picked for the squad."
+            : accountStatus === 'inactive'
+            ? 'Your account is inactive. Have a word with the manager to get back in the squad.'
+            : "You're in — the manager just needs to sign you off before you can mark yourself available. Hang tight."}
+        </div>
+      )}
+
       {isAdmin && (
         <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a fixture</button>
       )}
@@ -112,6 +124,7 @@ export default function Fixtures() {
               <FixtureHero
                 fixture={hero}
                 isAdmin={isAdmin}
+                canRespond={canRespond}
                 pool={pool}
                 onSetAvail={(s) => handleSetAvail(hero.id, s)}
                 onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
@@ -144,6 +157,7 @@ export default function Fixtures() {
                   key={f.id}
                   fixture={f}
                   isAdmin={isAdmin}
+                  canRespond={canRespond}
                   onSetAvail={(s) => handleSetAvail(f.id, s)}
                   onOpen={() => (isAdmin ? openEdit(f) : setDetail(f))}
                 />
@@ -175,6 +189,7 @@ export default function Fixtures() {
         open={!!detail}
         fixture={detail}
         isAdmin={isAdmin}
+        canRespond={canRespond}
         pool={pool}
         canLogResult={!!detail && isAdmin && hasKickedOff(detail.match_date, detail.kickoff)}
         onChanged={refetch}
@@ -210,6 +225,9 @@ export default function Fixtures() {
 
       <style>{`
         .status-line { color: var(--bone-mute); font-size: 14px; }
+        .banner { font-size: 14px; color: var(--bone); background: var(--coal);
+          border: 1px solid var(--line-2); border-left: 3px solid var(--amber);
+          border-radius: 12px; padding: 12px 14px; line-height: 1.4; }
         .needs { font-size: 14px; color: var(--amber); background: var(--amber-dim);
           border: 1px solid rgba(245,166,35,.25); border-radius: 12px; padding: 10px 14px; }
         .ppd-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 18px;

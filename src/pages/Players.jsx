@@ -24,11 +24,22 @@ export default function Players() {
     return players.filter((p) => `${p.first_name} ${p.last_name}`.toLowerCase().includes(needle))
   }, [players, q])
 
-  const activeList = filtered.filter((p) => p.active)
+  // Sign-off queue first, then the squad, supporters, and removed players.
+  const pendingList = filtered.filter((p) => p.active && p.is_player && !p.approved)
+  const squadList = filtered.filter((p) => p.active && p.is_player && p.approved)
+  const supporterList = filtered.filter((p) => p.active && !p.is_player)
   const inactiveList = filtered.filter((p) => !p.active)
 
   const openAdd = () => { setEditing(null); setFormOpen(true) }
   const openEdit = (p) => { setEditing(p); setFormOpen(true) }
+
+  // One-tap manager sign-off. RLS lets an admin set approved; the protect trigger
+  // blocks everyone else.
+  async function approve(id) {
+    const { error } = await supabase.from('profiles').update({ approved: true }).eq('id', id)
+    if (error) { alert(error.message); return }
+    refetch()
+  }
 
   if (loading) return <Loader label="Pulling the squad…" />
 
@@ -40,7 +51,13 @@ export default function Players() {
       <input className="input mt-3" placeholder="Search players…" value={q} onChange={(e) => setQ(e.target.value)} />
       <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a player</button>
 
-      <Section title={`Active · ${activeList.length}`} list={activeList} onEdit={openEdit} meId={user?.id} empty="No active players." />
+      {pendingList.length > 0 && (
+        <Section title={`Awaiting sign-off · ${pendingList.length}`} list={pendingList} onEdit={openEdit} onApprove={approve} meId={user?.id} accent />
+      )}
+      <Section title={`Active · ${squadList.length}`} list={squadList} onEdit={openEdit} meId={user?.id} empty="No active players." />
+      {supporterList.length > 0 && (
+        <Section title={`Supporters · ${supporterList.length}`} list={supporterList} onEdit={openEdit} meId={user?.id} />
+      )}
       {inactiveList.length > 0 && (
         <Section title={`Inactive · ${inactiveList.length}`} list={inactiveList} onEdit={openEdit} meId={user?.id} muted />
       )}
@@ -53,10 +70,10 @@ export default function Players() {
   )
 }
 
-function Section({ title, list, onEdit, meId, muted, empty }) {
+function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent }) {
   return (
     <div className="mt-5">
-      <p className="kicker" style={{ color: 'var(--bone-mute)' }}>{title}</p>
+      <p className="kicker" style={{ color: accent ? 'var(--amber)' : 'var(--bone-mute)' }}>{title}</p>
       {list.length === 0 ? (
         empty ? <p className="dim mt-2" style={{ fontSize: 14 }}>{empty}</p> : null
       ) : (
@@ -69,12 +86,21 @@ function Section({ title, list, onEdit, meId, muted, empty }) {
               <span className="pl-main">
                 <span className="pl-name">{p.first_name} {p.last_name}{p.id === meId ? ' · you' : ''}</span>
                 <span className="pl-tags">
+                  {!p.is_player && <span className="tag tag-supporter">Supporter</span>}
+                  {p.is_player && !p.approved && <span className="tag tag-pending">Pending</span>}
                   {p.teamKeys.includes('xl') && <span className="tag tag-xl">XL</span>}
                   {p.teamKeys.includes('community') && <span className="tag tag-co">Community</span>}
                   {p.xl_eligible && <span className="tag">XL eligible</span>}
                   {p.role === 'admin' && <span className="tag tag-admin">Manager</span>}
                 </span>
               </span>
+              {onApprove && (
+                <span role="button" tabIndex={0} className="pl-approve"
+                  onClick={(e) => { e.stopPropagation(); onApprove(p.id) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onApprove(p.id) } }}>
+                  Sign off
+                </span>
+              )}
               <span className="pl-go">›</span>
             </button>
           ))}
@@ -95,6 +121,10 @@ function Section({ title, list, onEdit, meId, muted, empty }) {
         .tag-xl { color: var(--red-bright); border-color: var(--red); }
         .tag-co { color: var(--green-bright); border-color: var(--green); }
         .tag-admin { color: var(--gold); border-color: var(--gold); }
+        .tag-pending { color: var(--amber); border-color: var(--amber); }
+        .tag-supporter { color: var(--bone-mute); border-color: var(--line-2); }
+        .pl-approve { flex: none; font-size: 12px; font-weight: 600; color: var(--green-bright);
+          border: 1px solid var(--green); background: var(--green-dim-2); border-radius: 8px; padding: 6px 10px; }
         .pl-go { color: var(--bone-dim); font-size: 20px; }
       `}</style>
     </div>

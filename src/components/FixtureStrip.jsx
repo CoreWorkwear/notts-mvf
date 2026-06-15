@@ -5,7 +5,7 @@ import { fmtDate, fmtKO } from '../lib/format'
 // One upcoming game as a strip row: team-colour spine, the matchup (home team
 // named first), tags, and the viewer's availability at a glance + settable
 // inline. Admins see live counts instead of their own control.
-export default function FixtureStrip({ fixture, isAdmin, onSetAvail, onOpen }) {
+export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSetAvail, onOpen }) {
   const f = fixture
   const community = f.team?.key === 'community'
   const us = f.team?.label
@@ -33,8 +33,10 @@ export default function FixtureStrip({ fixture, isAdmin, onSetAvail, onOpen }) {
             <span className="sc no">{f.noReply}</span>
             <span className="sc-label">in · maybe · left</span>
           </button>
-        ) : (
+        ) : canRespond ? (
           <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
+        ) : (
+          <span className="strip-locked mono">Not signed off yet</span>
         )}
       </div>
 
@@ -47,6 +49,7 @@ export default function FixtureStrip({ fixture, isAdmin, onSetAvail, onOpen }) {
         .strip-tags span { background: var(--slate); border-radius: 6px; padding: 2px 7px; letter-spacing: .03em; }
         .strip-venue { font-size: 12px; color: var(--bone-dim); }
         .strip-side { display: flex; align-items: center; padding: 12px 14px; border-left: 1px solid var(--line); }
+        .strip-locked { font-size: 11px; color: var(--bone-dim); max-width: 90px; line-height: 1.2; }
         .strip-counts { background: none; border: none; display: grid;
           grid-template-columns: repeat(3, auto); gap: 0 10px; align-items: center; color: var(--bone); }
         .strip-counts .sc { font-size: 19px; font-weight: 600; }

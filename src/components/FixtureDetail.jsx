@@ -10,7 +10,7 @@ import WeatherStrip from './WeatherStrip'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
 // Admins can pin a club photo to this game's poster.
-export default function FixtureDetail({ open, onClose, fixture, isAdmin, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
+export default function FixtureDetail({ open, onClose, fixture, isAdmin, canRespond = true, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
   const { user } = useAuth()
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
@@ -72,7 +72,9 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, pool = 
 
       {tab === 'me' ? (
         <div className="mt-4">
-          <AvailControl value={f.myStatus} onChange={onSetAvail} />
+          {canRespond
+            ? <AvailControl value={f.myStatus} onChange={onSetAvail} />
+            : <p className="muted" style={{ fontSize: 14 }}>You can set your availability once the manager's signed you off.</p>}
 
           <p className="kicker mt-5"><span className="kicker-rule">VENUE</span></p>
           <p className="mt-2" style={{ fontWeight: 600 }}>{f.venue}</p>

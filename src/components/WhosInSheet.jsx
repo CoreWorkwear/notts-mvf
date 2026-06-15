@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
 import { MATCH_FEE } from '../lib/constants'
 import { buildFixtureCsv, csvFilename, downloadCsv } from '../lib/csv'
+import { isSquadMember } from '../lib/players'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
 // list — the XI filling up, a big count, and a one-tap chase for the players who
@@ -28,7 +29,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           .eq('fixture_id', fixture.id),
         supabase
           .from('team_memberships')
-          .select('profiles!inner(id, first_name, last_name, phone, active, xl_eligible)')
+          .select('profiles!inner(id, first_name, last_name, phone, active, approved, is_player, xl_eligible)')
           .eq('team_id', fixture.team_id),
         supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
       ])
@@ -51,7 +52,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       const noReply = []
       for (const m of rosterRes.data ?? []) {
         const p = m.profiles
-        if (!p?.active) continue
+        if (!isSquadMember(p)) continue          // skip supporters + pending players
         if (isXL && !p.xl_eligible) continue
         if (!replied[p.id]) noReply.push(person(p, user))
       }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { canSetAvailability, accountStatus } from '../lib/players'
 
 const AuthContext = createContext(null)
 
@@ -50,12 +51,13 @@ export function AuthProvider({ children }) {
     return supabase.auth.signInWithPassword({ email, password })
   }
 
-  // Register writes the trigger metadata. Server forces player/not-eligible.
-  async function signUp({ email, password, first_name, last_name, phone, positions, preferred, teams }) {
+  // Register writes the trigger metadata. Server forces player/not-eligible and
+  // lands them pending (approved=false). is_player=false signs up a supporter.
+  async function signUp({ email, password, first_name, last_name, phone, positions, preferred, teams, is_player = true }) {
     return supabase.auth.signUp({
       email,
       password,
-      options: { data: { first_name, last_name, phone, positions, preferred, teams } },
+      options: { data: { first_name, last_name, phone, positions, preferred, teams, is_player } },
     })
   }
 
@@ -81,6 +83,11 @@ export function AuthProvider({ children }) {
     isAuthed: !!session,
     isAdmin: profile?.role === 'admin',
     xlEligible: !!profile?.xl_eligible,
+    // Account state for the "can view, can't act" gate.
+    approved: !!profile?.approved,
+    isPlayer: profile?.is_player !== false,
+    canRespond: canSetAvailability(profile),   // approved + active + a player
+    accountStatus: accountStatus(profile),     // 'pending' | 'supporter' | 'inactive' | 'active'
     passwordRecovery,
     endRecovery: () => setPasswordRecovery(false),
     refreshProfile: () => loadProfile(session?.user?.id),

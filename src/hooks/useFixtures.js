@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
+import { isSquadMember } from '../lib/players'
 
 // Loads everything the Fixtures screen needs for a season. RLS does the
 // eligibility gate for us: a non-eligible player simply never receives XL
@@ -38,17 +39,18 @@ export function useFixtures(seasonId) {
         .order('kickoff', { ascending: true }),
       supabase.from('teams').select('id, key, label, colour, is_first_team, league_name'),
       supabase.from('opponents').select('id, name, badge_url').order('name'),
-      // Eligible roster per team: active members, and for XL only the eligible.
+      // Eligible roster per team: approved, active squad players (and for XL
+      // only the eligible). Supporters + pending players don't count.
       supabase
         .from('team_memberships')
-        .select('team_id, teams(key), profiles!inner(id, active, xl_eligible)'),
+        .select('team_id, teams(key), profiles!inner(id, active, approved, is_player, xl_eligible)'),
     ])
 
     // Build eligible-roster size per team_id.
     const rosterByTeam = {}
     for (const m of rosterRes.data ?? []) {
       const p = m.profiles
-      if (!p?.active) continue
+      if (!isSquadMember(p)) continue
       if (m.teams?.key === 'xl' && !p.xl_eligible) continue
       rosterByTeam[m.team_id] = (rosterByTeam[m.team_id] ?? 0) + 1
     }
@@ -86,10 +88,18 @@ export function useFixtures(seasonId) {
   useEffect(() => { load() }, [load])
 
   // First-cut realtime: refetch when the tab regains focus (HANDOVER §7).
+  // On mobile/installed PWAs the window `focus` event is unreliable, so we also
+  // refetch on `visibilitychange` — this is what makes a newly-added player show
+  // up in the counts when the manager flips back to Fixtures.
   useEffect(() => {
-    const onFocus = () => load()
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    const refresh = () => load()
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [load])
 
   // A fixture stays in Fixtures until kickoff + 4h (London). A logged result

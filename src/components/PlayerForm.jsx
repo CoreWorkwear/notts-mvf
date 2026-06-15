@@ -28,6 +28,8 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
   const [xlEligible, setXlEligible] = useState(false)
   const [role, setRole] = useState('player')
   const [active, setActive] = useState(true)
+  const [isPlayer, setIsPlayer] = useState(true)
+  const [approved, setApproved] = useState(true)
   const [password, setPassword] = useState('')
 
   const [busy, setBusy] = useState(false)
@@ -60,6 +62,8 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
     setXlEligible(player?.xl_eligible ?? false)
     setRole(player?.role ?? 'player')
     setActive(player?.active ?? true)
+    setIsPlayer(player?.is_player !== false)
+    setApproved(player?.approved ?? true) // manager-added players are signed off by default
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -94,6 +98,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
         const meta = {
           first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim(),
           dob: dob || null, positions, preferred: preferred || null, teams: teamKeys,
+          is_player: isPlayer,
         }
         // Prefer the admin Edge Function (proper server-side create). If it's
         // not deployed yet, fall back to the throwaway signUp (which keeps the
@@ -119,7 +124,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
           first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), phone: phone.trim(),
           dob: dob || null, ec_name: ecName.trim() || null, ec_phone: ecPhone.trim() || null,
           positions, preferred: preferred || null,
-          xl_eligible: xlEligible, role, active,
+          xl_eligible: xlEligible, role, active, is_player: isPlayer, approved,
         }).eq('id', player.id)
         if (upErr) throw upErr
 
@@ -211,13 +216,25 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
             ))}
           </div></div>
 
-        <div className="field"><label className="label">Team(s)</label>
+        <div className="field"><label className="label">Account type</label>
           <div className="row gap-2">
-            {teams.map((t) => (
-              <button type="button" key={t.id} className={'chip' + (t.key === 'community' ? ' community' : '')}
-                aria-pressed={teamKeys.includes(t.key)} onClick={() => toggle(teamKeys, setTeamKeys, t.key)}>{t.label}</button>
-            ))}
-          </div></div>
+            <button type="button" className="chip" aria-pressed={isPlayer} onClick={() => setIsPlayer(true)}>Squad player</button>
+            <button type="button" className="chip" aria-pressed={!isPlayer} onClick={() => setIsPlayer(false)}>Supporter</button>
+          </div>
+          <span className="dim" style={{ fontSize: 12 }}>
+            {isPlayer ? 'Picked for the squad and sets availability.' : 'App access only — follows fixtures & results, not in the squad.'}
+          </span>
+        </div>
+
+        {isPlayer && (
+          <div className="field"><label className="label">Team(s)</label>
+            <div className="row gap-2">
+              {teams.map((t) => (
+                <button type="button" key={t.id} className={'chip' + (t.key === 'community' ? ' community' : '')}
+                  aria-pressed={teamKeys.includes(t.key)} onClick={() => toggle(teamKeys, setTeamKeys, t.key)}>{t.label}</button>
+              ))}
+            </div></div>
+        )}
 
         {!adding && (
           <>
@@ -234,6 +251,12 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
                   style={{ color: active ? 'var(--green-bright)' : 'var(--red-bright)' }}>
                   {active ? 'Active' : 'Inactive'}
                 </button>
+                {isPlayer && (
+                  <button type="button" className="chip" aria-pressed={approved} onClick={() => setApproved((a) => !a)}
+                    style={{ color: approved ? 'var(--green-bright)' : 'var(--amber)' }}>
+                    {approved ? 'Signed off ✓' : 'Pending sign-off'}
+                  </button>
+                )}
               </div>
               {self && <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>You can't change your own role or deactivate yourself.</p>}
             </div>

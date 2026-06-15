@@ -7,7 +7,7 @@ import { heroBackground } from '../lib/media'
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
 // Player: in/maybe/out inline, the lead. Manager: squad state leads, tappable
 // to who's-in; their own in/out is still there but secondary.
-export default function FixtureHero({ fixture, isAdmin, pool = [], onSetAvail, onOpenWhosIn, onEdit }) {
+export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool = [], onSetAvail, onOpenWhosIn, onEdit }) {
   const f = fixture
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
@@ -45,13 +45,15 @@ export default function FixtureHero({ fixture, isAdmin, pool = [], onSetAvail, o
             </span>
             <span className="ss-cta">See who's in →</span>
           </button>
-        ) : (
+        ) : canRespond ? (
           <>
             <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>YOU IN?</span>
             <div className="mt-2">
               <AvailControl value={f.myStatus} unanswered onChange={onSetAvail} />
             </div>
           </>
+        ) : (
+          <span style={{ fontSize: 14, opacity: .9 }}>Availability opens once the manager signs you off.</span>
         )}
       </div>
 

@@ -11,7 +11,7 @@ export function usePlayers() {
     setLoading(true)
     const { data } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, email, phone, dob, ec_name, ec_phone, positions, preferred, role, xl_eligible, active, photo_url, team_memberships(team_id, teams(key, label))')
+      .select('id, first_name, last_name, email, phone, dob, ec_name, ec_phone, positions, preferred, role, xl_eligible, active, approved, is_player, photo_url, team_memberships(team_id, teams(key, label))')
       .order('last_name', { ascending: true })
 
     setPlayers((data ?? []).map((p) => ({
