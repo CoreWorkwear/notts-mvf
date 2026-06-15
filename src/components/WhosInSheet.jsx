@@ -3,13 +3,15 @@ import Sheet from './Sheet'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
+import { MATCH_FEE } from '../lib/constants'
+import { buildFixtureCsv, csvFilename, downloadCsv } from '../lib/csv'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
 // list — the XI filling up, a big count, and a one-tap chase for the players who
-// haven't replied. Chase = a plain WhatsApp-ready message to copy (push lands
-// at the notifications step; AI drafting is post-MVP).
+// haven't replied. For admins it also carries the weekly subs jobs (§10): a
+// paid/not-paid toggle per available player, and a per-fixture CSV export.
 export default function WhosInSheet({ open, onClose, fixture }) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [groups, setGroups] = useState(null)
   const [copied, setCopied] = useState(false)
 
@@ -17,24 +19,30 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     if (!open || !fixture) return
     setGroups(null); setCopied(false)
     ;(async () => {
-      const [availRes, rosterRes] = await Promise.all([
+      const [availRes, rosterRes, payRes] = await Promise.all([
         supabase
           .from('availability')
-          .select('status, profile:profiles(id, first_name, last_name, phone)')
+          .select('status, profile:profiles(id, first_name, last_name, phone, preferred)')
           .eq('fixture_id', fixture.id),
         supabase
           .from('team_memberships')
           .select('profiles!inner(id, first_name, last_name, phone, active, xl_eligible)')
           .eq('team_id', fixture.team_id),
+        supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
       ])
 
+      const paidById = Object.fromEntries((payRes.data ?? []).map((p) => [p.profile_id, p.paid]))
       const replied = {}
       const buckets = { in: [], maybe: [], out: [] }
       for (const a of availRes.data ?? []) {
         const p = a.profile
         if (!p) continue
         replied[p.id] = true
-        if (a.status in buckets) buckets[a.status].push(person(p, user))
+        if (a.status in buckets) {
+          const per = person(p, user)
+          if (a.status === 'in') per.paid = !!paidById[p.id]
+          buckets[a.status].push(per)
+        }
       }
 
       const isXL = fixture.team?.key === 'xl'
@@ -54,6 +62,22 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   const f = fixture
   const isCommunity = f.team?.key === 'community'
 
+  async function togglePaid(id, next) {
+    setGroups((g) => ({ ...g, in: g.in.map((p) => (p.id === id ? { ...p, paid: next } : p)) }))
+    const { error } = await supabase
+      .from('payments')
+      .upsert({ fixture_id: f.id, profile_id: id, paid: next }, { onConflict: 'fixture_id,profile_id' })
+    if (error) {
+      setGroups((g) => ({ ...g, in: g.in.map((p) => (p.id === id ? { ...p, paid: !next } : p)) }))
+      alert(error.message)
+    }
+  }
+
+  function exportCsv() {
+    const players = groups.in.map((p) => ({ name: p.name, preferred: p.preferred, paid: !!p.paid }))
+    downloadCsv(csvFilename(f), buildFixtureCsv(f, players))
+  }
+
   async function chase() {
     const names = groups.noReply.map((p) => p.first).join(', ')
     const us = f.team?.label
@@ -67,9 +91,11 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2200)
     } catch {
-      alert(msg) // clipboard blocked — show it to copy by hand
+      alert(msg)
     }
   }
+
+  const paidCount = groups?.in.filter((p) => p.paid).length ?? 0
 
   return (
     <Sheet open={open} onClose={onClose}>
@@ -85,7 +111,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
         <>
           <div className="ti-count">
             <span className="display ti-num" key={groups.in.length}>{groups.in.length}</span>
-            <span className="kicker">IN{isCommunity ? '' : ''}</span>
+            <span className="kicker">IN</span>
           </div>
 
           <TeamSheet people={groups.in} accent={isCommunity ? 'var(--green)' : 'var(--red)'} />
@@ -98,6 +124,29 @@ export default function WhosInSheet({ open, onClose, fixture }) {
             <button className="btn btn-primary btn-block mt-5" onClick={chase}>
               {copied ? 'Copied — paste in WhatsApp ✓' : `Chase the ${groups.noReply.length} who've gone quiet`}
             </button>
+          )}
+
+          {/* Subs — admin only (HANDOVER §10) */}
+          {isAdmin && groups.in.length > 0 && (
+            <div className="subs mt-5">
+              <div className="row spread" style={{ alignItems: 'center' }}>
+                <p className="kicker"><span className="kicker-rule">SUBS · £{MATCH_FEE}</span></p>
+                <button className="chip" onClick={exportCsv}>Export CSV</button>
+              </div>
+              <div className="col gap-2 mt-3">
+                {groups.in.map((p) => (
+                  <div key={p.id} className="sub-row">
+                    <span className="grow">{p.isMe ? 'You' : p.name}{p.preferred ? <span className="dim"> · {p.preferred}</span> : null}</span>
+                    <button className={'chip' + (p.paid ? ' paid-on' : '')} aria-pressed={!!p.paid} onClick={() => togglePaid(p.id, !p.paid)}>
+                      {p.paid ? 'Paid ✓' : 'Not paid'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="dim mt-2" style={{ fontSize: 12 }}>
+                {paidCount} of {groups.in.length} paid · £{paidCount * MATCH_FEE} collected
+              </p>
+            </div>
           )}
         </>
       )}
@@ -117,6 +166,8 @@ export default function WhosInSheet({ open, onClose, fixture }) {
         .ti-empty { color: var(--bone-dim); font-size: 14px; margin-top: 8px; }
         .grp { margin-top: 18px; }
         .grp-people { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .sub-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .chip.paid-on { background: var(--green-dim-2); border-color: var(--green); color: var(--green-bright); }
       `}</style>
     </Sheet>
   )
@@ -129,6 +180,7 @@ function person(p, user) {
     name: `${p.first_name} ${(p.last_name ?? '').slice(0, 1)}`,
     initials: `${(p.first_name ?? '?')[0] ?? ''}${(p.last_name ?? '')[0] ?? ''}`.toUpperCase(),
     phone: p.phone,
+    preferred: p.preferred ?? null,
     isMe: p.id === user?.id,
   }
 }
