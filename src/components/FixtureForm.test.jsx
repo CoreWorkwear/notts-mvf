@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act, waitFor } from '@testing-library/react'
+import { render, screen, act, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Sheet from './Sheet'
 import FixtureForm from './FixtureForm'
@@ -36,7 +36,7 @@ const EXISTING = {
 
 // Mirrors Fixtures.jsx: detail sheet open, then a button closes it and opens
 // the fixture form in the same handler (the onEdit / add transition).
-function Harness({ fixture = null }) {
+function Harness({ fixture = null, seasonId = 'season-1', onSaved = () => {} }) {
   const [detailOpen, setDetailOpen] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   return (
@@ -48,10 +48,10 @@ function Harness({ fixture = null }) {
       <FixtureForm
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        onSaved={() => {}}
+        onSaved={onSaved}
         teams={TEAMS}
         opponents={OPPONENTS}
-        seasonId="season-1"
+        seasonId={seasonId}
         fixture={fixture}
       />
     </>
@@ -87,5 +87,41 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
     await waitFor(() => expect(calls.find((c) => c[0] === 'update' && c[1] === 'fixtures')).toBeTruthy())
+  })
+
+  test('ADD with an existing opponent persists the full payload (club_id, season_id, status)', async () => {
+    const onSaved = vi.fn()
+    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    // pick the existing opponent from the dropdown
+    const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Long Eaton'))
+    await userEvent.selectOptions(oppSelect, 'opp-1')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Memorial Ground')
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins).toBeTruthy()
+    expect(ins[2]).toMatchObject({
+      opponent_id: 'opp-1', venue: 'Memorial Ground',
+      club_id: 'club-1', season_id: 'season-1', team_id: 't-xl', status: 'scheduled',
+    })
+  })
+
+  test('save is blocked (not a silent no-op) when no season is selected', async () => {
+    render(<StrictMode><Harness seasonId={null} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+
+    await userEvent.type(screen.getByPlaceholderText('New opponent name'), 'Carlton Town')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec 3G')
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+    await flush()
+
+    // must NOT fire an insert with a null season_id, and must tell the user why
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeFalsy()
+    expect(screen.getByText(/season/i)).toBeInTheDocument()
   })
 })

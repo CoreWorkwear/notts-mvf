@@ -68,6 +68,10 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
       setError('Team, date, kickoff and venue are all needed.'); return
     }
     if (!opponentId && !newOpponent.trim()) { setError('Pick an opponent or add a new one.'); return }
+    // Guard the required FKs so a not-yet-loaded season/profile can't produce a
+    // silent insert that the DB rejects ("save does nothing").
+    if (!seasonId) { setError('No season selected yet — pick a season up top, then try again.'); return }
+    if (!profile?.club_id) { setError('Your profile is still loading — give it a second and try again.'); return }
 
     setBusy(true)
     try {
