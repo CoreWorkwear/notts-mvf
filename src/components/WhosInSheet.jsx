@@ -14,6 +14,8 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   const { user, isAdmin } = useAuth()
   const [groups, setGroups] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [pushMsg, setPushMsg] = useState(null)
 
   useEffect(() => {
     if (!open || !fixture) return
@@ -78,6 +80,28 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     downloadCsv(csvFilename(f), buildFixtureCsv(f, players))
   }
 
+  // Push nudge to the fixture's eligible roster (needs the send-push Edge
+  // Function deployed; fails gracefully otherwise).
+  async function pushReminder() {
+    setPushing(true); setPushMsg(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('send-push', {
+        body: {
+          fixtureId: f.id, withAvailability: true,
+          title: `${f.team?.label} v ${f.opponent?.name}`,
+          body: `${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO — you in?`,
+        },
+      })
+      if (error) throw error
+      setPushMsg(`Pushed to ${data?.sent ?? 0}`)
+    } catch {
+      setPushMsg('Push unavailable (deploy send-push?)')
+    } finally {
+      setPushing(false)
+      setTimeout(() => setPushMsg(null), 2800)
+    }
+  }
+
   async function chase() {
     const names = groups.noReply.map((p) => p.first).join(', ')
     const us = f.team?.label
@@ -123,6 +147,11 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           {groups.noReply.length > 0 && (
             <button className="btn btn-primary btn-block mt-5" onClick={chase}>
               {copied ? 'Copied — paste in WhatsApp ✓' : `Chase the ${groups.noReply.length} who've gone quiet`}
+            </button>
+          )}
+          {isAdmin && groups.in.length + groups.noReply.length > 0 && (
+            <button className="btn btn-ghost btn-block mt-2" disabled={pushing} onClick={pushReminder}>
+              {pushing ? 'Sending…' : pushMsg || 'Send push reminder'}
             </button>
           )}
 
