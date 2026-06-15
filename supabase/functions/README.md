@@ -27,6 +27,10 @@ supabase secrets set \
 supabase functions deploy send-push
 supabase functions deploy admin-create-player
 ```
+Both run with **platform `verify_jwt = false`** (set in `supabase/config.toml`)
+so the browser CORS preflight reaches the function — they enforce admin auth
+*inside* (verify the caller's JWT → `is_admin`), so this is not a hole. If you
+deploy before that config is picked up, pass `--no-verify-jwt` explicitly.
 
 ## What they do
 - **admin-create-player** — `auth.admin.createUser` (email-confirmed) with the
