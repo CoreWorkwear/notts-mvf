@@ -7,6 +7,8 @@ import { fmtDateLong, fmtKO } from '../lib/format'
 import { heroBackground } from '../lib/media'
 import { setPinnedImage } from '../hooks/useFixtures'
 import WeatherStrip from './WeatherStrip'
+import { inForecastWindow } from '../lib/weather'
+import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
 // Admins can pin a club photo to this game's poster.
@@ -39,9 +41,11 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
     await setPinnedImage(f.id, f.pinned_image_id === mediaId ? null : mediaId)
     onChanged?.()
   }
-  const mapsQuery = encodeURIComponent(f.address || f.venue)
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
   const w3wUrl = f.w3w ? `https://what3words.com/${f.w3w.replace(/^\/+/, '')}` : null
+  const mapEmbed = osmEmbedUrl(f.venue_lat, f.venue_lng)
+  const dirUrl = directionsUrl({ lat: f.venue_lat, lng: f.venue_lng, address: f.address, venue: f.venue })
+  const mapsUrl = mapSearchUrl({ lat: f.venue_lat, lng: f.venue_lng, address: f.address, venue: f.venue })
+  const showWeather = inForecastWindow(f.match_date)
 
   const group = (s) => rows.filter((r) => r.status === s)
   const name = (r) => `${r.profile?.first_name ?? '?'} ${(r.profile?.last_name ?? '').slice(0, 1)}`
@@ -76,11 +80,24 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
             ? <AvailControl value={f.myStatus} onChange={onSetAvail} />
             : <p className="muted" style={{ fontSize: 14 }}>You can set your availability once the manager's signed you off.</p>}
 
-          <p className="kicker mt-5"><span className="kicker-rule">VENUE</span></p>
+          {showWeather && (
+            <>
+              <p className="kicker mt-5"><span className="kicker-rule">MATCH-DAY WEATHER</span></p>
+              <div className="mt-2"><WeatherStrip fixture={f} card /></div>
+            </>
+          )}
+
+          <p className="kicker mt-5"><span className="kicker-rule">VENUE &amp; DIRECTIONS</span></p>
           <p className="mt-2" style={{ fontWeight: 600 }}>{f.venue}</p>
-          {f.address && <p className="muted" style={{ fontSize: 14 }}>{f.address}</p>}
+          {(f.address || f.postcode) && (
+            <p className="muted" style={{ fontSize: 14 }}>{[f.address, f.postcode].filter(Boolean).join(', ')}</p>
+          )}
+          {mapEmbed && (
+            <iframe className="venue-map mt-3" src={mapEmbed} title={`Map of ${f.venue}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+          )}
           <div className="row gap-2 mt-3">
-            <a className="btn btn-ghost grow" href={mapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>
+            {dirUrl && <a className="btn btn-primary grow" href={dirUrl} target="_blank" rel="noreferrer">Get directions</a>}
+            {mapsUrl && <a className="btn btn-ghost grow" href={mapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}
             {w3wUrl && <a className="btn btn-ghost grow" href={w3wUrl} target="_blank" rel="noreferrer">{f.w3w}</a>}
           </div>
 
@@ -118,6 +135,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
         .det-hero { border-radius: var(--r-hero); padding: 16px; position: relative; }
         .det-edit { position: absolute; top: 14px; right: 14px; padding: 5px 12px; font-size: 13px;
           background: rgba(0,0,0,.25); color: #fff; border-color: rgba(255,255,255,.25); }
+        .venue-map { width: 100%; height: 200px; border: 1px solid var(--line); border-radius: 12px; display: block; }
       `}</style>
     </Sheet>
   )

@@ -159,7 +159,7 @@ export default function Fixtures() {
                   isAdmin={isAdmin}
                   canRespond={canRespond}
                   onSetAvail={(s) => handleSetAvail(f.id, s)}
-                  onOpen={() => (isAdmin ? openEdit(f) : setDetail(f))}
+                  onOpen={() => setDetail(f)}
                 />
               ))}
             </div>
@@ -171,7 +171,7 @@ export default function Fixtures() {
               <div className="col gap-2 mt-2">
                 {postponedList.map((f) => (
                   <button key={f.id} className={'card spine ppd-row' + (f.team?.key === 'community' ? ' community' : '')}
-                    onClick={() => (isAdmin ? openEdit(f) : setDetail(f))}>
+                    onClick={() => setDetail(f)}>
                     <span className="flash D ppd-badge">P-P</span>
                     <span className="grow" style={{ textAlign: 'left' }}>
                       {f.home_away === 'Home' ? `${f.team?.label} v ${f.opponent?.name}` : `${f.opponent?.name} v ${f.team?.label}`}
