@@ -1,4 +1,5 @@
 import AvailControl from './AvailControl'
+import WeatherStrip from './WeatherStrip'
 import { fmtDate, fmtKO } from '../lib/format'
 
 // One upcoming game as a strip row: team-colour spine, the matchup (home team
@@ -21,7 +22,7 @@ export default function FixtureStrip({ fixture, isAdmin, onSetAvail, onOpen }) {
           <span>{f.home_away}</span>
           <span>{f.fixture_type}</span>
         </div>
-        <div className="strip-venue">{f.venue}</div>
+        <div className="strip-venue">{f.venue} <WeatherStrip fixture={f} /></div>
       </button>
 
       <div className="strip-side" onClick={(e) => e.stopPropagation()}>
