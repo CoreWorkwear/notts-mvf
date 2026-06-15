@@ -1,27 +1,25 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
-  IconFixtures, IconResults, IconClub, IconWhosIn, IconPlayers, IconYou,
+  IconFixtures, IconResults, IconClub, IconManage, IconYou,
 } from './Icons'
 
-// Role-gated bottom nav (HANDOVER §5).
+// Role-gated bottom nav (HANDOVER §5). Admin/config screens live behind a single
+// "Manage" hub rather than crowding the bar with extra tabs.
 // Player: Fixtures · Results · Club · You
-// Admin:  Fixtures · Results · Club · Who's In · Players · You
+// Admin:  Fixtures · Results · Club · Manage · You
 const PLAYER_TABS = [
   { to: '/fixtures', label: 'Fixtures', Icon: IconFixtures },
   { to: '/results',  label: 'Results',  Icon: IconResults },
   { to: '/club',     label: 'Club',     Icon: IconClub },
   { to: '/you',      label: 'You',      Icon: IconYou },
 ]
-const ADMIN_EXTRA = [
-  { to: '/whos-in', label: "Who's In", Icon: IconWhosIn },
-  { to: '/players', label: 'Players',  Icon: IconPlayers },
-]
+const MANAGE_TAB = { to: '/manage', label: 'Manage', Icon: IconManage }
 
 export default function BottomNav() {
   const { isAdmin } = useAuth()
   const tabs = isAdmin
-    ? [...PLAYER_TABS.slice(0, 3), ...ADMIN_EXTRA, PLAYER_TABS[3]]
+    ? [...PLAYER_TABS.slice(0, 3), MANAGE_TAB, PLAYER_TABS[3]]
     : PLAYER_TABS
 
   return (

@@ -23,6 +23,18 @@ export const IconPlayers = (p) => (
 export const IconYou = (p) => (
   <svg {...base} {...p}><path d="M19 21v-2a5 5 0 0 0-5-5H10a5 5 0 0 0-5 5v2" /><circle cx="12" cy="7" r="4" /></svg>
 )
+export const IconManage = (p) => (
+  <svg {...base} {...p}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
+)
+export const IconOpponents = (p) => (
+  <svg {...base} {...p}><path d="M4 22V3M4 3h13l-2.5 4L17 11H4" /></svg>
+)
+export const IconSeasons = (p) => (
+  <svg {...base} {...p}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></svg>
+)
+export const IconMedia = (p) => (
+  <svg {...base} {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-4.5-4.5L5 21" /></svg>
+)
 export const IconChevron = (p) => (
   <svg {...base} {...p} width={p.width ?? 16} height={p.height ?? 16}><path d="m6 9 6 6 6-6" /></svg>
 )
