@@ -45,10 +45,10 @@ Deno.serve(async (req) => {
       const isXL = (fx as any)?.team?.key === 'xl'
       const { data: members } = await admin
         .from('team_memberships')
-        .select('profile_id, profiles!inner(active, xl_eligible)')
+        .select('profile_id, profiles!inner(active, approved, is_player, xl_eligible)')
         .eq('team_id', (fx as any)?.team_id)
       targets = (members ?? [])
-        .filter((m: any) => m.profiles?.active && (!isXL || m.profiles?.xl_eligible))
+        .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player && (!isXL || m.profiles?.xl_eligible))
         .map((m: any) => m.profile_id)
     }
 
