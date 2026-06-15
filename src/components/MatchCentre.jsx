@@ -1,26 +1,46 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import ScoreBug from './ScoreBug'
+import PitchView from './PitchView'
 import { supabase } from '../lib/supabase'
 import { resolveName, outcome } from '../hooks/useResults'
+import { rowsToState } from '../lib/lineup'
 import { fmtDateLong } from '../lib/format'
 import { heroBackground } from '../lib/media'
 
 // Match centre (HANDOVER §5): big FT score + HT, MOTM with a star, the goal
-// timeline, and the squad that played with goals/assists tallied per name.
+// timeline, and who actually played — the manager's selected line-up (pitch +
+// subs) for games where one was named, falling back to availability='in' for
+// older games with no line-up.
 export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = [], onEdit }) {
-  const [played, setPlayed] = useState([]) // [{id, name}] who were marked in
+  const [played, setPlayed] = useState([])   // fallback: [{id, name}] marked in
+  const [lineup, setLineup] = useState(null) // { formation, starters, subs } or null
+  const [lineNames, setLineNames] = useState({}) // profile_id -> 'First Last'
 
   useEffect(() => {
     if (!open || !fixture) return
-    supabase
-      .from('availability')
-      .select('status, profile:profiles(id, first_name, last_name)')
-      .eq('fixture_id', fixture.id)
-      .eq('status', 'in')
-      .then(({ data }) => setPlayed((data ?? []).map((a) => ({
+    setLineup(null); setLineNames({}); setPlayed([])
+    ;(async () => {
+      const { data: lrows } = await supabase
+        .from('lineups')
+        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name)')
+        .eq('fixture_id', fixture.id)
+      if (lrows && lrows.length) {
+        const nm = {}
+        for (const r of lrows) if (r.profiles) nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`
+        setLineNames(nm)
+        setLineup(rowsToState(lrows))
+        return
+      }
+      const { data } = await supabase
+        .from('availability')
+        .select('status, profile:profiles(id, first_name, last_name)')
+        .eq('fixture_id', fixture.id)
+        .eq('status', 'in')
+      setPlayed((data ?? []).map((a) => ({
         id: a.profile?.id, name: `${a.profile?.first_name ?? ''} ${a.profile?.last_name ?? ''}`.trim(),
-      }))))
+      })))
+    })()
   }, [open, fixture])
 
   if (!fixture) return null
@@ -42,6 +62,19 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   // Squad list = those marked in, merged with anyone in the tally (guests).
   const names = new Set(played.map((p) => p.name).filter(Boolean))
   Object.keys(tally).forEach((n) => names.add(n))
+
+  // Per-player goals/assists by id, for badges on the line-up pitch + subs.
+  const goalsById = {}, assistsById = {}
+  for (const g of f.goals) {
+    if (g.scorer_profile_id) goalsById[g.scorer_profile_id] = (goalsById[g.scorer_profile_id] || 0) + 1
+    if (g.assist_profile_id) assistsById[g.assist_profile_id] = (assistsById[g.assist_profile_id] || 0) + 1
+  }
+  const gaSuffix = (id) => {
+    const parts = []
+    if (goalsById[id]) parts.push(`${goalsById[id]}G`)
+    if (assistsById[id]) parts.push(`${assistsById[id]}A`)
+    return parts.length ? ` · ${parts.join(' ')}` : ''
+  }
 
   return (
     <Sheet open={open} onClose={onClose}>
@@ -85,7 +118,23 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         </div>
       )}
 
-      {names.size > 0 && (
+      {lineup ? (
+        <>
+          <p className="kicker mt-5"><span className="kicker-rule">LINE-UP</span></p>
+          <div className="mt-3">
+            <PitchView formation={lineup.formation} starters={lineup.starters} names={lineNames}
+              badge={(id) => (goalsById[id] ? `⚽${goalsById[id]}` : null)} />
+          </div>
+          {lineup.subs.length > 0 && (
+            <div className="mt-3">
+              <p className="kicker" style={{ color: 'var(--bone-mute)' }}>SUBS · {lineup.subs.length}</p>
+              <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
+                {lineup.subs.map((id) => <span key={id} className="chip">{lineNames[id] || '—'}{gaSuffix(id)}</span>)}
+              </div>
+            </div>
+          )}
+        </>
+      ) : names.size > 0 ? (
         <>
           <p className="kicker mt-5"><span className="kicker-rule">THE SQUAD</span></p>
           <div className="mc-squad mt-3">
@@ -100,7 +149,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
             })}
           </div>
         </>
-      )}
+      ) : null}
 
       <style>{`
         .mc-hero { border-radius: var(--r-hero); padding: 16px; position: relative; }

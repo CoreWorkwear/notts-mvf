@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLineup } from '../hooks/useLineup'
-import { FORMATION_NAMES, formationSlots, stateToRows, filledCount } from '../lib/lineup'
+import { FORMATION_NAMES, stateToRows, filledCount } from '../lib/lineup'
+import PitchView, { initials } from './PitchView'
 import Toast from './Toast'
-
-const initials = (name) => (name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
 // Match-details line-up. Players see the picked XI + subs on a pitch; managers
 // tap a slot to assign an available player (those who marked in / maybe), choose
@@ -23,16 +22,8 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     setFormation(saved.formation); setStarters(saved.starters); setSubs(saved.subs)
   }, [saved])
 
-  const slots = useMemo(() => formationSlots(formation), [formation])
   const placed = useMemo(() => new Set([...Object.values(starters).filter(Boolean), ...subs]), [starters, subs])
   const remaining = pool.filter((p) => !placed.has(p.id))
-
-  // Lines top (attack) → bottom (keeper) for the pitch.
-  const lines = useMemo(() => {
-    const byLine = {}
-    for (const s of slots) (byLine[s.line] ??= []).push(s)
-    return Object.keys(byLine).map(Number).sort((a, b) => b - a).map((k) => byLine[k])
-  }, [slots])
 
   function assign(id) {
     if (active === 'sub') setSubs((s) => [...s, id])
@@ -62,7 +53,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
             <p>{isAdmin ? 'Pick your XI from the players who are in.' : 'The manager names the side closer to kickoff.'}</p></div>
         ) : (
           <>
-            <Pitch lines={lines} starters={starters} names={names} />
+            <PitchView formation={formation} starters={starters} names={names} />
             {subs.length > 0 && (
               <div className="mt-3">
                 <p className="kicker" style={{ color: 'var(--bone-mute)' }}>SUBS · {subs.length}</p>
@@ -95,7 +86,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
       </div>
 
       <p className="dim mt-3" style={{ fontSize: 13 }}>{filledCount(starters)}/11 picked · tap a shirt to fill it</p>
-      <Pitch lines={lines} starters={starters} names={names} onTapSlot={(slot) => setActive(slot)} activeSlot={active} />
+      <PitchView formation={formation} starters={starters} names={names} onTapSlot={(slot) => setActive(slot)} activeSlot={active} />
 
       <div className="mt-4">
         <div className="row spread" style={{ alignItems: 'center' }}>
@@ -150,46 +141,6 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
           background: var(--coal); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600; }
         .tag-in { color: var(--green-bright); border-color: var(--green); }
         .tag-maybe { color: var(--amber); border-color: var(--amber); }
-      `}</style>
-    </div>
-  )
-}
-
-// The pitch: lines from attack (top) to keeper (bottom); each slot a shirt.
-function Pitch({ lines, starters, names, onTapSlot, activeSlot }) {
-  return (
-    <div className="pitch">
-      {lines.map((line, i) => (
-        <div className="pitch-line" key={i}>
-          {line.map((s) => {
-            const id = starters[s.slot]
-            const on = activeSlot === s.slot
-            const Tag = onTapSlot ? 'button' : 'div'
-            return (
-              <Tag key={s.slot} type={onTapSlot ? 'button' : undefined}
-                className={'shirt' + (id ? ' filled' : '') + (on ? ' active' : '')}
-                onClick={onTapSlot ? () => onTapSlot(s.slot) : undefined}>
-                <span className="shirt-pos mono">{s.pos}</span>
-                <span className="shirt-badge">{id ? initials(names[id]) : '+'}</span>
-                <span className="shirt-name">{id ? (names[id]?.split(' ')[0] ?? '') : ''}</span>
-              </Tag>
-            )
-          })}
-        </div>
-      ))}
-      <style>{`
-        .pitch { background: linear-gradient(var(--green-dim-2), rgba(47,168,79,.10));
-          border: 1px solid var(--green); border-radius: 14px; padding: 14px 8px;
-          display: flex; flex-direction: column; gap: 10px; min-height: 320px; justify-content: space-between; }
-        .pitch-line { display: flex; justify-content: space-around; gap: 6px; }
-        .shirt { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 2px;
-          color: var(--bone); padding: 0; min-width: 52px; }
-        .shirt-pos { font-size: 9px; color: var(--bone-dim); letter-spacing: .04em; }
-        .shirt-badge { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
-          background: var(--slate); border: 1.5px dashed var(--line-2); font-size: 13px; font-weight: 700; color: var(--bone-mute); }
-        .shirt.filled .shirt-badge { background: var(--red-dim-2); border: 1.5px solid var(--red); color: var(--red-bright); border-style: solid; }
-        .shirt.active .shirt-badge { box-shadow: 0 0 0 3px var(--red-dim); }
-        .shirt-name { font-size: 10px; color: var(--bone-mute); max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       `}</style>
     </div>
   )
