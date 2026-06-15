@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useResults, outcome } from '../hooks/useResults'
+import { usePhotoPool } from '../hooks/useMedia'
 import { fmtDate } from '../lib/format'
+import { heroBackground } from '../lib/media'
 import ScoreBug from '../components/ScoreBug'
 import MatchCentre from '../components/MatchCentre'
 import ResultForm from '../components/ResultForm'
@@ -14,6 +16,7 @@ export default function Results() {
   const { isAdmin } = useAuth()
   const { seasonId } = useSeason()
   const { played, needsResult, postponed, squad, loading, refetch } = useResults(seasonId)
+  const pool = usePhotoPool()
   const [centre, setCentre] = useState(null)   // fixture for match centre
   const [editing, setEditing] = useState(null) // fixture for result form
 
@@ -54,7 +57,7 @@ export default function Results() {
           {/* Latest = poster hero */}
           <button
             className="result-hero mt-4"
-            style={{ backgroundImage: `var(--hero-wash), ${latest.team?.key === 'community' ? 'var(--grad-community)' : 'var(--grad-xl)'}` }}
+            style={{ backgroundImage: heroBackground({ pinnedUrl: latest.pinnedUrl, pool, seed: latest.id, gradient: latest.team?.key === 'community' ? 'var(--grad-community)' : 'var(--grad-xl)' }), backgroundSize: 'cover', backgroundPosition: 'center' }}
             onClick={() => setCentre(latest)}
           >
             <div className="row spread">
@@ -108,7 +111,7 @@ export default function Results() {
       )}
 
       <MatchCentre
-        open={!!centre} fixture={centre} isAdmin={isAdmin}
+        open={!!centre} fixture={centre} isAdmin={isAdmin} pool={pool}
         onClose={() => setCentre(null)}
         onEdit={() => { const c = centre; setCentre(null); setEditing(c) }}
       />

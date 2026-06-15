@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useFixtures, setAvailability } from '../hooks/useFixtures'
+import { usePhotoPool } from '../hooks/useMedia'
 import { todayISO, fmtDate, hasKickedOff } from '../lib/format'
 import FixtureHero from '../components/FixtureHero'
 import FixtureStrip from '../components/FixtureStrip'
@@ -18,6 +19,7 @@ export default function Fixtures() {
   const { user, profile, isAdmin, teamKeys } = useAuth()
   const { seasonId } = useSeason()
   const { upcoming, past, teams, opponents, fixtures, loading, refetch } = useFixtures(seasonId)
+  const pool = usePhotoPool()
   const navigate = useNavigate()
 
   const [view, setView] = useState('list')
@@ -110,6 +112,7 @@ export default function Fixtures() {
               <FixtureHero
                 fixture={hero}
                 isAdmin={isAdmin}
+                pool={pool}
                 onSetAvail={(s) => handleSetAvail(hero.id, s)}
                 onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
                 onEdit={() => openEdit(hero)}
@@ -172,7 +175,9 @@ export default function Fixtures() {
         open={!!detail}
         fixture={detail}
         isAdmin={isAdmin}
+        pool={pool}
         canLogResult={!!detail && isAdmin && hasKickedOff(detail.match_date, detail.kickoff)}
+        onChanged={refetch}
         onClose={() => setDetail(null)}
         onSetAvail={async (s) => { await handleSetAvail(detail.id, s) }}
         onEdit={() => { const d = detail; setDetail(null); openEdit(d) }}

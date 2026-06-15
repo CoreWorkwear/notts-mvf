@@ -17,3 +17,11 @@ export function pickHeroImage({ pinnedUrl = null, pool = [], seed = '' } = {}) {
   if (!pool || pool.length === 0) return null
   return pool[hashString(seed) % pool.length]
 }
+
+// CSS background-image for a poster hero: the chosen photo under the dark wash,
+// or the team gradient under the wash when there's no photo. The wash always
+// stays on top so white display type reads (DESIGN-SYSTEM §1).
+export function heroBackground({ pinnedUrl = null, pool = [], seed = '', gradient } = {}) {
+  const img = pickHeroImage({ pinnedUrl, pool, seed })
+  return img ? `var(--hero-wash), url("${img}")` : `var(--hero-wash), ${gradient}`
+}

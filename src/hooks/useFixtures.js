@@ -25,9 +25,10 @@ export function useFixtures(seasonId) {
         .from('fixtures')
         .select(`
           id, match_date, kickoff, home_away, fixture_type, league_name,
-          venue, address, w3w, season_id, team_id, opponent_id, status,
+          venue, address, w3w, season_id, team_id, opponent_id, status, pinned_image_id,
           team:teams(id, key, label, colour, is_first_team),
           opponent:opponents(id, name, badge_url),
+          pinned:media_assets(url),
           availability(profile_id, status),
           results(fixture_id)
         `)
@@ -71,6 +72,7 @@ export function useFixtures(seasonId) {
         hasResult: !!firstRow(f.results),
         postponed: f.status === 'postponed',
         concluded: fixtureConcluded(f.match_date, f.kickoff),
+        pinnedUrl: firstRow(f.pinned)?.url ?? null,
       }
     })
 
@@ -104,4 +106,10 @@ export async function setAvailability(fixtureId, profileId, status) {
   return supabase
     .from('availability')
     .upsert({ fixture_id: fixtureId, profile_id: profileId, status }, { onConflict: 'fixture_id,profile_id' })
+}
+
+// Admin: pin a specific club photo to a fixture's poster (null = back to the
+// random pool). RLS: fixtures write is admin-only.
+export async function setPinnedImage(fixtureId, mediaId) {
+  return supabase.from('fixtures').update({ pinned_image_id: mediaId }).eq('id', fixtureId)
 }

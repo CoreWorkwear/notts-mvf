@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { hashString, pickHeroImage } from './media'
+import { hashString, pickHeroImage, heroBackground } from './media'
 
 describe('pickHeroImage', () => {
   const pool = ['a.jpg', 'b.jpg', 'c.jpg']
@@ -28,5 +28,16 @@ describe('pickHeroImage', () => {
   test('hashString is deterministic and non-negative', () => {
     expect(hashString('abc')).toBe(hashString('abc'))
     expect(hashString('abc')).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('heroBackground', () => {
+  test('uses the photo (under the wash) when one is available', () => {
+    const bg = heroBackground({ pinnedUrl: 'p.jpg', gradient: 'var(--grad-xl)' })
+    expect(bg).toBe('var(--hero-wash), url("p.jpg")')
+  })
+  test('falls back to the team gradient (under the wash) with no photo', () => {
+    expect(heroBackground({ pool: [], seed: 'x', gradient: 'var(--grad-community)' }))
+      .toBe('var(--hero-wash), var(--grad-community)')
   })
 })

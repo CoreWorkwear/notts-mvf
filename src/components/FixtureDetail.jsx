@@ -4,14 +4,16 @@ import AvailControl from './AvailControl'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
+import { heroBackground } from '../lib/media'
+import { setPinnedImage } from '../hooks/useFixtures'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
-// (Full who's-in team-sheet + no-reply chase land at step 6; this is the
-// fuller-picture sheet the strips/calendar open into.)
-export default function FixtureDetail({ open, onClose, fixture, isAdmin, canLogResult, onSetAvail, onEdit, onLogResult }) {
+// Admins can pin a club photo to this game's poster.
+export default function FixtureDetail({ open, onClose, fixture, isAdmin, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
   const { user } = useAuth()
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
+  const [photoAssets, setPhotoAssets] = useState([]) // [{id,url}] for the pin picker
 
   useEffect(() => {
     if (!open || !fixture) return
@@ -21,12 +23,21 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canLogR
       .select('status, profile:profiles(id, first_name, last_name)')
       .eq('fixture_id', fixture.id)
       .then(({ data }) => setRows(data ?? []))
-  }, [open, fixture])
+    if (isAdmin) {
+      supabase.from('media_assets').select('id, url').eq('type', 'photo')
+        .then(({ data }) => setPhotoAssets(data ?? []))
+    }
+  }, [open, fixture, isAdmin])
 
   if (!fixture) return null
   const f = fixture
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
+
+  async function pin(mediaId) {
+    await setPinnedImage(f.id, f.pinned_image_id === mediaId ? null : mediaId)
+    onChanged?.()
+  }
   const mapsQuery = encodeURIComponent(f.address || f.venue)
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
   const w3wUrl = f.w3w ? `https://what3words.com/${f.w3w.replace(/^\/+/, '')}` : null
@@ -37,7 +48,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canLogR
 
   return (
     <Sheet open={open} onClose={onClose}>
-      <div className="det-hero" style={{ backgroundImage: `var(--hero-wash), ${grad}` }}>
+      <div className="det-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>{f.team?.label} · {f.home_away} · {f.fixture_type}</span>
         <h2 className="display" style={{ fontSize: 32, color: '#fff', marginTop: 6 }}>{f.opponent?.name}</h2>
         <p className="mono" style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, marginTop: 4 }}>
@@ -68,6 +79,27 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canLogR
             <a className="btn btn-ghost grow" href={mapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>
             {w3wUrl && <a className="btn btn-ghost grow" href={w3wUrl} target="_blank" rel="noreferrer">{f.w3w}</a>}
           </div>
+
+          {isAdmin && photoAssets.length > 0 && (
+            <>
+              <p className="kicker mt-5"><span className="kicker-rule">POSTER PHOTO</span></p>
+              <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Pin one to this game, or leave it on the random club shot.</p>
+              <div className="pin-row mt-2">
+                {photoAssets.map((a) => (
+                  <button key={a.id} className={'pin-thumb' + (f.pinned_image_id === a.id ? ' on' : '')} onClick={() => pin(a.id)} aria-label="Pin this photo">
+                    <img src={a.url} alt="" />
+                  </button>
+                ))}
+              </div>
+              <style>{`
+                .pin-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+                .pin-thumb { flex: none; width: 72px; height: 54px; border-radius: 10px; overflow: hidden;
+                  border: 2px solid var(--line); padding: 0; background: none; }
+                .pin-thumb.on { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-dim); }
+                .pin-thumb img { width: 100%; height: 100%; object-fit: cover; }
+              `}</style>
+            </>
+          )}
         </div>
       ) : (
         <div className="mt-4 col gap-4">

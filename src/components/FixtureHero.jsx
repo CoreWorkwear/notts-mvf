@@ -1,17 +1,19 @@
 import AvailControl from './AvailControl'
 import Crest from './Crest'
 import { fmtDateLong, fmtKO, relativeWhen } from '../lib/format'
+import { heroBackground } from '../lib/media'
 
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
 // Player: in/maybe/out inline, the lead. Manager: squad state leads, tappable
 // to who's-in; their own in/out is still there but secondary.
-export default function FixtureHero({ fixture, isAdmin, onSetAvail, onOpenWhosIn, onEdit }) {
+export default function FixtureHero({ fixture, isAdmin, pool = [], onSetAvail, onOpenWhosIn, onEdit }) {
   const f = fixture
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
+  const bg = heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad })
 
   return (
-    <div className="hero" style={{ '--grad': grad }}>
+    <div className="hero" style={{ backgroundImage: bg }}>
       <div className="hero-top">
         <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>NEXT UP · {relativeWhen(f.match_date)}</span>
         {isAdmin && (
@@ -56,7 +58,7 @@ export default function FixtureHero({ fixture, isAdmin, onSetAvail, onOpenWhosIn
           position: relative; overflow: hidden;
           border-radius: var(--r-hero);
           padding: 18px;
-          background-image: var(--hero-wash), var(--grad);
+          background-size: cover; background-position: center;
           color: #fff;
           box-shadow: 0 18px 40px -20px rgba(0,0,0,.9);
         }

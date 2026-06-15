@@ -24,6 +24,7 @@ export function useResults(seasonId) {
           id, match_date, kickoff, home_away, fixture_type, league_name, venue, team_id, status,
           team:teams(id, key, label, colour),
           opponent:opponents(id, name, badge_url),
+          pinned:media_assets(url),
           result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name),
           goals(id, minute, scorer_profile_id, scorer_name, assist_profile_id, assist_name)
         `)
@@ -43,6 +44,7 @@ export function useResults(seasonId) {
       ...f,
       result: firstRow(f.result),
       goals: (f.goals ?? []).slice().sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999)),
+      pinnedUrl: firstRow(f.pinned)?.url ?? null,
       squadById,
     }))
 

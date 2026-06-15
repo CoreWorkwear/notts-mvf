@@ -4,10 +4,11 @@ import ScoreBug from './ScoreBug'
 import { supabase } from '../lib/supabase'
 import { resolveName, outcome } from '../hooks/useResults'
 import { fmtDateLong } from '../lib/format'
+import { heroBackground } from '../lib/media'
 
 // Match centre (HANDOVER §5): big FT score + HT, MOTM with a star, the goal
 // timeline, and the squad that played with goals/assists tallied per name.
-export default function MatchCentre({ open, onClose, fixture, isAdmin, onEdit }) {
+export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = [], onEdit }) {
   const [played, setPlayed] = useState([]) // [{id, name}] who were marked in
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, onEdit })
 
   return (
     <Sheet open={open} onClose={onClose}>
-      <div className="mc-hero" style={{ backgroundImage: `var(--hero-wash), ${grad}` }}>
+      <div className="mc-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <div className="row spread">
           <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>FULL TIME · {f.fixture_type}</span>
           {isAdmin && <button className="btn btn-ghost mc-edit" onClick={onEdit}>Edit</button>}
