@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePlayers } from '../hooks/usePlayers'
 import PlayerForm from '../components/PlayerForm'
+import OpponentsPanel from '../components/OpponentsPanel'
 import Loader from '../components/Loader'
 
 export default function Players() {
@@ -12,6 +13,7 @@ export default function Players() {
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState(null) // player or null
   const [formOpen, setFormOpen] = useState(false)
+  const [view, setView] = useState('players') // 'players' | 'opponents'
 
   useEffect(() => {
     supabase.from('teams').select('id, key, label, is_first_team')
@@ -34,21 +36,30 @@ export default function Players() {
 
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">THE SQUAD</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Players</h1>
+      <p className="kicker"><span className="kicker-rule">{view === 'players' ? 'THE SQUAD' : 'OPPONENTS'}</span></p>
+      <div className="row gap-2 mt-3">
+        <button className={'btn grow ' + (view === 'players' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('players')}>Players</button>
+        <button className={'btn grow ' + (view === 'opponents' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('opponents')}>Opponents</button>
+      </div>
 
-      <input className="input mt-3" placeholder="Search players…" value={q} onChange={(e) => setQ(e.target.value)} />
-      <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a player</button>
+      {view === 'opponents' ? (
+        <OpponentsPanel />
+      ) : (
+        <>
+          <input className="input mt-3" placeholder="Search players…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a player</button>
 
-      <Section title={`Active · ${activeList.length}`} list={activeList} onEdit={openEdit} meId={user?.id} empty="No active players." />
-      {inactiveList.length > 0 && (
-        <Section title={`Inactive · ${inactiveList.length}`} list={inactiveList} onEdit={openEdit} meId={user?.id} muted />
+          <Section title={`Active · ${activeList.length}`} list={activeList} onEdit={openEdit} meId={user?.id} empty="No active players." />
+          {inactiveList.length > 0 && (
+            <Section title={`Inactive · ${inactiveList.length}`} list={inactiveList} onEdit={openEdit} meId={user?.id} muted />
+          )}
+
+          <PlayerForm
+            open={formOpen} onClose={() => setFormOpen(false)} onSaved={refetch}
+            player={editing} teams={teams} currentUserId={user?.id}
+          />
+        </>
       )}
-
-      <PlayerForm
-        open={formOpen} onClose={() => setFormOpen(false)} onSaved={refetch}
-        player={editing} teams={teams} currentUserId={user?.id}
-      />
     </div>
   )
 }
