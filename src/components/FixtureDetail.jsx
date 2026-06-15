@@ -9,6 +9,7 @@ import { setPinnedImage } from '../hooks/useFixtures'
 import WeatherStrip from './WeatherStrip'
 import { inForecastWindow } from '../lib/weather'
 import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
+import LineupBoard from './LineupBoard'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
 // Admins can pin a club photo to this game's poster.
@@ -70,11 +71,14 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
       )}
 
       <div className="row gap-2 mt-4">
-        <button className={'btn grow ' + (tab === 'me' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('me')}>My availability</button>
-        <button className={'btn grow ' + (tab === 'who' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('who')}>Who's in</button>
+        <button className={'btn grow det-tab ' + (tab === 'me' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('me')}>Availability</button>
+        <button className={'btn grow det-tab ' + (tab === 'who' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('who')}>Who's in</button>
+        <button className={'btn grow det-tab ' + (tab === 'line' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('line')}>Line-up</button>
       </div>
 
-      {tab === 'me' ? (
+      {tab === 'line' ? (
+        <LineupBoard fixture={f} isAdmin={isAdmin} open={open} />
+      ) : tab === 'me' ? (
         <div className="mt-4">
           {canRespond
             ? <AvailControl value={f.myStatus} onChange={onSetAvail} />
@@ -136,6 +140,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
         .det-edit { position: absolute; top: 14px; right: 14px; padding: 5px 12px; font-size: 13px;
           background: rgba(0,0,0,.25); color: #fff; border-color: rgba(255,255,255,.25); }
         .venue-map { width: 100%; height: 200px; border: 1px solid var(--line); border-radius: 12px; display: block; }
+        .det-tab { font-size: 14px; padding-left: 8px; padding-right: 8px; }
       `}</style>
     </Sheet>
   )

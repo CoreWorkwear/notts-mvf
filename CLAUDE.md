@@ -47,7 +47,7 @@ The anon key ships in the client (`.env` → `VITE_SUPABASE_*`); every rule is e
 - **All match-lifecycle timing is reckoned in Europe/London (GMT/BST aware)** via `fixtureConcluded`/`hasKickedOff` in `src/lib/format.js`. A fixture stays in Fixtures until **kickoff + 4h**, then moves to Results (needs-a-result, or P-P for a `postponed` fixture); logging a result moves it immediately.
 
 ### Data conventions
-- **Stats key by `profile_id`, not name.** Scorer/assist/MOTM resolve to a squad member's id when the typed name matches, falling back to a free-typed string for guests (`resolveName` in `useResults.js`). Appearances are currently proxied from `availability='in'`.
+- **Stats key by `profile_id`, not name.** Scorer/assist/MOTM resolve to a squad member's id when the typed name matches, falling back to a free-typed string for guests (`resolveName` in `useResults.js`). Appearances come from the manager's selected **line-up** (`lineups` table — start or sub) on played fixtures, computed in `useClub.js` (was an `availability='in'` proxy before line-ups existed).
 - Removing a player is a **soft delete** (`active=false`), never a hard delete — preserves results history.
 - Positions are a frontend constant (`src/lib/constants.js`), not a table.
 

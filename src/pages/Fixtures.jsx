@@ -128,6 +128,7 @@ export default function Fixtures() {
                 pool={pool}
                 onSetAvail={(s) => handleSetAvail(hero.id, s)}
                 onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
+                onOpenDetail={() => setDetail(hero)}
                 onEdit={() => openEdit(hero)}
               />
             </div>

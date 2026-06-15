@@ -7,7 +7,7 @@ import { heroBackground } from '../lib/media'
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
 // Player: in/maybe/out inline, the lead. Manager: squad state leads, tappable
 // to who's-in; their own in/out is still there but secondary.
-export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool = [], onSetAvail, onOpenWhosIn, onEdit }) {
+export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool = [], onSetAvail, onOpenWhosIn, onOpenDetail, onEdit }) {
   const f = fixture
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
@@ -65,6 +65,10 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
         )}
       </div>
 
+      {onOpenDetail && (
+        <button className="hero-detail" onClick={onOpenDetail}>Match details &amp; line-up →</button>
+      )}
+
       <style>{`
         .hero {
           position: relative; overflow: hidden;
@@ -94,6 +98,8 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
         .hero-you { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px;
           border-top: 1px solid rgba(255,255,255,.18); flex-wrap: wrap; }
         .hero-you-lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+        .hero-detail { width: 100%; margin-top: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18);
+          color: #fff; border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 600; backdrop-filter: blur(4px); }
       `}</style>
     </div>
   )

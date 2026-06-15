@@ -5,8 +5,8 @@ import { firstRow } from '../lib/embed'
 
 // Loads everything the Club tab needs for a season: the manual league tables,
 // the teams, and the derived stats (golden boot / leaderboards / squad table).
-// Appearances are proxied from availability='in' for fixtures that were played
-// (HANDOVER §3 note); goals/assists/MOTM come straight off results.
+// Appearances come from the manager's selected LINE-UP (starting XI + subs) for
+// fixtures that were played; goals/assists/MOTM come straight off results.
 export function useClub(seasonId) {
   const [table, setTable] = useState([])
   const [teams, setTeams] = useState([])
@@ -17,17 +17,17 @@ export function useClub(seasonId) {
     if (!seasonId) return
     setLoading(true)
 
-    const [tblRes, teamRes, fixRes, availRes, profRes] = await Promise.all([
+    const [tblRes, teamRes, fixRes, lineupRes, profRes] = await Promise.all([
       supabase.from('league_tables').select('*').eq('season_id', seasonId),
       supabase.from('teams').select('id, key, label, colour, is_first_team'),
       supabase
         .from('fixtures')
         .select('id, fixture_type, team:teams(key), result:results!inner(motm_profile_id), goals(scorer_profile_id, assist_profile_id)')
         .eq('season_id', seasonId),
+      // An appearance = named in the line-up (start OR sub) on a played fixture.
       supabase
-        .from('availability')
+        .from('lineups')
         .select('profile_id, fixtures!inner(id, fixture_type, season_id, team:teams(key))')
-        .eq('status', 'in')
         .eq('fixtures.season_id', seasonId),
       supabase.from('profiles').select('id, first_name, last_name'),
     ])
@@ -44,8 +44,8 @@ export function useClub(seasonId) {
     }))
     const playedSet = new Set(played.map((f) => f.id))
 
-    // Appearances: only count availability='in' on fixtures that were actually played.
-    const appearances = (availRes.data ?? [])
+    // Appearances: line-up entries (start or sub) on fixtures that were played.
+    const appearances = (lineupRes.data ?? [])
       .filter((a) => a.fixtures && playedSet.has(a.fixtures.id))
       .map((a) => ({
         profile_id: a.profile_id,
