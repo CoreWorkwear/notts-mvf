@@ -33,6 +33,12 @@ export default defineConfig({
         // Supabase API/auth is always network — never serve it from the SW cache.
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
         cleanupOutdatedCaches: true,
+        // Push a new deploy out immediately: the fresh SW skips the "waiting"
+        // state and claims open tabs, so users get the latest build on next load
+        // (with registerType:'autoUpdate' that triggers an auto-reload) — no
+        // manual cache-clearing after a deploy.
+        skipWaiting: true,
+        clientsClaim: true,
         // Web-push handlers live in a plain script imported into the SW.
         importScripts: ['/push-sw.js'],
       },
