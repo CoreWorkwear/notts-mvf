@@ -52,5 +52,8 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
     css: false,
+    // Keep vitest to src unit/component tests — the e2e/*.spec.js Playwright
+    // tests run under a separate runner (npm run test:e2e).
+    include: ['src/**/*.test.{js,jsx}'],
   },
 })

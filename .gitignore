@@ -23,3 +23,9 @@ Thumbs.db
 # Supabase local
 supabase/.branches/
 supabase/.temp/
+
+# Playwright E2E
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

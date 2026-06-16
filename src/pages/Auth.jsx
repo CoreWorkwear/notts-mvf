@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { POSITIONS, TEAM_ORDER, TEAMS } from '../lib/constants'
 import Crest from '../components/Crest'
+import Toast from '../components/Toast'
 
 // Login + Register. Register captures everything the trigger needs; the server
 // forces player / not-eligible regardless of what we send (HANDOVER §3).
@@ -94,19 +95,22 @@ export default function Auth() {
           <button className={'btn grow ' + (tab === 'register' ? 'btn-primary' : 'btn-ghost')} onClick={() => { setTab('register'); setError(null) }}>Join up</button>
         </div>
 
-        {notice && <p className="mt-4 center" style={{ color: 'var(--green-bright)' }}>{notice}</p>}
-        {error && <p className="field-error mt-4 center">{error}</p>}
+        {/* Pop-up Toast (fixed, always in view) — never an inline error that can
+            scroll off-screen on the long register form (regression: the
+            off-screen-error class, now E2E-guarded). */}
+        <Toast message={error} tone="error" onDismiss={() => setError(null)} />
+        <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
         <style>{`.auth-link{ background:none; border:none; color:var(--bone-mute); text-decoration:underline; font-size:13px; cursor:pointer; align-self:center; }`}</style>
 
         {tab === 'login' ? (
           <form className="col gap-3 mt-4" onSubmit={onLogin}>
             <div className="field">
               <label className="label">Email</label>
-              <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="input" type="email" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="field">
               <label className="label">Password</label>
-              <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input className="input" type="password" aria-label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Hang on…' : 'Sign in'}</button>
             <button type="button" className="auth-link" onClick={() => { setTab('reset'); setError(null); setNotice(null) }}>Forgot password?</button>
