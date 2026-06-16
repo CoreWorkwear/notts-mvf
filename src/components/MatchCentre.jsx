@@ -16,6 +16,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   const [played, setPlayed] = useState([])   // fallback: [{id, name}] marked in
   const [lineup, setLineup] = useState(null) // { formation, starters, subs } or null
   const [lineNames, setLineNames] = useState({}) // profile_id -> 'First Last'
+  const [linePhotos, setLinePhotos] = useState({}) // profile_id -> headshot url
   const [motmSponsor, setMotmSponsor] = useState(null)
 
   useEffect(() => {
@@ -26,16 +27,17 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
 
   useEffect(() => {
     if (!open || !fixture) return
-    setLineup(null); setLineNames({}); setPlayed([])
+    setLineup(null); setLineNames({}); setLinePhotos({}); setPlayed([])
     ;(async () => {
       const { data: lrows } = await supabase
         .from('lineups')
-        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name)')
+        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
         .eq('fixture_id', fixture.id)
       if (lrows && lrows.length) {
-        const nm = {}
-        for (const r of lrows) if (r.profiles) nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`
+        const nm = {}, ph = {}
+        for (const r of lrows) if (r.profiles) { nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`; ph[r.profile_id] = r.profiles.photo_url ?? null }
         setLineNames(nm)
+        setLinePhotos(ph)
         setLineup(rowsToState(lrows))
         return
       }
@@ -138,7 +140,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         <>
           <p className="kicker mt-5"><span className="kicker-rule">LINE-UP</span></p>
           <div className="mt-3">
-            <PitchView formation={lineup.formation} starters={lineup.starters} names={lineNames}
+            <PitchView formation={lineup.formation} starters={lineup.starters} names={lineNames} photos={linePhotos}
               badge={(id) => (goalsById[id] ? `⚽${goalsById[id]}` : null)} />
           </div>
           {lineup.subs.length > 0 && (

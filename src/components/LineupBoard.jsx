@@ -10,7 +10,7 @@ import Toast from './Toast'
 // tap a slot to assign an available player (those who marked in / maybe), choose
 // a formation, and name the subs. Saved to the lineups table (admin-write RLS).
 export default function LineupBoard({ fixture, isAdmin, open }) {
-  const { saved, pool, names, hasLineup, loading, save } = useLineup(fixture, open)
+  const { saved, pool, names, photos = {}, hasLineup, loading, save } = useLineup(fixture, open)
   const [formation, setFormation] = useState(saved.formation)
   const [starters, setStarters] = useState(saved.starters)
   const [subs, setSubs] = useState(saved.subs)
@@ -82,12 +82,17 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
             <p>{isAdmin ? 'Pick your XI from the players who are in.' : 'The manager names the side closer to kickoff.'}</p></div>
         ) : (
           <>
-            <PitchView formation={formation} starters={starters} names={names} />
+            <PitchView formation={formation} starters={starters} names={names} photos={photos} />
             {subs.length > 0 && (
               <div className="mt-3">
                 <p className="kicker" style={{ color: 'var(--bone-mute)' }}>SUBS · {subs.length}</p>
-                <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
-                  {subs.map((id) => <span key={id} className="chip">{names[id] || '—'}</span>)}
+                <div className="col gap-2 mt-2">
+                  {subs.map((id) => (
+                    <div key={id} className="sub-line">
+                      {photos[id] ? <img className="sub-av" src={photos[id]} alt="" /> : <span className="sub-av mono">{initials(names[id])}</span>}
+                      <span>{names[id] || '—'}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -122,7 +127,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
       </div>
 
       <p className="dim mt-3" style={{ fontSize: 13 }}>{filledCount(starters)}/11 picked · tap a shirt to fill it</p>
-      <PitchView formation={formation} starters={starters} names={names} onTapSlot={(slot) => setActive(slot)} activeSlot={active} />
+      <PitchView formation={formation} starters={starters} names={names} photos={photos} onTapSlot={(slot) => setActive(slot)} activeSlot={active} />
 
       <div className="mt-4">
         <div className="row spread" style={{ alignItems: 'center' }}>
@@ -154,7 +159,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
             <div className="col gap-2 mt-2">
               {remaining.map((p) => (
                 <button key={p.id} type="button" className="card pick-row" onClick={() => assign(p.id)}>
-                  <span className="pick-av mono">{initials(p.name)}</span>
+                  {p.photo_url ? <img className="pick-av" src={p.photo_url} alt="" /> : <span className="pick-av mono">{initials(p.name)}</span>}
                   <span className="grow" style={{ textAlign: 'left' }}>{p.name}</span>
                   <span className={'tag ' + (p.status === 'in' ? 'tag-in' : 'tag-maybe')}>{p.status === 'in' ? 'In' : 'Maybe'}</span>
                 </button>
@@ -174,7 +179,12 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         .pick-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--slate);
           color: var(--bone); border: 1px solid var(--line); }
         .pick-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none;
-          background: var(--coal); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600; }
+          background: var(--coal); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600;
+          overflow: hidden; object-fit: cover; }
+        img.pick-av { object-fit: cover; }
+        .sub-line { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+        .sub-av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none;
+          background: var(--slate); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600; overflow: hidden; object-fit: cover; }
         .tag-in { color: var(--green-bright); border-color: var(--green); }
         .tag-maybe { color: var(--amber); border-color: var(--amber); }
       `}</style>

@@ -9,6 +9,7 @@ export function useLineup(fixture, open) {
   const [saved, setSaved] = useState({ formation: '4-4-2', starters: {}, subs: [] })
   const [pool, setPool] = useState([])     // [{ id, name, status }] in/maybe, in first
   const [names, setNames] = useState({})   // id -> 'First Last' (covers pool + picked)
+  const [photos, setPhotos] = useState({}) // id -> headshot url (covers pool + picked)
   const [hasLineup, setHasLineup] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -17,28 +18,33 @@ export function useLineup(fixture, open) {
     setLoading(true)
     const [lineRes, availRes] = await Promise.all([
       supabase.from('lineups')
-        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name)')
+        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
         .eq('fixture_id', fixture.id),
       supabase.from('availability')
-        .select('status, profiles!inner(id, first_name, last_name)')
+        .select('status, profiles!inner(id, first_name, last_name, photo_url)')
         .eq('fixture_id', fixture.id)
         .in('status', ['in', 'maybe']),
     ])
 
-    const nm = {}
+    const nm = {}, ph = {}
     for (const r of lineRes.data ?? []) {
-      if (r.profiles) nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`
+      if (r.profiles) { nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`; ph[r.profile_id] = r.profiles.photo_url ?? null }
     }
     const rank = { in: 0, maybe: 1 }
     const p = (availRes.data ?? [])
       .filter((a) => a.profiles)
-      .map((a) => { nm[a.profiles.id] = `${a.profiles.first_name} ${a.profiles.last_name}`; return { id: a.profiles.id, name: nm[a.profiles.id], status: a.status } })
+      .map((a) => {
+        nm[a.profiles.id] = `${a.profiles.first_name} ${a.profiles.last_name}`
+        ph[a.profiles.id] = a.profiles.photo_url ?? null
+        return { id: a.profiles.id, name: nm[a.profiles.id], photo_url: a.profiles.photo_url ?? null, status: a.status }
+      })
       .sort((a, b) => (rank[a.status] - rank[b.status]) || a.name.localeCompare(b.name))
 
     setSaved(rowsToState(lineRes.data ?? []))
     setHasLineup((lineRes.data ?? []).length > 0)
     setPool(p)
     setNames(nm)
+    setPhotos(ph)
     setLoading(false)
   }, [fixture?.id])
 
@@ -56,5 +62,5 @@ export function useLineup(fixture, open) {
     return { error: null }
   }, [fixture?.id, load])
 
-  return { saved, pool, names, hasLineup, loading, save, refetch: load }
+  return { saved, pool, names, photos, hasLineup, loading, save, refetch: load }
 }
