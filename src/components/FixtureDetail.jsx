@@ -19,10 +19,14 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
   const [photoAssets, setPhotoAssets] = useState([]) // [{id,url}] for the pin picker
+  // Local mirror of the viewer's status so the control reflects a change at once
+  // — the `fixture` prop is a frozen snapshot from the parent's list (§2.2).
+  const [myStatus, setMyStatus] = useState(fixture?.myStatus ?? null)
 
   useEffect(() => {
     if (!open || !fixture) return
     setTab('me')
+    setMyStatus(fixture.myStatus ?? null)
     supabase
       .from('availability')
       .select('status, profile:profiles(id, first_name, last_name)')
@@ -82,7 +86,11 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
       ) : tab === 'me' ? (
         <div className="mt-4">
           {canRespond
-            ? <AvailControl value={f.myStatus} onChange={onSetAvail} />
+            ? <AvailControl value={myStatus} onChange={async (s) => {
+                const prev = myStatus
+                setMyStatus(s) // optimistic — reflect the pick immediately
+                try { await onSetAvail(s) } catch { setMyStatus(prev) }
+              }} />
             : <p className="muted" style={{ fontSize: 14 }}>You can set your availability once the manager's signed you off.</p>}
 
           {showWeather && (

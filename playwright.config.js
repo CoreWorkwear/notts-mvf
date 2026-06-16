@@ -20,6 +20,7 @@ export default defineConfig({
     viewport: { width: 390, height: 844 }, // iPhone-ish, portrait
     isMobile: true,
     hasTouch: true,
+    reducedMotion: 'reduce', // stop infinite UI animations making elements "unstable"
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

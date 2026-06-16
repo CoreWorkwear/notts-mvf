@@ -17,13 +17,13 @@ test.describe('admin', () => {
   test('adds a fixture and it appears in the list (the 3×-broken bug)', async ({ page }) => {
     await signIn(page, ADMIN.email, ADMIN.password)
     await page.getByRole('button', { name: /add a fixture/i }).click()
-    const stamp = `E2E ${Date.now()}`
-    // Opponent free-text, venue, a near-future date so it lands in upcoming.
-    await page.getByLabel(/opponent/i).fill(stamp)
-    await page.getByLabel(/venue/i).first().fill('E2E Park')
-    await page.getByLabel(/date/i).fill('2027-05-01')
-    await page.getByRole('button', { name: /save|add fixture/i }).click()
-    // The sheet closes and the new opponent shows in the fixtures surface.
+    const stamp = `E2E-${Date.now()}`
+    // New opponent (free-text), venue, a far-future date so it lands in upcoming.
+    await page.getByPlaceholder('New opponent name').fill(stamp)
+    await page.getByPlaceholder(/harvey hadden/i).fill('E2E Park')
+    await page.locator('input[type="date"]').fill('2027-05-01')
+    await page.getByRole('button', { name: /^add fixture$/i }).click()
+    // The sheet closes and the new game shows in the fixtures surface.
     await expect(page.getByText(stamp)).toBeVisible({ timeout: 10_000 })
   })
 
@@ -40,7 +40,7 @@ test.describe('player', () => {
   test('sets availability from the hero and the UI updates immediately', async ({ page }) => {
     await signIn(page, PLAYER.email, PLAYER.password)
     const inBtn = page.getByRole('button', { name: /^i'm in$/i }).first()
-    await inBtn.click()
+    await inBtn.click({ force: true }) // hero/weather still settling; we test the write+re-render, not layout
     // Immediate reflection — the bug class in §2.2/§3.4 (write OK, UI stale).
     await expect(page.getByText(/saved|you're down as in/i)).toBeVisible({ timeout: 8_000 })
   })
