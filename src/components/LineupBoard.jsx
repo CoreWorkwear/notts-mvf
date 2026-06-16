@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLineup } from '../hooks/useLineup'
-import { FORMATION_NAMES, stateToRows, filledCount } from '../lib/lineup'
+import { FORMATION_NAMES, stateToRows, filledCount, swapStarters } from '../lib/lineup'
 import { fixtureMatchup } from '../lib/teams'
 import { supabase } from '../lib/supabase'
 import PitchView, { initials } from './PitchView'
@@ -61,6 +61,12 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   }
   function clearSlot(slot) { setStarters((st) => { const n = { ...st }; delete n[slot]; return n }); setActive(null) }
   function removeSub(id) { setSubs((s) => s.filter((x) => x !== id)) }
+
+  // Drag-and-drop: swap two filled slots, or move a player into an empty one.
+  function swapSlots(from, to) {
+    setActive(null)
+    setStarters((st) => swapStarters(st, from, to))
+  }
 
   async function onSave() {
     setBusy(true); setError(null)
@@ -126,8 +132,8 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         ))}
       </div>
 
-      <p className="dim mt-3" style={{ fontSize: 13 }}>{filledCount(starters)}/11 picked · tap a shirt to fill it</p>
-      <PitchView formation={formation} starters={starters} names={names} photos={photos} onTapSlot={(slot) => setActive(slot)} activeSlot={active} />
+      <p className="dim mt-3" style={{ fontSize: 13 }}>{filledCount(starters)}/11 picked · tap a shirt to fill it, drag one onto another to swap</p>
+      <PitchView formation={formation} starters={starters} names={names} photos={photos} onTapSlot={(slot) => setActive(slot)} onSwap={swapSlots} activeSlot={active} />
 
       <div className="mt-4">
         <div className="row spread" style={{ alignItems: 'center' }}>

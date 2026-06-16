@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { FORMATIONS, FORMATION_NAMES, formationSlots, rowsToState, stateToRows, filledCount } from './lineup'
+import { FORMATIONS, FORMATION_NAMES, formationSlots, rowsToState, stateToRows, filledCount, swapStarters } from './lineup'
 
 describe('formations', () => {
   test('every formation has exactly 11 outfield+GK slots', () => {
@@ -46,5 +46,23 @@ describe('filledCount', () => {
   test('counts assigned starters only', () => {
     expect(filledCount({ 0: 'a', 1: 'b', 2: null })).toBe(2)
     expect(filledCount({})).toBe(0)
+  })
+})
+
+describe('swapStarters (drag-and-drop)', () => {
+  test('swaps two filled slots — the players exchange positions', () => {
+    expect(swapStarters({ 0: 'gk', 5: 'cm' }, 0, 5)).toEqual({ 0: 'cm', 5: 'gk' })
+  })
+  test('moves a player into an empty slot, vacating the source', () => {
+    expect(swapStarters({ 0: 'gk' }, 0, 5)).toEqual({ 5: 'gk' })
+  })
+  test('dropping onto the same slot is a no-op (same reference)', () => {
+    const st = { 0: 'gk' }
+    expect(swapStarters(st, 0, 0)).toBe(st)
+  })
+  test('does not mutate the input', () => {
+    const st = { 0: 'gk', 1: 'lb' }
+    swapStarters(st, 0, 1)
+    expect(st).toEqual({ 0: 'gk', 1: 'lb' })
   })
 })

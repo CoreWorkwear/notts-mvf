@@ -60,3 +60,14 @@ export function stateToRows(fixtureId, { formation, starters, subs }) {
 export function filledCount(starters) {
   return Object.values(starters ?? {}).filter(Boolean).length
 }
+
+// Drag-and-drop result: swap the players in two slots, or — if the target is
+// empty — move the dragged player there (vacating the source). Returns a new map.
+export function swapStarters(starters, from, to) {
+  if (from === to) return starters
+  const n = { ...starters }
+  const a = n[from], b = n[to]
+  if (b == null) { delete n[from]; n[to] = a }
+  else { n[from] = b; n[to] = a }
+  return n
+}
