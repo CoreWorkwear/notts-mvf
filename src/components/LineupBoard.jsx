@@ -70,7 +70,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
   async function onSave() {
     setBusy(true); setError(null)
-    const rows = stateToRows(fixture.id, { formation, starters, subs })
+    const rows = stateToRows(fixture.id, { formation, starters, subs }, names)
     const { error } = await save(rows)
     setBusy(false)
     if (error) setError(error.message)

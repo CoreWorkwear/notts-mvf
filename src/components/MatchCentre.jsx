@@ -31,14 +31,20 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
     ;(async () => {
       const { data: lrows } = await supabase
         .from('lineups')
-        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
+        .select('profile_id, player_name, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
         .eq('fixture_id', fixture.id)
       if (lrows && lrows.length) {
+        // Key by profile_id, falling back to the name snapshot for a since-deleted
+        // player so they still appear in this past line-up.
+        const keyOf = (r) => r.profile_id ?? `name:${r.player_name}`
         const nm = {}, ph = {}
-        for (const r of lrows) if (r.profiles) { nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`; ph[r.profile_id] = r.profiles.photo_url ?? null }
+        for (const r of lrows) {
+          nm[keyOf(r)] = r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}` : (r.player_name ?? '—')
+          ph[keyOf(r)] = r.profiles?.photo_url ?? null
+        }
         setLineNames(nm)
         setLinePhotos(ph)
-        setLineup(rowsToState(lrows))
+        setLineup(rowsToState(lrows, keyOf))
         return
       }
       const { data } = await supabase

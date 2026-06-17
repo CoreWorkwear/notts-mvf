@@ -30,28 +30,32 @@ export function formationSlots(name) {
 }
 
 // Saved line-up rows → editor state. starters keyed by slot index; subs ordered.
-export function rowsToState(rows) {
+// keyOf resolves the identity used in the state — profile_id by default; a viewer
+// of a PAST line-up can pass a name fallback so a since-deleted player still shows.
+export function rowsToState(rows, keyOf = (r) => r.profile_id) {
   const starters = {}
   const subs = []
   let formation = DEFAULT_FORMATION
   for (const r of rows ?? []) {
     if (r.formation) formation = r.formation
-    if (r.role === 'sub') subs.push(r.profile_id)
-    else if (r.slot != null) starters[r.slot] = r.profile_id
+    if (r.role === 'sub') subs.push(keyOf(r))
+    else if (r.slot != null) starters[r.slot] = keyOf(r)
   }
   return { formation, starters, subs }
 }
 
-// Editor state → rows to persist (we replace the whole line-up on save).
-export function stateToRows(fixtureId, { formation, starters, subs }) {
+// Editor state → rows to persist (we replace the whole line-up on save). A name
+// snapshot is stored alongside the id so the row survives the player's deletion
+// (their profile link goes null; the name stays — anonymise-on-delete).
+export function stateToRows(fixtureId, { formation, starters, subs }, names = {}) {
   const rows = []
   const slots = formationSlots(formation)
   for (const s of slots) {
     const pid = starters[s.slot]
-    if (pid) rows.push({ fixture_id: fixtureId, profile_id: pid, role: 'start', position: s.pos, slot: s.slot, formation })
+    if (pid) rows.push({ fixture_id: fixtureId, profile_id: pid, player_name: names[pid] ?? null, role: 'start', position: s.pos, slot: s.slot, formation })
   }
   for (const pid of subs ?? []) {
-    rows.push({ fixture_id: fixtureId, profile_id: pid, role: 'sub', position: null, slot: null, formation })
+    rows.push({ fixture_id: fixtureId, profile_id: pid, player_name: names[pid] ?? null, role: 'sub', position: null, slot: null, formation })
   }
   return rows
 }

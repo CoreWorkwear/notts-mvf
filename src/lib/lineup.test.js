@@ -40,6 +40,24 @@ describe('rowsToState / stateToRows round-trip', () => {
     const rows = stateToRows('f', { formation: '4-4-2', starters: { 0: 'gk' }, subs: [] })
     expect(rows).toHaveLength(1)
   })
+
+  test('a name snapshot is stored so the row survives the player being deleted', () => {
+    const names = { gk: 'Sam Keeper', s1: 'Ben Sub' }
+    const rows = stateToRows('f', { formation: '4-4-2', starters: { 0: 'gk' }, subs: ['s1'] }, names)
+    expect(rows.find((r) => r.profile_id === 'gk').player_name).toBe('Sam Keeper')
+    expect(rows.find((r) => r.profile_id === 's1').player_name).toBe('Ben Sub')
+  })
+
+  test('rowsToState keyOf falls back to the name snapshot for a deleted (null id) player', () => {
+    const rows = [
+      { profile_id: 'gk', role: 'start', slot: 0, position: 'GK', formation: '4-4-2' },
+      { profile_id: null, player_name: 'Gone Player', role: 'start', slot: 5, position: 'CM', formation: '4-4-2' },
+    ]
+    const keyOf = (r) => r.profile_id ?? `name:${r.player_name}`
+    const s = rowsToState(rows, keyOf)
+    expect(s.starters[0]).toBe('gk')
+    expect(s.starters[5]).toBe('name:Gone Player') // still occupies the slot
+  })
 })
 
 describe('filledCount', () => {

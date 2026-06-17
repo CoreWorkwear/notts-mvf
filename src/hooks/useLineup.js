@@ -18,7 +18,7 @@ export function useLineup(fixture, open) {
     setLoading(true)
     const [lineRes, availRes] = await Promise.all([
       supabase.from('lineups')
-        .select('profile_id, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
+        .select('profile_id, player_name, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
         .eq('fixture_id', fixture.id),
       supabase.from('availability')
         .select('status, profiles!inner(id, first_name, last_name, photo_url)')
@@ -28,7 +28,10 @@ export function useLineup(fixture, open) {
 
     const nm = {}, ph = {}
     for (const r of lineRes.data ?? []) {
-      if (r.profiles) { nm[r.profile_id] = `${r.profiles.first_name} ${r.profiles.last_name}`; ph[r.profile_id] = r.profiles.photo_url ?? null }
+      // A since-deleted player has a null profile link but keeps player_name.
+      const key = r.profile_id ?? `name:${r.player_name}`
+      nm[key] = r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}` : (r.player_name ?? '—')
+      ph[key] = r.profiles?.photo_url ?? null
     }
     const rank = { in: 0, maybe: 1 }
     const p = (availRes.data ?? [])
