@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildStats } from '../lib/stats'
 import { firstRow } from '../lib/embed'
+import { logError } from '../lib/logger'
 
 // Loads everything the Club tab needs for a season: the manual league tables,
 // the teams, and the derived stats (golden boot / leaderboards / squad table).
@@ -31,6 +32,9 @@ export function useClub(seasonId) {
         .eq('fixtures.season_id', seasonId),
       supabase.from('profiles').select('id, first_name, last_name'),
     ])
+
+    const fetchErr = [tblRes, teamRes, fixRes, lineupRes, profRes].find((r) => r?.error)?.error
+    if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useClub', seasonId })
 
     const names = Object.fromEntries((profRes.data ?? []).map((p) => [p.id, `${p.first_name} ${p.last_name}`]))
 

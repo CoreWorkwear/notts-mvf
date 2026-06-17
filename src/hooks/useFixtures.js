@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
 import { isSquadMember } from '../lib/players'
+import { logError } from '../lib/logger'
 
 // Loads everything the Fixtures screen needs for a season. RLS does the
 // eligibility gate for us: a non-eligible player simply never receives XL
@@ -45,6 +46,9 @@ export function useFixtures(seasonId) {
         .from('team_memberships')
         .select('team_id, teams(key), profiles!inner(id, active, approved, is_player, xl_eligible)'),
     ])
+
+    const fetchErr = [fixRes, teamRes, oppRes, rosterRes].find((r) => r?.error)?.error
+    if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useFixtures', seasonId })
 
     // Build eligible-roster size per team_id.
     const rosterByTeam = {}

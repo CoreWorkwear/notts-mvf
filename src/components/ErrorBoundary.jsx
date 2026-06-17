@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { logError } from '../lib/logger'
 
 // Last-ditch catch so a render error shows a club-voice fallback, not a white
 // screen. (Per-feature errors are still handled inline where they happen.)
@@ -7,7 +8,10 @@ export default class ErrorBoundary extends Component {
 
   static getDerivedStateFromError(error) { return { error } }
 
-  componentDidCatch(error, info) { console.error('App error:', error, info) }
+  componentDidCatch(error, info) {
+    console.error('App error:', error, info)
+    logError('render', error?.message, { stack: error?.stack, componentStack: info?.componentStack })
+  }
 
   render() {
     if (this.state.error) {

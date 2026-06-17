@@ -1,7 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import { installGlobalErrorLogging } from './lib/logger'
 import './styles/tokens.css'
+
+// Catch uncaught errors + unhandled promise rejections app-wide.
+installGlobalErrorLogging()
 
 // Keep installed apps current. An installed Android PWA only re-checks the
 // service worker on navigation/~daily, so it can sit on a stale build. Poll for

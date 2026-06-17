@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
+import { logError } from '../lib/logger'
 
 // Results data for a season. We resolve scorer/assist/MOTM display names from
 // the squad map client-side (keyed by profile_id, free-typed name as fallback)
@@ -32,6 +33,9 @@ export function useResults(seasonId) {
         .order('match_date', { ascending: false }),
       supabase.from('profiles').select('id, first_name, last_name').eq('active', true),
     ])
+
+    const fetchErr = [fixRes, sqRes].find((r) => r?.error)?.error
+    if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useResults', seasonId })
 
     const squadList = (sqRes.data ?? []).map((p) => ({
       id: p.id,

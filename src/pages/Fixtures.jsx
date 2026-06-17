@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useFixtures, setAvailability } from '../hooks/useFixtures'
 import { usePhotoPool } from '../hooks/useMedia'
+import { logError } from '../lib/logger'
 import { todayISO, fmtDate, hasKickedOff } from '../lib/format'
 import FixtureHero from '../components/FixtureHero'
 import FixtureStrip from '../components/FixtureStrip'
@@ -55,7 +56,7 @@ export default function Fixtures() {
     // Pending players + supporters can view but not act (DB blocks it too).
     if (!canRespond) return
     const { error } = await setAvailability(fixtureId, user.id, status)
-    if (error) { alert(error.message); throw error }
+    if (error) { logError('write', error.message, { op: 'setAvailability', fixtureId, status }); alert(error.message); throw error }
     await refetch()
   }
 

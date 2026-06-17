@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { logError } from '../lib/logger'
 import { TEAMS } from '../lib/constants'
 import NotificationToggle from '../components/NotificationToggle'
 import ImageUpload from '../components/ImageUpload'
@@ -37,7 +38,7 @@ export default function Profile() {
           label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
           onUploaded={async (url) => {
             const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
-            if (error) setError(error.message)
+            if (error) { setError(error.message); logError('write', error.message, { op: 'avatar' }) }
             else refreshProfile?.()
           }}
         />

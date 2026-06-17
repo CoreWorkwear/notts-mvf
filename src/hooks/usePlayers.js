@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { logError } from '../lib/logger'
 
 // Full squad records for the admin Players screen. RLS lets an admin select
 // every profile in the club; team memberships come along for the ride.
@@ -9,10 +10,11 @@ export function usePlayers() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, email, phone, dob, ec_name, ec_phone, positions, preferred, role, xl_eligible, active, approved, is_player, photo_url, team_memberships(team_id, teams(key, label))')
       .order('last_name', { ascending: true })
+    if (error) logError('fetch', error.message, { hook: 'usePlayers' })
 
     setPlayers((data ?? []).map((p) => ({
       ...p,
