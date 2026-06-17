@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
+import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
 
 // Admin: log or edit a result. FT + HT scores, goals added one at a time
@@ -14,6 +15,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
   const [htUs, setHtUs] = useState(0)
   const [htThem, setHtThem] = useState(0)
   const [motm, setMotm] = useState('')
+  const [motmPhoto, setMotmPhoto] = useState(null)
   const [goals, setGoals] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -28,6 +30,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
     setHtUs(existing?.ht_us ?? 0)
     setHtThem(existing?.ht_them ?? 0)
     setMotm(nameFor(existing?.motm_profile_id, existing?.motm_name))
+    setMotmPhoto(existing?.motm_photo_url ?? null)
     setGoals((fixture?.goals ?? []).map((g) => ({
       scorer: nameFor(g.scorer_profile_id, g.scorer_name),
       minute: g.minute ?? '',
@@ -56,7 +59,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
         fixture_id: fixture.id,
         us: Number(usScore) || 0, them: Number(themScore) || 0,
         ht_us: Number(htUs) || 0, ht_them: Number(htThem) || 0,
-        motm_profile_id: m.id, motm_name: m.name,
+        motm_profile_id: m.id, motm_name: m.name, motm_photo_url: motmPhoto,
       }, { onConflict: 'fixture_id' })
       if (rErr) throw rErr
 
@@ -144,6 +147,16 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
         <div className="field">
           <label className="label">Man of the match</label>
           <input className="input" list="squad-names" placeholder="Pick or type a name" value={motm} onChange={(e) => setMotm(e.target.value)} />
+          <div className="row gap-2 mt-2" style={{ alignItems: 'center' }}>
+            <ImageUpload
+              folder="motm" shape="square" maxDim={1000} current={motmPhoto}
+              label={motmPhoto ? 'Change MOTM photo' : 'Add a MOTM photo'}
+              onUploaded={(url) => setMotmPhoto(url)}
+            />
+            {motmPhoto && (
+              <button type="button" className="chip" onClick={() => setMotmPhoto(null)} style={{ color: 'var(--red-bright)' }}>Remove</button>
+            )}
+          </div>
         </div>
 
         <button className="btn btn-primary btn-block" disabled={busy}>

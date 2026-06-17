@@ -120,6 +120,12 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         </div>
       )}
 
+      {r.motm_photo_url && (
+        <img className="mc-motm-photo mt-2" src={r.motm_photo_url}
+          alt={motm ? `${motm} — man of the match` : 'Man of the match'}
+          style={{ width: '100%', borderRadius: 14, maxHeight: 380, objectFit: 'cover', display: 'block' }} />
+      )}
+
       <p className="kicker mt-5"><span className="kicker-rule">GOALS</span></p>
       {f.goals.length === 0 ? (
         <p className="dim mt-2" style={{ fontSize: 14 }}>{res === 'L' || r.us === 0 ? 'None for us this time.' : '—'}</p>

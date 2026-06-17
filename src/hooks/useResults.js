@@ -26,7 +26,7 @@ export function useResults(seasonId) {
           team:teams(id, key, label, match_name, colour),
           opponent:opponents(id, name, badge_url),
           pinned:media_assets(url),
-          result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name),
+          result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name, motm_photo_url),
           goals(id, minute, scorer_profile_id, scorer_name, assist_profile_id, assist_name)
         `)
         .eq('season_id', seasonId)

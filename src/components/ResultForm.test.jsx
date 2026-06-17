@@ -98,4 +98,20 @@ describe('ResultForm — log a result', () => {
     // MOTM resolved to a profile_id too.
     expect(upsert[2]).toMatchObject({ motm_profile_id: 'p2', motm_name: null })
   })
+
+  test('keeps an existing MOTM photo on save', async () => {
+    const onSaved = vi.fn()
+    const fixture = {
+      ...FIX,
+      result: { us: 2, them: 0, ht_us: 1, ht_them: 0, motm_profile_id: null, motm_name: 'Guest', motm_photo_url: 'https://cdn/motm.jpg' },
+      goals: [],
+    }
+    render(<ResultForm open fixture={fixture} squad={SQUAD} onClose={() => {}} onSaved={onSaved} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /save result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+
+    const upsert = calls.find((c) => c[0] === 'upsert' && c[1] === 'results')
+    expect(upsert[2]).toMatchObject({ motm_photo_url: 'https://cdn/motm.jpg' })
+  })
 })
