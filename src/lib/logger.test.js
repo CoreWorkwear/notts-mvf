@@ -1,5 +1,19 @@
 import { describe, test, expect } from 'vitest'
-import { buildErrorRow } from './logger'
+import { buildErrorRow, isActionableWindowError } from './logger'
+
+describe('isActionableWindowError', () => {
+  test('drops the opaque cross-origin "Script error." noise', () => {
+    expect(isActionableWindowError({ message: 'Script error.', error: null })).toBe(false)
+    expect(isActionableWindowError({ message: 'Script error', error: null })).toBe(false)
+    expect(isActionableWindowError({ message: '', error: null })).toBe(false)
+  })
+  test('keeps a real same-origin error (has an Error object)', () => {
+    expect(isActionableWindowError({ message: 'x is not a function', error: new Error('x is not a function') })).toBe(true)
+  })
+  test('keeps a detailed message even without an Error object', () => {
+    expect(isActionableWindowError({ message: 'ResizeObserver loop limit exceeded' })).toBe(true)
+  })
+})
 
 describe('buildErrorRow', () => {
   test('keeps the essentials and defaults kind', () => {

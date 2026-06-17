@@ -35,11 +35,13 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
       </div>
 
       <h2 className="hero-opp display">{f.opponent?.name}</h2>
-      <p className="hero-meta mono">
-        {teamMatchName(f.team)}{f.team?.is_first_team && <span className="pill-first">First Team</span>} · {f.home_away} · {f.fixture_type}
-      </p>
-      <p className="hero-when mono">{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO · {f.venue}</p>
-      <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
+      <div className="hero-info">
+        <p className="hero-meta mono">
+          {teamMatchName(f.team)}{f.team?.is_first_team && <span className="pill-first">First Team</span>} · {f.home_away} · {f.fixture_type}
+        </p>
+        <p className="hero-when mono">{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO · {f.venue}</p>
+        <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
+      </div>
 
       <div className="hero-action">
         {isAdmin ? (
@@ -82,18 +84,19 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
           color: #fff;
           box-shadow: 0 18px 40px -20px rgba(0,0,0,.9);
         }
-        /* Soft scrim + text-shadow over a busy action photo so the white type
-           stays legible — only over photos, never the branded gradient cards. */
-        .hero.has-photo::before {
-          content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-          background: linear-gradient(180deg,
-            rgba(0,0,0,.32) 0%, rgba(0,0,0,.12) 26%, rgba(0,0,0,.26) 55%, rgba(0,0,0,.42) 100%);
+        /* Over a busy action photo: a soft rounded box behind the detail lines
+           (team · home/away · type · date · KO · venue · weather) so they stay
+           legible, plus a light shadow on the big name. Photos only — branded
+           gradient cards are left clean. */
+        .hero.has-photo .hero-info {
+          display: inline-block; margin-top: 8px;
+          background: rgba(8, 10, 9, .40); backdrop-filter: blur(3px);
+          border-radius: 12px; padding: 8px 12px;
         }
-        .hero.has-photo > * { position: relative; z-index: 1; }
-        .hero.has-photo .hero-opp,
-        .hero.has-photo .hero-meta,
-        .hero.has-photo .hero-when,
-        .hero.has-photo .hero-top .kicker { text-shadow: 0 1px 10px rgba(0,0,0,.55); }
+        .hero.has-photo .hero-info .hero-meta,
+        .hero.has-photo .hero-info .hero-when { margin-top: 0; }
+        .hero.has-photo .hero-info .hero-when { margin-top: 4px; }
+        .hero.has-photo .hero-opp { text-shadow: 0 2px 12px rgba(0,0,0,.55); }
         .hero-top { display: flex; justify-content: space-between; align-items: center; }
         .hero-edit { background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.25); color: #fff;
           border-radius: 9px; padding: 5px 12px; font-size: 13px; font-weight: 600; }

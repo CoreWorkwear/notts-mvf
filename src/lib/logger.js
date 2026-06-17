@@ -45,12 +45,24 @@ export async function logError(kind, message, context) {
   }
 }
 
+// A cross-origin error is sanitised by the browser to a bare "Script error."
+// with no file/line and no Error object — almost always a browser extension or
+// a third-party script, never our (same-origin) code. There's nothing
+// actionable, so we don't log it (it would just be noise in Diagnostics).
+export function isActionableWindowError(e) {
+  if (e?.error) return true // a real Error object → same-origin, has a stack
+  const m = e?.message
+  return !!m && m !== 'Script error.' && m !== 'Script error'
+}
+
 // Attach global handlers once (uncaught errors + unhandled promise rejections).
 export function installGlobalErrorLogging() {
   if (typeof window === 'undefined' || window.__mvfErrLog) return
   window.__mvfErrLog = true
   window.addEventListener('error', (e) => {
-    logError('error', e?.message || 'window.error', { source: e?.filename, line: e?.lineno })
+    if (!isActionableWindowError(e)) return
+    logError('error', e?.error?.message || e?.message || 'window.error',
+      { stack: e?.error?.stack, source: e?.filename, line: e?.lineno })
   })
   window.addEventListener('unhandledrejection', (e) => {
     const r = e?.reason
