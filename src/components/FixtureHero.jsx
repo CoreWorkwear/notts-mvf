@@ -2,7 +2,7 @@ import AvailControl from './AvailControl'
 import Crest from './Crest'
 import WeatherStrip from './WeatherStrip'
 import { fmtDateLong, fmtKO, relativeWhen } from '../lib/format'
-import { heroBackground } from '../lib/media'
+import { heroBackground, pickHeroImage } from '../lib/media'
 import { teamMatchName } from '../lib/teams'
 
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
@@ -13,9 +13,12 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
   const bg = heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad })
+  // Only add the extra text scrim over a real photo — branded gradient cards
+  // already read fine and shouldn't be darkened.
+  const hasPhoto = !!pickHeroImage({ pinnedUrl: f.pinnedUrl, pool, seed: f.id })
 
   return (
-    <div className="hero" style={{ backgroundImage: bg }}>
+    <div className={'hero' + (hasPhoto ? ' has-photo' : '')} style={{ backgroundImage: bg }}>
       <div className="hero-top">
         <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>NEXT UP · {relativeWhen(f.match_date)}</span>
         {isAdmin && (
@@ -79,6 +82,18 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
           color: #fff;
           box-shadow: 0 18px 40px -20px rgba(0,0,0,.9);
         }
+        /* Soft scrim + text-shadow over a busy action photo so the white type
+           stays legible — only over photos, never the branded gradient cards. */
+        .hero.has-photo::before {
+          content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+          background: linear-gradient(180deg,
+            rgba(0,0,0,.32) 0%, rgba(0,0,0,.12) 26%, rgba(0,0,0,.26) 55%, rgba(0,0,0,.42) 100%);
+        }
+        .hero.has-photo > * { position: relative; z-index: 1; }
+        .hero.has-photo .hero-opp,
+        .hero.has-photo .hero-meta,
+        .hero.has-photo .hero-when,
+        .hero.has-photo .hero-top .kicker { text-shadow: 0 1px 10px rgba(0,0,0,.55); }
         .hero-top { display: flex; justify-content: space-between; align-items: center; }
         .hero-edit { background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.25); color: #fff;
           border-radius: 9px; padding: 5px 12px; font-size: 13px; font-weight: 600; }
