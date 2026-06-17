@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import { inForecastWindow, fetchForecast } from '../lib/weather'
+import { fmtKO } from '../lib/format'
 import WeatherIcon from './WeatherIcon'
 
 // Small weather strip on a fixture (icon · temp · rain%). Only renders inside
-// the forecast window; forecast cached 6h in localStorage.
-// Location: the fixture's venue lat/lng when set, otherwise the club city
-// (Nottingham). Open-Meteo's geocoder is place-name only, so venue-name lookups
-// don't work — venue-precise coords come from venue_lat/lng (populated later).
+// the forecast window AND only when we know the venue's real coordinates — we
+// deliberately DON'T fall back to a default city, so the band never shows the
+// wrong place's weather (an away/TBC game with no coords simply shows nothing).
 const TTL = 6 * 60 * 60 * 1000
-const CLUB_DEFAULT = { lat: 52.9536, lng: -1.1505 } // Nottingham
 
 function cacheGet(key) {
   try { const v = JSON.parse(localStorage.getItem(key)); return v && Date.now() - v.ts < TTL ? v.data : null } catch { return null }
@@ -17,25 +16,27 @@ function cacheSet(key, data) {
   try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
 }
 
-function resolveLatLng(fixture) {
-  if (fixture.venue_lat != null && fixture.venue_lng != null) return { lat: fixture.venue_lat, lng: fixture.venue_lng }
-  return CLUB_DEFAULT
+// The venue's coordinates, or null if unknown. No city fallback — better no
+// band than a confidently-wrong one.
+export function venueCoords(fixture) {
+  if (fixture?.venue_lat != null && fixture?.venue_lng != null) return { lat: fixture.venue_lat, lng: fixture.venue_lng }
+  return null
 }
 
 export default function WeatherStrip({ fixture, light = false, detailed = false, card = false }) {
   const [wx, setWx] = useState(null)
 
   useEffect(() => {
-    if (!fixture || !inForecastWindow(fixture.match_date)) { setWx(null); return }
+    const ll = venueCoords(fixture)
+    if (!fixture || !ll || !inForecastWindow(fixture.match_date)) { setWx(null); return }
     let active = true
-    // Key includes the kickoff so the forecast is per match-hour (and so old
-    // day-summary caches from before the hourly switch are ignored).
-    const key = `wx:${fixture.id}:${fixture.match_date}:${fixture.kickoff ?? ''}`
+    // Key includes the kickoff AND the location, so the cached reading is tied
+    // to this exact match-hour and venue (a coords change busts a stale entry).
+    const key = `wx:${fixture.id}:${fixture.match_date}:${fixture.kickoff ?? ''}:${ll.lat},${ll.lng}`
     const cached = cacheGet(key)
     if (cached) { setWx(cached); return }
     ;(async () => {
       try {
-        const ll = resolveLatLng(fixture)
         const data = await fetchForecast(ll.lat, ll.lng, fixture.match_date, fixture.kickoff)
         if (!active || !data) return
         cacheSet(key, data)
@@ -43,10 +44,12 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
       } catch { /* weather is best-effort */ }
     })()
     return () => { active = false }
-  }, [fixture?.id, fixture?.match_date, fixture?.kickoff])
+  }, [fixture?.id, fixture?.match_date, fixture?.kickoff, fixture?.venue_lat, fixture?.venue_lng])
 
   if (!wx) return null
-  const temp = wx.feelsLike ?? wx.tempMax
+  // Headline the ACTUAL temperature; feels-like is the labelled secondary.
+  const actual = wx.tempMax ?? wx.feelsLike
+  const feels = wx.feelsLike
 
   // Big match-day weather panel (the expanded match-details version).
   if (card) {
@@ -54,9 +57,9 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
       <div className="wx-card">
         <WeatherIcon category={wx.category} size={56} windy={wx.wind != null && wx.wind >= 16} />
         <div className="wx-card-main">
-          <span className="wx-card-text">{wx.text}</span>
-          <span className="wx-card-temp display">{(wx.tempMax ?? temp)}°</span>
-          {wx.feelsLike != null && <span className="wx-card-feels mono">Feels {wx.feelsLike}°</span>}
+          <span className="wx-card-text">{wx.text}{fixture?.kickoff ? ` · at ${fmtKO(fixture.kickoff)} KO` : ''}</span>
+          <span className="wx-card-temp display">{actual}°</span>
+          {feels != null && <span className="wx-card-feels mono">Feels like {feels}°</span>}
         </div>
         <div className="wx-card-bits">
           {wx.wind != null && <span className="wx-card-bit mono">💨 {wx.wind} mph</span>}
@@ -80,9 +83,11 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
   }
 
   return (
-    <span className={'wx' + (light ? ' wx-light' : '') + (detailed ? ' wx-detailed' : '')} title={wx.text}>
+    <span className={'wx' + (light ? ' wx-light' : '') + (detailed ? ' wx-detailed' : '')}
+      title={`${wx.text}${fixture?.kickoff ? ` at ${fmtKO(fixture.kickoff)} KO` : ''}`}>
       <WeatherIcon category={wx.category} size={detailed ? 30 : 20} windy={wx.wind != null && wx.wind >= 16} />
-      {temp != null && <span className="wx-temp mono">{detailed ? 'Feels ' : ''}{temp}°</span>}
+      {actual != null && <span className="wx-temp mono">{actual}°</span>}
+      {detailed && feels != null && feels !== actual && <span className="wx-bit mono">feels {feels}°</span>}
       {wx.wind != null && <span className="wx-bit mono">💨 {wx.wind}mph</span>}
       {wx.precip != null && <span className="wx-bit mono">💧 {wx.precip}%</span>}
       {detailed && wx.verdict && <span className="wx-verdict">{wx.verdict}</span>}
