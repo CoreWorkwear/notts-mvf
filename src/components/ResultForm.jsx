@@ -151,6 +151,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
             <ImageUpload
               folder="motm" shape="square" maxDim={1000} current={motmPhoto}
               label={motmPhoto ? 'Change MOTM photo' : 'Add a MOTM photo'}
+              hint="Landscape works best — around 16:9 (e.g. 1200×675). It's shown full-width, ~1000px, and we compress it, so a phone snap is fine."
               onUploaded={(url) => setMotmPhoto(url)}
             />
             {motmPhoto && (

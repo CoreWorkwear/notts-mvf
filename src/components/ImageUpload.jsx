@@ -4,7 +4,13 @@ import Toast from './Toast'
 
 // Admin image picker → resize → upload → onUploaded(publicUrl). Shows the
 // current/just-uploaded image as a preview. round = crest/headshot, square = photo.
-export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200, multiple = false }) {
+// A sensible default hint per shape; callers can override with `hint`.
+const defaultHint = (shape, maxDim) =>
+  shape === 'round'
+    ? `Square works best — a head-and-shoulders shot (about ${Math.min(maxDim, 512)}×${Math.min(maxDim, 512)}px). We resize + crop to a circle.`
+    : `Landscape works best (roughly 4:3 or 16:9). We shrink it to about ${maxDim}px and compress, so big phone photos are fine.`
+
+export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200, multiple = false, hint }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(null)
@@ -32,20 +38,27 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
     }
   }
 
+  const hintText = hint ?? defaultHint(shape, maxDim)
+
   return (
-    <div className="iu">
+    <div className="iu-wrap">
       <Toast message={error} onDismiss={() => setError(null)} />
-      {!multiple && (
-        <div className={'iu-preview ' + shape}>
-          {preview ? <img src={preview} alt="" /> : <span className="iu-empty">—</span>}
-        </div>
-      )}
-      <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
-        {busy ? (progress ? `Uploading ${progress}…` : 'Uploading…') : label}
-      </button>
-      <input ref={inputRef} type="file" accept="image/*" multiple={multiple} hidden onChange={onPick} />
+      <div className="iu">
+        {!multiple && (
+          <div className={'iu-preview ' + shape}>
+            {preview ? <img src={preview} alt="" /> : <span className="iu-empty">—</span>}
+          </div>
+        )}
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
+          {busy ? (progress ? `Uploading ${progress}…` : 'Uploading…') : label}
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" multiple={multiple} hidden onChange={onPick} />
+      </div>
+      {hintText && <p className="iu-hint">{hintText}</p>}
 
       <style>{`
+        .iu-wrap { display: flex; flex-direction: column; gap: 6px; }
+        .iu-hint { font-size: 12px; color: var(--bone-dim); line-height: 1.35; margin: 0; }
         .iu { display: flex; align-items: center; gap: 12px; }
         .iu-preview { width: 56px; height: 56px; flex: none; overflow: hidden; background: var(--slate);
           border: 1px solid var(--line); display: grid; place-items: center; }

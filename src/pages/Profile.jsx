@@ -36,6 +36,7 @@ export default function Profile() {
           folder="players" shape="round" maxDim={512}
           current={profile.photo_url}
           label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
+          hint="A square head-and-shoulders shot works best (e.g. 512×512) — it's cropped to a circle."
           onUploaded={async (url) => {
             const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
             if (error) { setError(error.message); logError('write', error.message, { op: 'avatar' }) }
