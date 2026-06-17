@@ -1,19 +1,50 @@
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 import { TEAMS } from '../lib/constants'
 import NotificationToggle from '../components/NotificationToggle'
+import ImageUpload from '../components/ImageUpload'
+import Toast from '../components/Toast'
 
 // You / Profile. Self-edit (name/phone/positions/preferred) lands at step 9;
-// for now it shows the real record + badges from the auth context.
+// for now it shows the real record + badges, and lets the player set their own
+// avatar (image-only, compressed by ImageUpload; RLS lets you write your own row).
 export default function Profile() {
-  const { profile, teamKeys, isAdmin, xlEligible } = useAuth()
+  const { profile, teamKeys, isAdmin, xlEligible, refreshProfile } = useAuth()
+  const [error, setError] = useState(null)
   if (!profile) return null
+
+  const initials = `${(profile.first_name?.[0] ?? '')}${(profile.last_name?.[0] ?? '')}`.toUpperCase()
 
   return (
     <div className="page">
+      <Toast message={error} tone="error" onDismiss={() => setError(null)} />
       <p className="kicker"><span className="kicker-rule">YOU</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 30 }}>
-        {profile.first_name} {profile.last_name}
-      </h1>
+
+      <div className="row gap-3 mt-2" style={{ alignItems: 'center' }}>
+        {profile.photo_url
+          ? <img className="you-av" src={profile.photo_url} alt="" />
+          : <span className="you-av mono">{initials}</span>}
+        <h1 className="display" style={{ fontSize: 30 }}>
+          {profile.first_name} {profile.last_name}
+        </h1>
+      </div>
+
+      <div className="mt-3" style={{ maxWidth: 280 }}>
+        <ImageUpload
+          folder="players" shape="round" maxDim={512}
+          current={profile.photo_url}
+          label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
+          onUploaded={async (url) => {
+            const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
+            if (error) setError(error.message)
+            else refreshProfile?.()
+          }}
+        />
+      </div>
+      <style>{`.you-av { width: 60px; height: 60px; border-radius: 50%; flex: none; object-fit: cover;
+        display: grid; place-items: center; background: var(--slate); border: 1px solid var(--line-2);
+        font-size: 20px; font-weight: 700; color: var(--bone-mute); }`}</style>
 
       <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
         {teamKeys.map((k) => (
