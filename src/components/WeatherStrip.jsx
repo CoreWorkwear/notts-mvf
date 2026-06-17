@@ -65,7 +65,6 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
           {wx.wind != null && <span className="wx-card-bit mono">💨 {wx.wind} mph</span>}
           {wx.precip != null && <span className="wx-card-bit mono">💧 {wx.precip}% rain</span>}
         </div>
-        {wx.verdict && <p className="wx-card-verdict">{wx.verdict}</p>}
         <style>{`
           .wx-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px 14px;
             background: var(--coal); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
@@ -75,8 +74,6 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
           .wx-card-feels { font-size: 12px; color: var(--bone-dim); margin-top: 2px; }
           .wx-card-bits { display: flex; flex-direction: column; gap: 4px; text-align: right; }
           .wx-card-bit { font-size: 13px; color: var(--bone-mute); white-space: nowrap; }
-          .wx-card-verdict { grid-column: 1 / -1; font-family: var(--font-body); font-style: italic;
-            color: var(--bone); margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
         `}</style>
       </div>
     )
@@ -90,16 +87,12 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
       {detailed && feels != null && feels !== actual && <span className="wx-bit mono">feels {feels}°</span>}
       {wx.wind != null && <span className="wx-bit mono">💨 {wx.wind}mph</span>}
       {wx.precip != null && <span className="wx-bit mono">💧 {wx.precip}%</span>}
-      {detailed && wx.verdict && <span className="wx-verdict">{wx.verdict}</span>}
       <style>{`
         .wx { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--bone-mute); }
         .wx-light { color: rgba(255,255,255,.92); }
         .wx-detailed { flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
         .wx-temp { font-weight: 600; }
         .wx-bit { opacity: .9; }
-        .wx-verdict { font-family: var(--font-body); font-style: italic; opacity: .95;
-          width: 100%; }
-        .wx:not(.wx-detailed) .wx-verdict { display: none; }
       `}</style>
     </span>
   )

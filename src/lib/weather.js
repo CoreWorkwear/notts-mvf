@@ -5,7 +5,9 @@ import { todayISO, parseDate } from './format'
 // Edge-Function cache to fixtures.forecast is the post-MVP optimisation
 // (HANDOVER §12). Pure helpers below are unit-tested; the fetchers are network.
 
-export const FORECAST_DAYS = 14
+// 7 days only — beyond ~a week the forecast is too volatile to trust (it swings
+// wildly between checks), so we'd rather show no band than a misleading one.
+export const FORECAST_DAYS = 7
 
 // Only show weather when the game is in the future and within the window.
 export function inForecastWindow(matchDate, today = todayISO()) {
