@@ -53,7 +53,7 @@ export default function StatsPanel({ stats }) {
         <>
           {/* Golden Boot */}
           <div className="gb mt-4">
-            <GoldenBootIcon className="gb-boot" />
+            <span className="gb-crown">👑</span>
             <div className="gb-body">
               <span className="kicker" style={{ color: '#3a2c05' }}>GOLDEN BOOT</span>
               <div className="gb-name">{boot.top.length ? boot.top.map((p) => p.name).join(' & ') : '—'}</div>
@@ -119,7 +119,7 @@ export default function StatsPanel({ stats }) {
           border-radius: var(--r-hero); color: #2a2000;
           background-image: linear-gradient(150deg, #F2CB5B 0%, #C9962a 100%);
           box-shadow: 0 14px 34px -18px rgba(201,150,42,.9); }
-        .gb-boot { width: 46px; height: 46px; flex: none; }
+        .gb-crown { font-size: 30px; }
         .gb-body { flex: 1; min-width: 0; }
         .gb-name { font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; margin-top: 4px;
           overflow: hidden; text-overflow: ellipsis; }
@@ -137,31 +137,5 @@ export default function StatsPanel({ stats }) {
         .st td.st-name { text-align: left; font-size: 14px; }
       `}</style>
     </div>
-  )
-}
-
-// The Golden Boot award — a football boot emblem. Drawn dark (to read on the
-// gold card) with a gold lace detail, toe pointing right with studs beneath.
-function GoldenBootIcon(props) {
-  return (
-    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      {/* boot upper + foot */}
-      <path d="M15 21 C14 15 18 12 24 13 C27 13.5 28 16 28 20 C28 27 33 33 44 34
-               C51 34.5 55 36 56 39 C56.5 40.5 55.5 42 53 42 L17 42
-               C12 42 11 37 11.5 31 C12 26 13 23 15 21 Z" fill="#3a2c05" />
-      {/* sole */}
-      <path d="M9 41.5 H56 a3 3 0 0 1 3 3 v0.5 a3 3 0 0 1 -3 3 H9 a3 3 0 0 1 -3 -3 V44.5 a3 3 0 0 1 3 -3 Z" fill="#2a2000" />
-      {/* studs */}
-      <g fill="#2a2000">
-        <path d="M15 49 h5 v2.5 a2.5 2.5 0 0 1 -5 0 Z" />
-        <path d="M27 49 h5 v2.5 a2.5 2.5 0 0 1 -5 0 Z" />
-        <path d="M39 49 h5 v2.5 a2.5 2.5 0 0 1 -5 0 Z" />
-        <path d="M49 49 h4 v2 a2 2 0 0 1 -4 0 Z" />
-      </g>
-      {/* laces (gold) */}
-      <g stroke="#E8B53F" strokeWidth="2" strokeLinecap="round">
-        <path d="M24 19 l4 1.6" /><path d="M25 23 l4 1.6" /><path d="M26.5 27 l4 1.6" />
-      </g>
-    </svg>
   )
 }

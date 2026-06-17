@@ -39,7 +39,8 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
         <p className="hero-meta mono">
           {teamMatchName(f.team)}{f.team?.is_first_team && <span className="pill-first">First Team</span>} · {f.home_away} · {f.fixture_type}
         </p>
-        <p className="hero-when mono">{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO · {f.venue}</p>
+        <p className="hero-when mono">{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO</p>
+        <p className="hero-venue mono">{f.venue}</p>
         <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
       </div>
 
@@ -109,6 +110,7 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
         .hero-meta .pill-first { font-size: 9px; font-weight: 600; background: rgba(255,255,255,.18);
           border-radius: 999px; padding: 2px 7px; margin-left: 6px; }
         .hero-when { font-size: 13px; opacity: .92; margin-top: 4px; }
+        .hero-venue { font-size: 13px; opacity: .82; margin-top: 2px; }
         .hero-action { margin-top: 18px; background: rgba(0,0,0,.28); border-radius: 14px; padding: 14px;
           backdrop-filter: blur(4px); }
         .squad-state { width: 100%; display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
