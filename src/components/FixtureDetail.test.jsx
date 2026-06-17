@@ -33,4 +33,13 @@ describe('FixtureDetail — §2.2 availability reflects immediately', () => {
     // stale snapshot until the sheet was reopened).
     await waitFor(() => expect(inBtn).toHaveAttribute('aria-pressed', 'true'))
   })
+
+  // §2.3 regression — all three availability options must be present + selectable
+  // on the drill-down (they'd gone missing here before).
+  test('shows all three availability options', () => {
+    render(<FixtureDetail open fixture={fx} isAdmin={false} canRespond onSetAvail={vi.fn()} onClose={() => {}} />)
+    expect(screen.getByRole('button', { name: "I'm in" })).toBeVisible()
+    expect(screen.getByRole('button', { name: /^maybe$/i })).toBeVisible()
+    expect(screen.getByRole('button', { name: /can't make it/i })).toBeVisible()
+  })
 })

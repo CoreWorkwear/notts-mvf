@@ -29,8 +29,29 @@ test.describe('admin', () => {
 
   test('logs a result and the game moves to Results', async ({ page }) => {
     await signIn(page, ADMIN.email, ADMIN.password)
-    // Flow depends on having a kicked-off fixture; covered manually until seeded.
-    test.fixme(true, 'needs a deterministic concluded fixture seeded for E2E')
+
+    // Add a PAST-dated fixture so it's already concluded → "needs a result".
+    const stamp = `E2E-RES-${Date.now()}`
+    const past = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10)
+    await page.getByRole('button', { name: /add a fixture/i }).click()
+    await page.getByPlaceholder('New opponent name').fill(stamp)
+    await page.getByPlaceholder(/harvey hadden/i).fill('E2E Park')
+    await page.locator('input[type="date"]').fill(past)
+    await page.getByRole('button', { name: /^add fixture$/i }).click()
+    await expect(page.getByRole('button', { name: /^add fixture$/i })).toBeHidden() // sheet closed
+
+    // Go to Results → the game is waiting in "Needs a result".
+    await page.getByRole('link', { name: /results/i }).first().click()
+    await page.getByRole('button', { name: new RegExp(stamp) }).click() // the needs-a-result row
+
+    // Log 3–1 and save.
+    await page.getByLabel('Our score').fill('3')
+    await page.getByLabel('Their score').fill('1')
+    await page.getByRole('button', { name: /^log result$/i }).click()
+
+    // It saved and moved to Results — the form closed and a Won result is shown.
+    await expect(page.getByRole('button', { name: /^log result$/i })).toBeHidden()
+    await expect(page.getByText('Won')).toBeVisible({ timeout: 10_000 })
   })
 })
 
