@@ -21,6 +21,7 @@ export default defineConfig({
     isMobile: true,
     hasTouch: true,
     reducedMotion: 'reduce', // stop infinite UI animations making elements "unstable"
+    permissions: ['notifications'], // permission != 'default' → the opt-in banner stays hidden, out of the way
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

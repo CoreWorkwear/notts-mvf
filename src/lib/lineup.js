@@ -3,16 +3,18 @@
 // bottom. Pure + unit-tested; the editor/board components consume these.
 
 export const FORMATIONS = {
-  '4-4-2':   [['GK'], ['LB', 'CB', 'CB', 'RB'], ['LM', 'CM', 'CM', 'RM'], ['ST', 'ST']],
-  '4-3-3':   [['GK'], ['LB', 'CB', 'CB', 'RB'], ['CM', 'CM', 'CM'], ['LW', 'ST', 'RW']],
-  '4-2-3-1': [['GK'], ['LB', 'CB', 'CB', 'RB'], ['CDM', 'CDM'], ['LW', 'CAM', 'RW'], ['ST']],
-  '3-5-2':   [['GK'], ['CB', 'CB', 'CB'], ['LM', 'CM', 'CM', 'CM', 'RM'], ['ST', 'ST']],
-  '5-3-2':   [['GK'], ['LWB', 'CB', 'CB', 'CB', 'RWB'], ['CM', 'CM', 'CM'], ['ST', 'ST']],
-  '4-5-1':   [['GK'], ['LB', 'CB', 'CB', 'RB'], ['LM', 'CM', 'CM', 'CM', 'RM'], ['ST']],
+  // Default: 4-3-3 with a single holding midfielder (informally 4-1-2-3) — back
+  // four, one CDM, two CMs ahead, front three of two wingers + a striker.
+  '4-3-3':       [['GK'], ['LB', 'CB', 'CB', 'RB'], ['CDM'], ['CM', 'CM'], ['LW', 'ST', 'RW']],
+  '4-4-2':       [['GK'], ['LB', 'CB', 'CB', 'RB'], ['LM', 'CM', 'CM', 'RM'], ['ST', 'ST']],
+  '4-2-3-1':     [['GK'], ['LB', 'CB', 'CB', 'RB'], ['CDM', 'CDM'], ['LW', 'CAM', 'RW'], ['ST']],
+  '3-5-2':       [['GK'], ['CB', 'CB', 'CB'], ['LM', 'CM', 'CM', 'CM', 'RM'], ['ST', 'ST']],
+  // 4-3-3 double pivot (4-2-1-3): two deeper CMs, an advanced CM, front three.
+  '4-3-3 (dbl)': [['GK'], ['LB', 'CB', 'CB', 'RB'], ['CM', 'CM'], ['CAM'], ['LW', 'ST', 'RW']],
 }
 
 export const FORMATION_NAMES = Object.keys(FORMATIONS)
-export const DEFAULT_FORMATION = '4-4-2'
+export const DEFAULT_FORMATION = '4-3-3'
 
 // Flatten a formation into ordered slots (GK = slot 0), each tagged with its
 // line + position-in-line so the pitch can lay them out.

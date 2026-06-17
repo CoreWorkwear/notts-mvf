@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { FORMATIONS, FORMATION_NAMES, formationSlots, rowsToState, stateToRows, filledCount, swapStarters } from './lineup'
+import { FORMATIONS, FORMATION_NAMES, DEFAULT_FORMATION, formationSlots, rowsToState, stateToRows, filledCount, swapStarters } from './lineup'
 
 describe('formations', () => {
   test('every formation has exactly 11 outfield+GK slots', () => {
@@ -9,6 +9,11 @@ describe('formations', () => {
   })
   test('slot 0 is always the keeper', () => {
     expect(formationSlots('4-3-3')[0]).toMatchObject({ slot: 0, pos: 'GK', line: 0 })
+  })
+  test('default is the 4-3-3 single pivot (one CDM, then two CMs)', () => {
+    expect(DEFAULT_FORMATION).toBe('4-3-3')
+    const positions = formationSlots('4-3-3').map((s) => s.pos)
+    expect(positions).toEqual(['GK', 'LB', 'CB', 'CB', 'RB', 'CDM', 'CM', 'CM', 'LW', 'ST', 'RW'])
   })
   test('unknown formation falls back to the default', () => {
     expect(formationSlots('not-real')).toHaveLength(11)
