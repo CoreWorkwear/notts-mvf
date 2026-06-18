@@ -27,7 +27,7 @@ const TEAMS = [{ id: 't-xl', key: 'xl', label: 'XL 11s' }, { id: 't-co', key: 'c
 const PLAYER = {
   id: 'p1', first_name: 'Joe', last_name: 'Morris', email: 'joe@notts.test', phone: '07700900000',
   dob: null, ec_name: null, ec_phone: null, positions: [], preferred: null,
-  role: 'player', xl_eligible: false, active: true, teamKeys: ['xl'], teamIds: ['t-xl'],
+  role: 'player', active: true, teamKeys: ['xl'], teamIds: ['t-xl'],
 }
 
 beforeEach(() => { h.calls.length = 0 })

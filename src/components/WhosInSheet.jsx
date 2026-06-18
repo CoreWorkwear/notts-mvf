@@ -30,7 +30,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           .eq('fixture_id', fixture.id),
         supabase
           .from('team_memberships')
-          .select('profiles!inner(id, first_name, last_name, phone, active, approved, is_player, xl_eligible)')
+          .select('profiles!inner(id, first_name, last_name, phone, active, approved, is_player)')
           .eq('team_id', fixture.team_id),
         supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
       ])
@@ -49,12 +49,10 @@ export default function WhosInSheet({ open, onClose, fixture }) {
         }
       }
 
-      const isXL = fixture.team?.key === 'xl'
       const noReply = []
       for (const m of rosterRes.data ?? []) {
         const p = m.profiles
         if (!isSquadMember(p)) continue          // skip supporters + pending players
-        if (isXL && !p.xl_eligible) continue
         if (!replied[p.id]) noReply.push(person(p, user))
       }
 

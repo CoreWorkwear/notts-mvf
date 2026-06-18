@@ -106,13 +106,12 @@ Deno.serve(async (req) => {
         if (due.length) {
           await admin.from('reminders_sent').insert(due.map((o) => ({ fixture_id: f.id, hours_before: o, kind: 'availability' })))
           remindersSent += due.length
-          const isXL = (f as any).team?.key === 'xl'
           const { data: members } = await admin
             .from('team_memberships')
-            .select('profile_id, profiles!inner(active, approved, is_player, xl_eligible)')
+            .select('profile_id, profiles!inner(active, approved, is_player)')
             .eq('team_id', f.team_id)
           const roster = (members ?? [])
-            .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player && (!isXL || m.profiles?.xl_eligible))
+            .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player)
             .map((m: any) => m.profile_id)
           // undecided only: skip those already in or out
           const targets = roster.filter((id: string) => statusById[id] !== 'in' && statusById[id] !== 'out')

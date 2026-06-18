@@ -25,7 +25,6 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
   const [positions, setPositions] = useState([])
   const [preferred, setPreferred] = useState('')
   const [teamKeys, setTeamKeys] = useState([])
-  const [xlEligible, setXlEligible] = useState(false)
   const [role, setRole] = useState('player')
   const [active, setActive] = useState(true)
   const [isPlayer, setIsPlayer] = useState(true)
@@ -59,7 +58,6 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
     setPositions(player?.positions ?? [])
     setPreferred(player?.preferred ?? '')
     setTeamKeys(player?.teamKeys ?? [])
-    setXlEligible(player?.xl_eligible ?? false)
     setRole(player?.role ?? 'player')
     setActive(player?.active ?? true)
     setIsPlayer(player?.is_player !== false)
@@ -142,7 +140,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
           first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), phone: phone.trim(),
           dob: dob || null, ec_name: ecName.trim() || null, ec_phone: ecPhone.trim() || null,
           positions, preferred: preferred || null,
-          xl_eligible: xlEligible, role, active, is_player: isPlayer, approved,
+          role, active, is_player: isPlayer, approved,
         }).eq('id', player.id)
         if (upErr) throw upErr
 
@@ -256,15 +254,12 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
 
         {!adding && (
           <>
-            <div className="field"><label className="label">Role &amp; eligibility</label>
+            <div className="field"><label className="label">Role</label>
               <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <select className="select" style={{ width: 'auto' }} value={role} disabled={self} onChange={(e) => setRole(e.target.value)}>
                   <option value="player">Player</option>
                   <option value="admin">Admin</option>
                 </select>
-                <button type="button" className="chip" aria-pressed={xlEligible} onClick={() => setXlEligible((x) => !x)}>
-                  {xlEligible ? 'First-team eligible ✓' : 'First-team eligible'}
-                </button>
                 <button type="button" className="chip" aria-pressed={active} disabled={self} onClick={() => setActive((a) => !a)}
                   style={{ color: active ? 'var(--green-bright)' : 'var(--red-bright)' }}>
                   {active ? 'Active' : 'Inactive'}

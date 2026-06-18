@@ -40,22 +40,20 @@ export function useFixtures(seasonId) {
         .order('kickoff', { ascending: true }),
       supabase.from('teams').select('id, key, label, match_name, colour, is_first_team, league_name'),
       supabase.from('opponents').select('id, name, badge_url, home_venue, home_address, home_postcode').order('name'),
-      // Eligible roster per team: approved, active squad players (and for XL
-      // only the eligible). Supporters + pending players don't count.
+      // Roster per team: approved, active squad players. Supporters + pending
+      // players don't count. (No eligibility gate — §1.)
       supabase
         .from('team_memberships')
-        .select('team_id, teams(key), profiles!inner(id, active, approved, is_player, xl_eligible)'),
+        .select('team_id, profiles!inner(id, active, approved, is_player)'),
     ])
 
     const fetchErr = [fixRes, teamRes, oppRes, rosterRes].find((r) => r?.error)?.error
     if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useFixtures', seasonId })
 
-    // Build eligible-roster size per team_id.
+    // Build roster size per team_id.
     const rosterByTeam = {}
     for (const m of rosterRes.data ?? []) {
-      const p = m.profiles
-      if (!isSquadMember(p)) continue
-      if (m.teams?.key === 'xl' && !p.xl_eligible) continue
+      if (!isSquadMember(m.profiles)) continue
       rosterByTeam[m.team_id] = (rosterByTeam[m.team_id] ?? 0) + 1
     }
 

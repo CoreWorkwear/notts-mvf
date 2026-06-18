@@ -82,7 +82,6 @@ export function AuthProvider({ children }) {
     loading,
     isAuthed: !!session,
     isAdmin: profile?.role === 'admin',
-    xlEligible: !!profile?.xl_eligible,
     // Account state for the "can view, can't act" gate.
     approved: !!profile?.approved,
     isPlayer: profile?.is_player !== false,
