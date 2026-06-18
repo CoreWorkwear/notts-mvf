@@ -1,6 +1,5 @@
 import { POSITIONS } from './constants'
 import { isSquadMember } from './players'
-import { formationSlots } from './lineup'
 
 // Squad page (§4.1): group the squad by position in football order — keepers,
 // then defenders, midfielders, forwards — using each player's PREFERRED position
@@ -58,23 +57,36 @@ export function positionDepth(players = [], pos) {
     .sort((a, b) => (b.isPreferred - a.isPreferred) || surname(a).localeCompare(surname(b)))
 }
 
-// Lay the depth onto a formation's slots for the pitch: each position's depth list
-// is dealt across that position's slots in order (two CB slots get the 1st and 2nd
-// choice CBs, etc.). Returns { slotIndex: profileId } for the first-choice spread.
-export function depthChartStarters(players = [], formation) {
-  const slots = formationSlots(formation)
-  const used = new Set()
-  const byPos = {}
-  for (const s of slots) (byPos[s.pos] ??= []).push(s.slot)
+// The depth-chart pitch shows EVERY position once (not a formation) — the FM
+// squad-depth view — laid out by zone, attack at the top line. Tap a position to
+// see its depth. Lines back→front; PitchView renders the highest line at the top.
+export const DEPTH_PITCH = [
+  ['GK'],
+  ['LB', 'CB', 'RB'],
+  ['CDM'],
+  ['LM', 'CM', 'RM'],
+  ['CAM'],
+  ['LW', 'ST', 'CF', 'RW'],
+]
+
+// Flatten to PitchView slots (same shape as formationSlots).
+export function depthPitchSlots() {
+  const slots = []
+  let i = 0
+  DEPTH_PITCH.forEach((line, lineIdx) => {
+    line.forEach((pos, col) => { slots.push({ slot: i, pos, line: lineIdx, lineSize: line.length, col }); i++ })
+  })
+  return slots
+}
+
+// First-choice player per position slot for the depth pitch (each position's top of
+// depth — preferred first). A player who's first choice in more than one position
+// shows in each, which is exactly what a depth chart wants.
+export function depthPitchStarters(players = []) {
   const starters = {}
-  for (const [pos, slotIdxs] of Object.entries(byPos)) {
-    const depth = positionDepth(players, pos)
-    let di = 0
-    for (const slotIdx of slotIdxs) {
-      // Skip players already placed in another slot of the same position spread.
-      while (di < depth.length && used.has(depth[di].id)) di++
-      if (di < depth.length) { starters[slotIdx] = depth[di].id; used.add(depth[di].id); di++ }
-    }
+  for (const s of depthPitchSlots()) {
+    const top = positionDepth(players, s.pos)[0]
+    if (top) starters[s.slot] = top.id
   }
   return starters
 }

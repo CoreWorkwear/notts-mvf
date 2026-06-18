@@ -18,13 +18,13 @@ const DRAG_THRESHOLD = 8 // px before a press becomes a drag (vs a tap)
 // Read-only by default. In the editor (onTapSlot set) a TAP opens the picker and,
 // when onSwap is given, DRAGGING a shirt onto another swaps the two players
 // (or moves into an empty slot). Pointer-events based, so it works on touch.
-export default function PitchView({ formation, starters, names, photos = {}, onTapSlot, onSwap, activeSlot, badge }) {
+export default function PitchView({ formation, slots, starters, names, photos = {}, onTapSlot, onSwap, activeSlot, badge }) {
   const lines = useMemo(() => {
-    const slots = formationSlots(formation)
+    const ss = slots || formationSlots(formation)
     const byLine = {}
-    for (const s of slots) (byLine[s.line] ??= []).push(s)
+    for (const s of ss) (byLine[s.line] ??= []).push(s)
     return Object.keys(byLine).map(Number).sort((a, b) => b - a).map((k) => byLine[k])
-  }, [formation])
+  }, [formation, slots])
 
   const editor = !!onTapSlot
   const press = useRef(null) // { slot, x0, y0, filled, moved }

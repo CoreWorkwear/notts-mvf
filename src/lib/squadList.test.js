@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { squadByPosition, primaryPosition, positionDepth, depthChartStarters } from './squadList'
+import { squadByPosition, primaryPosition, positionDepth, depthPitchSlots, depthPitchStarters } from './squadList'
 
 const make = (over) => ({ id: over.id, first_name: over.first_name ?? 'A', last_name: over.last_name ?? 'Z', active: true, approved: true, is_player: true, positions: [], preferred: null, ...over })
 
@@ -71,19 +71,24 @@ describe('positionDepth + depthChartStarters (§4.2)', () => {
     expect(positionDepth(players, 'GK').map((p) => p.id)).toEqual(['ok'])
   })
 
-  test('depthChartStarters deals depth across duplicate slots and never repeats a player', () => {
+  test('the depth pitch lays out every position once, attack-line last', () => {
+    const slots = depthPitchSlots()
+    const positions = slots.map((s) => s.pos)
+    // 13 unique positions, GK first (back line 0), forwards on the last line.
+    expect(positions).toEqual(['GK', 'LB', 'CB', 'RB', 'CDM', 'LM', 'CM', 'RM', 'CAM', 'LW', 'ST', 'CF', 'RW'])
+    expect(new Set(positions).size).toBe(positions.length)
+  })
+
+  test('depthPitchStarters puts each position\'s first choice in its slot (a player may lead more than one)', () => {
     const players = [
-      make({ id: 'cbA', preferred: 'CB', positions: ['CB'], last_name: 'Allen' }),
-      make({ id: 'cbB', preferred: 'CB', positions: ['CB'], last_name: 'Best' }),
+      make({ id: 'util', preferred: 'CB', positions: ['CB', 'RB'], last_name: 'Utility' }),
       make({ id: 'gk', preferred: 'GK', positions: ['GK'] }),
     ]
-    const starters = depthChartStarters(players, '4-3-3') // GK + LB,CB,CB,RB + ...
-    const ids = Object.values(starters)
-    // The two CB slots get the two different CBs; the GK slot gets the keeper.
-    expect(ids.filter((id) => id === 'cbA')).toHaveLength(1)
-    expect(ids.filter((id) => id === 'cbB')).toHaveLength(1)
-    expect(ids).toContain('gk')
-    // No player placed in two slots.
-    expect(new Set(ids).size).toBe(ids.length)
+    const starters = depthPitchStarters(players)
+    const slots = depthPitchSlots()
+    const at = (pos) => starters[slots.find((s) => s.pos === pos).slot]
+    expect(at('GK')).toBe('gk')
+    expect(at('CB')).toBe('util') // preferred
+    expect(at('RB')).toBe('util') // also first choice where nobody else plays — shows in both
   })
 })

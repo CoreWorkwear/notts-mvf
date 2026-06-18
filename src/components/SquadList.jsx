@@ -23,16 +23,16 @@ export default function SquadList() {
 
   return (
     <div className="mt-4">
-      {/* Team toggle (red = First Team, green = Community) + view toggle. */}
-      <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+      {/* View selector (parent) on top; team filter (red/green) below it. */}
+      <div className="sq-seg" role="tablist" aria-label="Squad view">
+        <button className={'sq-seg-btn' + (view === 'list' ? ' on' : '')} role="tab" aria-selected={view === 'list'} onClick={() => setView('list')}>List</button>
+        <button className={'sq-seg-btn' + (view === 'depth' ? ' on' : '')} role="tab" aria-selected={view === 'depth'} onClick={() => setView('depth')}>Depth chart</button>
+      </div>
+      <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
         <button className="chip" aria-pressed={team === 'all'} onClick={() => setTeam('all')}>All</button>
         {TEAM_ORDER.map((k) => (
           <button key={k} className={'chip' + (k === 'community' ? ' community' : '')} aria-pressed={team === k} onClick={() => setTeam(k)}>{TEAMS[k].label}</button>
         ))}
-      </div>
-      <div className="row gap-2 mt-2">
-        <button className="chip" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
-        <button className="chip" aria-pressed={view === 'depth'} onClick={() => setView('depth')}>Depth chart</button>
       </div>
 
       {total === 0 ? (
@@ -43,6 +43,14 @@ export default function SquadList() {
       ) : view === 'depth' ? <SquadDepth players={filtered} /> : (
         <SquadByPosition groups={groups} total={total} />
       )}
+
+      <style>{`
+        .sq-seg { display: flex; gap: 4px; padding: 4px; background: var(--slate); border: 1px solid var(--line);
+          border-radius: 12px; }
+        .sq-seg-btn { flex: 1; padding: 9px 10px; border: none; background: none; color: var(--bone-mute);
+          font-family: var(--font-body); font-size: 14px; font-weight: 600; border-radius: 9px; transition: all var(--t-fast); }
+        .sq-seg-btn.on { background: var(--red); color: #fff; }
+      `}</style>
     </div>
   )
 }
