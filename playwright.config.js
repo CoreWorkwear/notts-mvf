@@ -10,6 +10,11 @@ import { defineConfig, devices } from '@playwright/test'
 // when absent, so the no-auth smoke layer always runs.
 export default defineConfig({
   testDir: './e2e',
+  // Test users are created fresh before the cycle and deleted after, so they never
+  // linger in the live DB (needs SUPABASE_SERVICE_ROLE_KEY — see e2e/users.js;
+  // no-ops without it).
+  globalSetup: './e2e/global-setup.js',
+  globalTeardown: './e2e/global-teardown.js',
   fullyParallel: false,
   workers: 1, // the add-fixture / log-result flows mutate shared data — keep serial
   retries: 0,
