@@ -25,16 +25,12 @@ export const listItem = {
   animate: { opacity: 1, y: 0, transition: { duration: 0.28, ease: EASE } },
 }
 
-// Bottom sheet: spring up from the bottom. NOTE the sheet stays MOUNTED with an
-// `open` flag (StrictMode-safe pattern) — we animate between these states, we do
-// NOT mount/unmount, so this is used as animate={open ? 'open' : 'closed'}.
+// Bottom sheet: spring up from the bottom on open. The sheet unmounts instantly on
+// close (the StrictMode/history-safe `return null` pattern is kept — we animate the
+// ENTRANCE only, no exit), so this is just the mount transition for the panel.
 export const sheetPanel = {
-  closed: { y: '100%', transition: { duration: 0.2, ease: EASE } },
-  open: { y: 0, transition: { type: 'spring', stiffness: 380, damping: 34 } },
-}
-export const sheetBackdrop = {
-  closed: { opacity: 0, transition: { duration: 0.18, ease: EASE } },
-  open: { opacity: 1, transition: { duration: 0.2, ease: EASE } },
+  initial: { y: '100%' },
+  animate: { y: 0, transition: { type: 'spring', stiffness: 360, damping: 34 } },
 }
 
 // Press feedback for primary controls — a small, springy squeeze.

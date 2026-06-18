@@ -56,7 +56,7 @@ export default function LeagueTablePanel({ table, competitions = [], teams = [],
       ) : (
         <table className="lt mt-3">
           <thead>
-            <tr><th>#</th><th className="lt-team">Team</th><th>P</th><th>GD</th><th>Pts</th><th className="lt-form">W-D-L</th></tr>
+            <tr><th scope="col">#</th><th scope="col" className="lt-team">Team</th><th scope="col">P</th><th scope="col">GD</th><th scope="col">Pts</th><th scope="col" className="lt-form">W-D-L</th></tr>
           </thead>
           <tbody>
             {rows.map((r, i) => {

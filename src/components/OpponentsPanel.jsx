@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useOpponents } from '../hooks/useOpponents'
 import OpponentForm from './OpponentForm'
+import { Stagger, StaggerItem } from './Stagger'
 import Loader from './Loader'
 
 // Admin opponents CRUD (BUILD-LIST A2). League teams (with badges) and one-off
@@ -32,23 +33,25 @@ export default function OpponentsPanel() {
           <p>Add the teams in your league (with badges), or a quick name for a one-off friendly.</p>
         </div>
       ) : (
-        <div className="col gap-2 mt-4 stagger">
+        <Stagger className="col gap-2 mt-4">
           {filtered.map((o) => (
-            <button key={o.id} className="card opp-row" onClick={() => openEdit(o)}>
-              {o.badge_url
-                ? <img className="opp-badge" src={o.badge_url} alt="" />
-                : <span className="opp-badge opp-mono">{(o.name?.[0] ?? '?').toUpperCase()}</span>}
-              <span className="opp-main">
-                <span className="opp-name">{o.name}</span>
-                <span className="opp-tags">
-                  {o.is_league_team && <span className="tag tag-league">League</span>}
-                  {o.home_venue && <span className="opp-venue">{o.home_venue}</span>}
+            <StaggerItem key={o.id}>
+              <button className="card opp-row" style={{ width: '100%' }} onClick={() => openEdit(o)}>
+                {o.badge_url
+                  ? <img className="opp-badge" src={o.badge_url} alt="" />
+                  : <span className="opp-badge opp-mono">{(o.name?.[0] ?? '?').toUpperCase()}</span>}
+                <span className="opp-main">
+                  <span className="opp-name">{o.name}</span>
+                  <span className="opp-tags">
+                    {o.is_league_team && <span className="tag tag-league">League</span>}
+                    {o.home_venue && <span className="opp-venue">{o.home_venue}</span>}
+                  </span>
                 </span>
-              </span>
-              <span className="opp-go">›</span>
-            </button>
+                <span className="opp-go">›</span>
+              </button>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
 
       <OpponentForm open={open} opponent={editing} onClose={() => setOpen(false)} onSave={save} />

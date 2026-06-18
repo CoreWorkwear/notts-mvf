@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNews } from '../hooks/useNews'
 import NewsForm from '../components/NewsForm'
+import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
 import { fmtDate } from '../lib/format'
 
@@ -32,9 +33,9 @@ export default function News() {
           <p>{isAdmin ? 'Post the first update — tick push and it pings everyone.' : "Club updates will land here. We'll ping you when there's news."}</p>
         </div>
       ) : (
-        <div className="col gap-3 mt-4 stagger">
+        <Stagger className="col gap-3 mt-4">
           {items.map((n) => (
-            <div key={n.id} className="card news-card">
+            <StaggerItem key={n.id} className="card news-card">
               <div className="row spread">
                 <span className="news-title">{n.title}</span>
                 {n.pushed && <span className="tag" title="Pushed to phones">🔔</span>}
@@ -46,9 +47,9 @@ export default function News() {
                 </span>
                 {isAdmin && <button className="news-del" onClick={() => onDelete(n.id)}>Delete</button>}
               </div>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
 
       {isAdmin && <NewsForm open={composing} onClose={() => setComposing(false)} onPost={post} />}

@@ -14,6 +14,7 @@ import FixtureDetail from '../components/FixtureDetail'
 import FixtureForm from '../components/FixtureForm'
 import ResultForm from '../components/ResultForm'
 import CalendarView from '../components/CalendarView'
+import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
 import { fixtureMatchup } from '../lib/teams'
 
@@ -156,18 +157,19 @@ export default function Fixtures() {
           )}
 
           {rest.length > 0 && (
-            <div className="col gap-2 mt-4 stagger">
+            <Stagger className="col gap-2 mt-4">
               {rest.map((f) => (
-                <FixtureStrip
-                  key={f.id}
-                  fixture={f}
-                  isAdmin={isAdmin}
-                  canRespond={canRespond}
-                  onSetAvail={(s) => handleSetAvail(f.id, s)}
-                  onOpen={() => setDetail(f)}
-                />
+                <StaggerItem key={f.id}>
+                  <FixtureStrip
+                    fixture={f}
+                    isAdmin={isAdmin}
+                    canRespond={canRespond}
+                    onSetAvail={(s) => handleSetAvail(f.id, s)}
+                    onOpen={() => setDetail(f)}
+                  />
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           )}
 
           {postponedList.length > 0 && (

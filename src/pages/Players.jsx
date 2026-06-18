@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePlayers } from '../hooks/usePlayers'
 import PlayerForm from '../components/PlayerForm'
+import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
 
 export default function Players() {
@@ -77,9 +78,10 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
       {list.length === 0 ? (
         empty ? <p className="dim mt-2" style={{ fontSize: 14 }}>{empty}</p> : null
       ) : (
-        <div className="col gap-2 mt-2 stagger">
+        <Stagger className="col gap-2 mt-2">
           {list.map((p) => (
-            <button key={p.id} className="card pl-row" onClick={() => onEdit(p)} style={muted ? { opacity: 0.7 } : {}}>
+            <StaggerItem key={p.id}>
+            <button className="card pl-row" onClick={() => onEdit(p)} style={{ width: '100%', ...(muted ? { opacity: 0.7 } : {}) }}>
               {p.photo_url
                 ? <img className="pl-av" src={p.photo_url} alt="" />
                 : <span className="pl-av mono">{`${(p.first_name?.[0] ?? '')}${(p.last_name?.[0] ?? '')}`.toUpperCase()}</span>}
@@ -102,8 +104,9 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
               )}
               <span className="pl-go">›</span>
             </button>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       )}
 
       <style>{`

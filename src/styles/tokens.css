@@ -273,7 +273,7 @@ input, select, textarea { font-family: inherit; }
   border: 1px solid var(--line); border-bottom: none;
   max-height: 92vh; overflow-y: auto; overscroll-behavior: contain;
   padding: 10px 18px calc(24px + var(--safe-b));
-  animation: slideup var(--t-med);
+  /* Entrance spring is owned by Framer (Sheet.jsx); backdrop still fades via CSS. */
 }
 .grab-handle { width: 40px; height: 4px; border-radius: 99px; background: var(--line-2); margin: 6px auto 14px; }
 @media (min-width: 720px) {
@@ -292,13 +292,8 @@ input, select, textarea { font-family: inherit; }
 @keyframes slideup { from { transform: translateY(100%) } to { transform: translateY(0) } }
 @keyframes fadeup  { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
 
-.stagger > * { animation: fadeup var(--t-med) backwards; }
-.stagger > *:nth-child(1){animation-delay:0ms}
-.stagger > *:nth-child(2){animation-delay:30ms}
-.stagger > *:nth-child(3){animation-delay:60ms}
-.stagger > *:nth-child(4){animation-delay:90ms}
-.stagger > *:nth-child(5){animation-delay:120ms}
-.stagger > *:nth-child(6){animation-delay:150ms}
+/* List stagger is now Framer-driven (components/Stagger.jsx) — uncapped + honours
+   reduced motion via <MotionConfig>. The CSS .stagger helper has been retired. */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }

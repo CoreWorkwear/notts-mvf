@@ -73,22 +73,24 @@ export default function Results() {
 
           {/* Earlier = strips with a W/D/L flash */}
           {earlier.length > 0 && (
-            <div className="col gap-2 mt-4 stagger">
+            <Stagger className="col gap-2 mt-4">
               {earlier.map((f) => {
                 const o = outcome(f.result)
                 const community = f.team?.key === 'community'
                 return (
-                  <button key={f.id} className={'card spine res-strip' + (community ? ' community' : '')} onClick={() => setCentre(f)}>
-                    <span className={'flash sm ' + o}>{o}</span>
-                    <div className="grow" style={{ textAlign: 'left' }}>
-                      <div className="res-match">{fixtureMatchup(f)}</div>
-                      <div className="mono res-when">{fmtDate(f.match_date)} · {f.fixture_type}</div>
-                    </div>
-                    <span className="mono res-score">{f.result.us}–{f.result.them}</span>
-                  </button>
+                  <StaggerItem key={f.id}>
+                    <button className={'card spine res-strip' + (community ? ' community' : '')} style={{ width: '100%' }} onClick={() => setCentre(f)}>
+                      <span className={'flash sm ' + o}>{o}</span>
+                      <div className="grow" style={{ textAlign: 'left' }}>
+                        <div className="res-match">{fixtureMatchup(f)}</div>
+                        <div className="mono res-when">{fmtDate(f.match_date)} · {f.fixture_type}</div>
+                      </div>
+                      <span className="mono res-score">{f.result.us}–{f.result.them}</span>
+                    </button>
+                  </StaggerItem>
                 )
               })}
-            </div>
+            </Stagger>
           )}
         </>
       )}
