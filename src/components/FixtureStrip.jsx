@@ -70,8 +70,8 @@ export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSe
         .strip-counts { background: none; border: none; display: grid;
           grid-template-columns: repeat(3, auto); gap: 0 10px; align-items: center; color: var(--bone); }
         .strip-counts .sc { font-size: 19px; font-weight: 600; }
-        .sc.in { color: var(--green-bright); } .sc.maybe { color: var(--amber); } .sc.no { color: var(--bone-dim); }
-        .sc-label { grid-column: 1 / -1; font-size: 9px; color: var(--bone-dim); letter-spacing: .06em;
+        .sc.in { color: var(--green-bright); } .sc.maybe { color: var(--amber); } .sc.no { color: var(--bone-mute); }
+        .sc-label { grid-column: 1 / -1; font-size: 10px; color: var(--bone-mute); letter-spacing: .06em;
           text-transform: uppercase; margin-top: 2px; }
         @media (max-width: 520px) {
           .strip { flex-direction: column; }

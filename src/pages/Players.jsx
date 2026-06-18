@@ -115,16 +115,17 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
         .pl-main { flex: 1; min-width: 0; }
         .pl-name { display: block; font-weight: 600; }
         .pl-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-        .tag { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px;
+        .tag { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px;
           border-radius: 6px; background: var(--slate); color: var(--bone-mute); border: 1px solid var(--line); }
         .tag-xl { color: var(--red-bright); border-color: var(--red); }
         .tag-co { color: var(--green-bright); border-color: var(--green); }
         .tag-admin { color: var(--gold); border-color: var(--gold); }
         .tag-pending { color: var(--amber); border-color: var(--amber); }
         .tag-supporter { color: var(--bone-mute); border-color: var(--line-2); }
-        .pl-approve { flex: none; font-size: 12px; font-weight: 600; color: var(--green-bright);
-          border: 1px solid var(--green); background: var(--green-dim-2); border-radius: 8px; padding: 6px 10px; }
-        .pl-go { color: var(--bone-dim); font-size: 20px; }
+        /* Solid fill + dark text so the action is unmistakable (was bright-on-dim, ~1.6:1). */
+        .pl-approve { flex: none; font-size: 13px; font-weight: 700; color: var(--ink);
+          border: none; background: var(--green); border-radius: 8px; padding: 9px 12px; min-height: 40px; }
+        .pl-go { color: var(--bone-mute); font-size: 20px; }
       `}</style>
     </div>
   )

@@ -56,9 +56,9 @@ export default function AdminAvailability() {
         .wi-match { font-family: var(--font-display); font-weight: 600; font-size: 17px; line-height: 1.1; }
         .wi-when { font-size: 12px; color: var(--bone-mute); margin-top: 4px; }
         .wi-counts { display: grid; grid-template-columns: repeat(3, auto); gap: 0 10px; align-items: center; }
-        .wi-counts span { font-size: 19px; font-weight: 600; }
-        .wi-counts .in { color: var(--green-bright); } .wi-counts .maybe { color: var(--amber); } .wi-counts .no { color: var(--bone-dim); }
-        .wi-lbl { grid-column: 1 / -1; font-size: 9px; color: var(--bone-dim); letter-spacing: .06em;
+        .wi-counts .in, .wi-counts .maybe, .wi-counts .no { font-size: 19px; font-weight: 600; }
+        .wi-counts .in { color: var(--green-bright); } .wi-counts .maybe { color: var(--amber); } .wi-counts .no { color: var(--bone-mute); }
+        .wi-lbl { grid-column: 1 / -1; font-size: 10px; color: var(--bone-mute); letter-spacing: .06em;
           text-transform: uppercase; margin-top: 2px; }
       `}</style>
     </div>
