@@ -28,7 +28,9 @@ export default function StatsPanel({ stats }) {
   const [sortKey, setSortKey] = useState('goals')
   const rows = useMemo(() => statRows(stats, scope), [stats, scope])
   const boot = useMemo(() => goldenBoot(rows), [rows])
-  const accent = scope === 'community' ? 'var(--green)' : scope === 'xl' ? 'var(--red)' : 'var(--bone)'
+  // Accent for the scope: Community green, otherwise the brand red (First Team and
+  // the "All" default both use red — never bone, which rendered headers white).
+  const accent = scope === 'community' ? 'var(--green)' : 'var(--red)'
 
   const squad = useMemo(
     () => [...rows].sort((a, b) => b[sortKey].total - a[sortKey].total || a.name.localeCompare(b.name)),
@@ -68,7 +70,7 @@ export default function StatsPanel({ stats }) {
             const max = top[0][m.key].total
             return (
               <div key={m.key} className="lb mt-5">
-                <p className="kicker"><span className="kicker-rule" style={{ background: accent }}>{m.label.toUpperCase()}</span></p>
+                <p className="kicker"><span className="kicker-rule" style={{ borderColor: accent }}>{m.label.toUpperCase()}</span></p>
                 <div className="col gap-2 mt-3">
                   {top.map((p) => (
                     <div key={p.id} className="lb-row">
@@ -83,7 +85,7 @@ export default function StatsPanel({ stats }) {
           })}
 
           {/* Full squad table */}
-          <p className="kicker mt-5"><span className="kicker-rule" style={{ background: accent }}>THE SQUAD</span></p>
+          <p className="kicker mt-5"><span className="kicker-rule" style={{ borderColor: accent }}>THE SQUAD</span></p>
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>Tap a heading to sort. Each figure: total, with league · friendly beneath.</p>
           <table className="st mt-2">
             <thead>
