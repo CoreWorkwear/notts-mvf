@@ -1,15 +1,18 @@
+import { useState } from 'react'
 import { useSquad } from '../hooks/useSquad'
 import { squadByPosition, primaryPosition } from '../lib/squadList'
 import { Stagger, StaggerItem } from './Stagger'
+import SquadDepth from './SquadDepth'
 import Loader from './Loader'
 
 const initials = (p) => `${(p.first_name?.[0] ?? '')}${(p.last_name?.[0] ?? '')}`.toUpperCase()
 
-// §4.1 — the squad, by position (keepers → forwards), with avatars. Player-facing
-// (lives in the Club tab), so it reads a PII-free roster via useSquad. Each player
-// shows their primary position and a red/green dot per team they're in.
+// §4 — the squad. Two views: 4.1 list by position (with avatars), and 4.2 an
+// FM-style depth chart (pitch + tap-a-position). Player-facing (Club tab), so it
+// reads a PII-free roster via useSquad.
 export default function SquadList() {
   const { players, loading } = useSquad()
+  const [view, setView] = useState('list') // 'list' | 'depth'
   if (loading) return <Loader label="Naming the squad…" />
 
   const groups = squadByPosition(players)
@@ -24,6 +27,21 @@ export default function SquadList() {
     )
   }
 
+  return (
+    <div className="mt-4">
+      <div className="row gap-2">
+        <button className="chip" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
+        <button className="chip" aria-pressed={view === 'depth'} onClick={() => setView('depth')}>Depth chart</button>
+      </div>
+
+      {view === 'depth' ? <SquadDepth players={players} /> : (
+        <SquadByPosition groups={groups} total={total} />
+      )}
+    </div>
+  )
+}
+
+function SquadByPosition({ groups, total }) {
   return (
     <div className="mt-4">
       <p className="sq-total mono">{total} in the squad</p>

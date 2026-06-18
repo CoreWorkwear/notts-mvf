@@ -1,5 +1,6 @@
 import { POSITIONS } from './constants'
 import { isSquadMember } from './players'
+import { formationSlots } from './lineup'
 
 // Squad page (§4.1): group the squad by position in football order — keepers,
 // then defenders, midfielders, forwards — using each player's PREFERRED position
@@ -44,4 +45,36 @@ export function squadByPosition(players = []) {
 
   if (unassigned.length) groups.push({ key: 'NA', label: 'Squad', players: [...unassigned].sort((a, b) => surname(a).localeCompare(surname(b))) })
   return groups
+}
+
+// Depth chart (§4.2): for a position, the squad members who can play it — those
+// who PREFER it first (marked), then anyone who lists it as one of their
+// positions, each sorted by surname. No ability ratings exist, so "depth" is
+// who-can-play + preferred-first, not a power ranking.
+export function positionDepth(players = [], pos) {
+  const can = players.filter(isSquadMember).filter((p) => p.preferred === pos || (Array.isArray(p.positions) && p.positions.includes(pos)))
+  return can
+    .map((p) => ({ ...p, isPreferred: primaryPosition(p) === pos }))
+    .sort((a, b) => (b.isPreferred - a.isPreferred) || surname(a).localeCompare(surname(b)))
+}
+
+// Lay the depth onto a formation's slots for the pitch: each position's depth list
+// is dealt across that position's slots in order (two CB slots get the 1st and 2nd
+// choice CBs, etc.). Returns { slotIndex: profileId } for the first-choice spread.
+export function depthChartStarters(players = [], formation) {
+  const slots = formationSlots(formation)
+  const used = new Set()
+  const byPos = {}
+  for (const s of slots) (byPos[s.pos] ??= []).push(s.slot)
+  const starters = {}
+  for (const [pos, slotIdxs] of Object.entries(byPos)) {
+    const depth = positionDepth(players, pos)
+    let di = 0
+    for (const slotIdx of slotIdxs) {
+      // Skip players already placed in another slot of the same position spread.
+      while (di < depth.length && used.has(depth[di].id)) di++
+      if (di < depth.length) { starters[slotIdx] = depth[di].id; used.add(depth[di].id); di++ }
+    }
+  }
+  return starters
 }
