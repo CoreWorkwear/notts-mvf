@@ -1,3 +1,4 @@
+import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion'
 import AvailControl from './AvailControl'
 import Crest from './Crest'
 import WeatherStrip from './WeatherStrip'
@@ -17,8 +18,32 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
   // already read fine and shouldn't be darkened.
   const hasPhoto = !!pickHeroImage({ pinnedUrl: f.pinnedUrl, pool, seed: f.id })
 
+  // Signature poster motion (DESIGN-SYSTEM §5): a settle on arrival and a few
+  // degrees of pointer tilt for depth on desktop. Disabled under reduced motion;
+  // pointer tilt simply never fires on touch (no hover), which is fine.
+  const reduce = useReducedMotion()
+  const px = useMotionValue(0.5), py = useMotionValue(0.5)
+  const spring = { stiffness: 150, damping: 18 }
+  const rotateX = useSpring(useTransform(py, [0, 1], [4.5, -4.5]), spring)
+  const rotateY = useSpring(useTransform(px, [0, 1], [-4.5, 4.5]), spring)
+  function onMove(e) {
+    if (reduce) return
+    const r = e.currentTarget.getBoundingClientRect()
+    px.set((e.clientX - r.left) / r.width)
+    py.set((e.clientY - r.top) / r.height)
+  }
+  function onLeave() { px.set(0.5); py.set(0.5) }
+
   return (
-    <div className={'hero' + (hasPhoto ? ' has-photo' : '')} style={{ backgroundImage: bg }}>
+    <motion.div
+      className={'hero' + (hasPhoto ? ' has-photo' : '')}
+      style={{ backgroundImage: bg, rotateX, rotateY, transformPerspective: 1100 }}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      initial={reduce ? false : { opacity: 0, scale: 0.985, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+    >
       <div className="hero-top">
         <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>NEXT UP · {relativeWhen(f.match_date)}</span>
         {isAdmin && (
@@ -124,6 +149,6 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
         .hero-detail { width: 100%; margin-top: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18);
           color: #fff; border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 600; backdrop-filter: blur(4px); }
       `}</style>
-    </div>
+    </motion.div>
   )
 }
