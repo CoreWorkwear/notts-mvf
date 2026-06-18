@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { MotionConfig, AnimatePresence, motion } from 'framer-motion'
+import { pageTransition } from './lib/motion'
 import { useAuth } from './context/AuthContext'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
@@ -33,30 +35,46 @@ export default function App() {
   const adminOnly = (el) => (isAdmin ? el : <Navigate to="/fixtures" replace />)
 
   return (
-    <BrowserRouter>
-      <Header />
-      <main>
-        <Routes>
-          <Route path="/fixtures" element={<Fixtures />} />
-          <Route path="/results" element={<Results />} />
-          <Route path="/club" element={<Club />} />
-          <Route path="/you" element={<Profile />} />
-          <Route path="/news" element={<News />} />
-          <Route path="/manage" element={adminOnly(<Manage />)} />
-          <Route path="/whos-in" element={adminOnly(<AdminAvailability />)} />
-          <Route path="/players" element={adminOnly(<Players />)} />
-          <Route path="/opponents" element={adminOnly(<Opponents />)} />
-          <Route path="/seasons" element={adminOnly(<Seasons />)} />
-          <Route path="/media" element={adminOnly(<Media />)} />
-          <Route path="/reminders" element={adminOnly(<Reminders />)} />
-          <Route path="/sponsors" element={adminOnly(<Sponsors />)} />
-          <Route path="/diagnostics" element={adminOnly(<Diagnostics />)} />
-          <Route path="/competitions" element={adminOnly(<Competitions />)} />
-          <Route path="*" element={<Navigate to="/fixtures" replace />} />
-        </Routes>
-        <SponsorStrip />
-      </main>
-      <BottomNav />
-    </BrowserRouter>
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <Header />
+        <AnimatedRoutes adminOnly={adminOnly} />
+        <BottomNav />
+      </BrowserRouter>
+    </MotionConfig>
+  )
+}
+
+// Route content crossfades + drifts up on navigation (DESIGN-SYSTEM §5). The
+// header, bottom nav and sponsor strip live outside the transition so only the
+// page body moves. Keyed on pathname so AnimatePresence sees each route swap.
+function AnimatedRoutes({ adminOnly }) {
+  const location = useLocation()
+  return (
+    <main>
+      <AnimatePresence mode="wait">
+        <motion.div key={location.pathname} {...pageTransition}>
+          <Routes location={location}>
+            <Route path="/fixtures" element={<Fixtures />} />
+            <Route path="/results" element={<Results />} />
+            <Route path="/club" element={<Club />} />
+            <Route path="/you" element={<Profile />} />
+            <Route path="/news" element={<News />} />
+            <Route path="/manage" element={adminOnly(<Manage />)} />
+            <Route path="/whos-in" element={adminOnly(<AdminAvailability />)} />
+            <Route path="/players" element={adminOnly(<Players />)} />
+            <Route path="/opponents" element={adminOnly(<Opponents />)} />
+            <Route path="/seasons" element={adminOnly(<Seasons />)} />
+            <Route path="/media" element={adminOnly(<Media />)} />
+            <Route path="/reminders" element={adminOnly(<Reminders />)} />
+            <Route path="/sponsors" element={adminOnly(<Sponsors />)} />
+            <Route path="/diagnostics" element={adminOnly(<Diagnostics />)} />
+            <Route path="/competitions" element={adminOnly(<Competitions />)} />
+            <Route path="*" element={<Navigate to="/fixtures" replace />} />
+          </Routes>
+        </motion.div>
+      </AnimatePresence>
+      <SponsorStrip />
+    </main>
   )
 }
