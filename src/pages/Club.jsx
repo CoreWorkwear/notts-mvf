@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useClub } from '../hooks/useClub'
 import { useCompetitions } from '../hooks/useCompetitions'
@@ -10,6 +11,7 @@ import Loader from '../components/Loader'
 // Player-facing: League Table / Club Stats. Admin/config (Seasons, Media) now
 // live in the Manage hub, not here.
 export default function Club() {
+  const { club } = useAuth()
   const { seasonId } = useSeason()
   const { table, teams, stats, loading, refetch } = useClub(seasonId)
   const { competitions } = useCompetitions(seasonId)
@@ -20,6 +22,7 @@ export default function Club() {
   return (
     <div className="page">
       <p className="kicker"><span className="kicker-rule">THE CLUB</span></p>
+      <h1 className="display mt-2" style={{ fontSize: 28 }}>{club?.name ?? 'The Club'}</h1>
       <div className="row gap-2 mt-3">
         <button className={'btn grow club-tab ' + (view === 'table' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('table')}>Table</button>
         <button className={'btn grow club-tab ' + (view === 'stats' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('stats')}>Stats</button>

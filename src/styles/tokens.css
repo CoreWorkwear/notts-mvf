@@ -218,13 +218,25 @@ input, select, textarea { font-family: inherit; }
 .app-header {
   position: sticky; top: 0; z-index: 50;
   height: calc(58px + var(--safe-t)); padding-top: var(--safe-t);
-  display: flex; align-items: center; gap: 12px;
-  padding-inline: 18px;
+  display: flex; align-items: center; gap: 6px;
+  padding-inline: 14px;
   background: var(--glass);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
-.wordmark { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -.01em; }
+/* The brand never wraps and never shrinks below its text; it still flex-grows to
+   push the controls right. The season picker keeps a fixed, readable width and
+   the header icons sit tight so everything fits one line even for admins (who
+   get the extra manager-view toggle). */
+.wordmark { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -.01em;
+  white-space: nowrap; min-width: max-content; }
+.app-header .season-select { padding: 6px 8px; font-size: 12px; flex: none; }
+.app-header .nav-item { padding: 6px 6px; }
+/* When the wordmark must give way (very narrow phones; or admins on a phone, who
+   carry the extra manager-view icon) hide its TEXT but keep the element so its
+   flex-grow still pushes the controls to the right. The crest carries the brand. */
+@media (max-width: 360px) { .wordmark { font-size: 0; } }
+@media (max-width: 430px) { .app-header.admin .wordmark { font-size: 0; } }
 
 /* Bottom tab nav ---------------------------------------------------------- */
 .bottom-nav {
@@ -237,7 +249,7 @@ input, select, textarea { font-family: inherit; }
   border-top: 1px solid var(--line);
 }
 .nav-item {
-  background: none; border: none; color: var(--bone-dim);
+  background: none; border: none; color: var(--bone-mute);
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 6px 8px; flex: 1; transition: color var(--t-fast);
 }

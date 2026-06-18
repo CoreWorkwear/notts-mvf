@@ -13,14 +13,14 @@ export default function Header() {
   const [confirming, setConfirming] = useState(false)
 
   return (
-    <header className="app-header">
+    <header className={'app-header' + (isRealAdmin ? ' admin' : '')}>
       <Crest size={30} />
       <span className="wordmark grow">NOTTS MvF</span>
 
       {seasons.length > 0 && (
         <select
-          className="select"
-          style={{ width: 'auto', padding: '7px 10px', fontSize: 13 }}
+          className="select season-select"
+          style={{ width: 'auto' }}
           value={seasonId ?? ''}
           onChange={(e) => setSeasonId(e.target.value)}
           aria-label="Season"

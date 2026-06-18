@@ -56,17 +56,17 @@ export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSe
           padding: 14px 14px 14px 18px; display: flex; flex-direction: column; gap: 6px; }
         .strip-line { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.05;
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .pill-first { font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: .05em;
-          text-transform: uppercase; color: var(--red-bright); background: var(--red-dim-2);
-          border: 1px solid var(--red); border-radius: 999px; padding: 2px 7px; }
+        .pill-first { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .05em;
+          text-transform: uppercase; color: var(--red-bright); background: transparent;
+          border: 1px solid var(--red); border-radius: 999px; padding: 2px 8px; }
         .strip-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--bone-mute); }
         .strip-tags span { background: var(--slate); border-radius: 6px; padding: 2px 7px; letter-spacing: .03em; }
-        .strip-venue { font-size: 12px; color: var(--bone-dim); }
+        .strip-venue { font-size: 12px; color: var(--bone-mute); }
         .strip-side { display: flex; align-items: center; padding: 12px 14px; border-left: 1px solid var(--line); }
-        .strip-locked { font-size: 11px; color: var(--bone-dim); max-width: 90px; line-height: 1.2; }
+        .strip-locked { font-size: 11px; color: var(--bone-mute); max-width: 90px; line-height: 1.2; }
         .strip-admin-side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
         .strip-you { display: flex; align-items: center; gap: 8px; }
-        .strip-you-lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--bone-dim); }
+        .strip-you-lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--bone-mute); }
         .strip-counts { background: none; border: none; display: grid;
           grid-template-columns: repeat(3, auto); gap: 0 10px; align-items: center; color: var(--bone); }
         .strip-counts .sc { font-size: 19px; font-weight: 600; }

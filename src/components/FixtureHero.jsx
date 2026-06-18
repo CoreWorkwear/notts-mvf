@@ -107,8 +107,8 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
           border: 1.5px dashed rgba(255,255,255,.5); font-weight: 700; }
         .hero-opp { font-size: clamp(34px, 11vw, 56px); line-height: .92; margin-top: 8px; }
         .hero-meta { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; opacity: .9; margin-top: 8px; }
-        .hero-meta .pill-first { font-size: 9px; font-weight: 600; background: rgba(255,255,255,.18);
-          border-radius: 999px; padding: 2px 7px; margin-left: 6px; }
+        .hero-meta .pill-first { font-size: 11px; font-weight: 700; background: rgba(0,0,0,.38);
+          border: 1px solid rgba(255,255,255,.4); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
         .hero-when { font-size: 13px; opacity: .92; margin-top: 4px; }
         .hero-venue { font-size: 13px; opacity: .82; margin-top: 2px; }
         .hero-action { margin-top: 18px; background: rgba(0,0,0,.28); border-radius: 14px; padding: 14px;

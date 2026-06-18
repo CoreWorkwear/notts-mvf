@@ -54,7 +54,10 @@ export default function AvailControl({ value, onChange, compact = false, unanswe
           transition: transform var(--t-fast), background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
           flex: 1; min-width: 92px;
         }
-        .avail.compact .av-btn { flex: none; padding: 7px 11px; font-size: 13px; min-width: 0; }
+        /* Inline row control: still compact, but a comfortable 44px touch target
+           for the player's most-used action (was ~32px). */
+        .avail.compact .av-btn { flex: none; padding: 8px 14px; font-size: 14px;
+          min-width: 46px; min-height: 44px; }
         .av-btn:active { transform: scale(.96); }
         .av-in.on    { background: var(--green-dim-2); border-color: var(--green); color: var(--green-bright); }
         .av-maybe.on { background: var(--amber-dim);   border-color: var(--amber); color: var(--amber); }

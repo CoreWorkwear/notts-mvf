@@ -35,8 +35,8 @@ export default function SponsorStrip() {
         .sponsors-strip { margin-top: 28px; padding: 18px 16px calc(18px + var(--safe-b, 0px));
           border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center; }
         .sp-block { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .sp-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--bone-dim); }
-        .sp-label-sm { font-size: 9px; opacity: .85; }
+        .sp-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--bone-mute); }
+        .sp-label-sm { font-size: 9px; opacity: .9; }
         .sp-logos { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; }
         .sp-logo { display: inline-flex; align-items: center; justify-content: center; background: var(--bone);
           border-radius: 10px; padding: 8px 12px; }
