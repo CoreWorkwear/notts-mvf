@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSeason } from '../context/SeasonContext'
 import { useClub } from '../hooks/useClub'
+import { useCompetitions } from '../hooks/useCompetitions'
 import LeagueTablePanel from '../components/LeagueTablePanel'
 import StatsPanel from '../components/StatsPanel'
 import SponsorsList from '../components/SponsorsList'
@@ -11,6 +12,7 @@ import Loader from '../components/Loader'
 export default function Club() {
   const { seasonId } = useSeason()
   const { table, teams, stats, loading, refetch } = useClub(seasonId)
+  const { competitions } = useCompetitions(seasonId)
   const [view, setView] = useState('table')
 
   if (loading) return <Loader label="Totting up the club…" />
@@ -24,7 +26,7 @@ export default function Club() {
         <button className={'btn grow club-tab ' + (view === 'sponsors' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('sponsors')}>Sponsors</button>
       </div>
 
-      {view === 'table' ? <LeagueTablePanel table={table} teams={teams} seasonId={seasonId} onSaved={refetch} />
+      {view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
         : view === 'stats' ? <StatsPanel stats={stats} />
         : <SponsorsList />}
 

@@ -6,32 +6,41 @@ import { useOpponents } from '../hooks/useOpponents'
 import { sortStandings } from '../lib/stats'
 import { teamMatchName } from '../lib/teams'
 
-// Manual league table, per team / per season (HANDOVER §5). View shows pos,
-// team, P, GD, Pts, W-D-L with our row highlighted. Admin edits the grid (team
-// names free-typed or picked from opponents) + names the league; we re-sort by
-// pts → GD → GF on display.
-export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
+// Manual league table, per COMPETITION / per season (§1.5). View shows pos, team,
+// P, GD, Pts, W-D-L with our row highlighted; admin edits the grid (team names
+// free-typed or picked from opponents). We re-sort by pts → GD → GF on display.
+export default function LeagueTablePanel({ table, competitions = [], teams = [], seasonId, onSaved }) {
   const { isAdmin } = useAuth()
   const { opponents } = useOpponents()
-  const [teamKey, setTeamKey] = useState(teams[0]?.key ?? 'xl')
+  const [competitionId, setCompetitionId] = useState(competitions[0]?.id ?? '')
   const [editing, setEditing] = useState(false)
 
-  const team = teams.find((t) => t.key === teamKey) ?? teams[0]
-  const ourName = teamMatchName(team)
-  const rows = sortStandings(table.filter((r) => r.team_id === team?.id))
+  // Keep a valid selection as competitions load/change.
+  useEffect(() => {
+    if (competitions.length && !competitions.some((c) => c.id === competitionId)) setCompetitionId(competitions[0].id)
+  }, [competitions, competitionId])
+
+  const ourNames = new Set(teams.flatMap((t) => [teamMatchName(t), t.label]).filter(Boolean))
+  const rows = sortStandings(table.filter((r) => r.competition_id === competitionId))
+
+  if (competitions.length === 0) {
+    return (
+      <div className="empty mt-5">
+        <p className="empty-title">No competitions yet</p>
+        <p>{isAdmin ? 'Add a league or cup in Manage → Competitions, then build its table here.' : 'The manager sets up competitions and their tables.'}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="mt-4">
-      {teams.length > 1 && (
-        <div className="row gap-2">
-          {teams.map((t) => (
-            <button key={t.id} className={'chip' + (t.key === 'community' ? ' community' : '')}
-              aria-pressed={teamKey === t.key} onClick={() => setTeamKey(t.key)}>{t.label}</button>
+      {competitions.length > 1 && (
+        <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+          {competitions.map((c) => (
+            <button key={c.id} className="chip" aria-pressed={competitionId === c.id} onClick={() => setCompetitionId(c.id)}>{c.name}</button>
           ))}
         </div>
       )}
-
-      {team?.league_name && <p className="lt-league mt-3">{team.league_name}</p>}
 
       {isAdmin && (
         <button className="btn btn-ghost btn-block mt-3" onClick={() => setEditing(true)}>
@@ -51,7 +60,7 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const ours = r.team_name === ourName || r.team_name === team?.label
+              const ours = ourNames.has(r.team_name)
               return (
                 <tr key={r.id} className={ours ? 'lt-ours' : ''}>
                   <td className="mono">{i + 1}</td>
@@ -70,8 +79,9 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
       {isAdmin && (
         <LeagueTableEdit
           open={editing} onClose={() => setEditing(false)} onSaved={onSaved}
-          team={team} seasonId={seasonId} opponents={opponents} ourName={ourName}
-          rows={table.filter((r) => r.team_id === team?.id)}
+          competition={competitions.find((c) => c.id === competitionId)} seasonId={seasonId}
+          opponents={opponents} ourNames={[...ourNames]}
+          rows={table.filter((r) => r.competition_id === competitionId)}
         />
       )}
 
@@ -85,27 +95,23 @@ export default function LeagueTablePanel({ table, teams, seasonId, onSaved }) {
         .lt-ours { background: var(--slate); }
         .lt-ours .lt-team { font-weight: 700; color: var(--bone); }
         .lt-form { color: var(--bone-mute); }
-        .lt-league { font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
-          color: var(--bone-mute); }
       `}</style>
     </div>
   )
 }
 
-function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows, opponents = [], ourName }) {
+function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, opponents = [], ourNames = [] }) {
   const { profile } = useAuth()
   const [draft, setDraft] = useState([])
-  const [leagueName, setLeagueName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!open) return
     setError(null)
-    setLeagueName(team?.league_name ?? '')
     setDraft(rows.length
       ? rows.map((r) => ({ team_name: r.team_name, played: r.played, won: r.won, drawn: r.drawn, lost: r.lost, gf: r.gf, ga: r.ga, pts: r.pts }))
-      : [{ team_name: ourName ?? team?.label ?? '', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 }])
+      : [{ team_name: '', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -114,20 +120,15 @@ function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows, opponen
   const rmRow = (i) => setDraft((d) => d.filter((_, idx) => idx !== i))
 
   async function save() {
+    if (!competition) { setError('Pick a competition first.'); return }
     setError(null); setBusy(true)
     try {
-      // Name the league on the team — this is what new fixtures default to.
-      const nextLeague = leagueName.trim() || null
-      if (nextLeague !== (team?.league_name ?? null)) {
-        const { error } = await supabase.from('teams').update({ league_name: nextLeague }).eq('id', team.id)
-        if (error) throw error
-      }
-      // Replace this division's rows wholesale — simplest correct approach.
-      await supabase.from('league_tables').delete().eq('season_id', seasonId).eq('team_id', team.id)
+      // Replace this competition's rows wholesale — simplest correct approach.
+      await supabase.from('league_tables').delete().eq('season_id', seasonId).eq('competition_id', competition.id)
       const payload = draft
         .filter((r) => r.team_name.trim())
         .map((r) => ({
-          club_id: profile.club_id, season_id: seasonId, team_id: team.id,
+          club_id: profile.club_id, season_id: seasonId, competition_id: competition.id,
           team_name: r.team_name.trim(),
           played: +r.played || 0, won: +r.won || 0, drawn: +r.drawn || 0, lost: +r.lost || 0,
           gf: +r.gf || 0, ga: +r.ga || 0, pts: +r.pts || 0,
@@ -145,25 +146,18 @@ function LeagueTableEdit({ open, onClose, onSaved, team, seasonId, rows, opponen
 
   return (
     <Sheet open={open} onClose={onClose}>
-      <p className="kicker"><span className="kicker-rule">{team?.label} TABLE</span></p>
+      <p className="kicker"><span className="kicker-rule">{competition?.name ?? 'TABLE'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>Edit the table</h2>
       <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Straight off the league's own site. GD sorts itself.</p>
       {error && <p className="field-error mt-3">{error}</p>}
 
-      <div className="field mt-4">
-        <label className="label">League name</label>
-        <input className="input" value={leagueName} onChange={(e) => setLeagueName(e.target.value)}
-          placeholder="e.g. MvF XL National League" />
-        <span className="dim" style={{ fontSize: 12 }}>New fixtures for this team default to this league name.</span>
-      </div>
-
-      {/* Pick from your saved opponents, or free-type a team. */}
+      {/* Pick from your saved opponents or your own team names, or free-type. */}
       <datalist id="lt-teamnames">
-        {ourName && <option value={ourName} />}
+        {ourNames.map((n) => <option key={n} value={n} />)}
         {opponents.map((o) => <option key={o.id} value={o.name} />)}
       </datalist>
 
-      <div className="col gap-2 mt-2">
+      <div className="col gap-2 mt-4">
         {draft.map((r, i) => (
           <div key={i} className="card lte-row" style={{ padding: 10 }}>
             <div className="row gap-2">
