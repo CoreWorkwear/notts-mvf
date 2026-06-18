@@ -5,14 +5,17 @@ import { logError } from '../lib/logger'
 import { TEAMS } from '../lib/constants'
 import NotificationToggle from '../components/NotificationToggle'
 import ImageUpload from '../components/ImageUpload'
+import ProfileEdit from '../components/ProfileEdit'
 import Toast from '../components/Toast'
 
-// You / Profile. Self-edit (name/phone/positions/preferred) lands at step 9;
-// for now it shows the real record + badges, and lets the player set their own
-// avatar (image-only, compressed by ImageUpload; RLS lets you write your own row).
+// You / Profile. Shows the real record + badges, lets the player set their own
+// avatar and edit their own details — everything except email (the account hangs
+// off it). RLS lets you write your own row; the protect trigger blocks the
+// privileged columns regardless.
 export default function Profile() {
   const { profile, teamKeys, isRealAdmin, refreshProfile } = useAuth()
   const [error, setError] = useState(null)
+  const [editing, setEditing] = useState(false)
   if (!profile) return null
 
   const initials = `${(profile.first_name?.[0] ?? '')}${(profile.last_name?.[0] ?? '')}`.toUpperCase()
@@ -60,17 +63,27 @@ export default function Profile() {
       <div className="card mt-5" style={{ padding: 16 }}>
         <Row label="Email" value={profile.email} />
         <Row label="Phone" value={profile.phone} />
+        <Row label="Date of birth" value={formatDob(profile.dob)} />
         <Row label="Positions" value={profile.positions?.join(', ') || '—'} />
-        <Row label="Preferred" value={profile.preferred || '—'} last />
+        <Row label="Preferred" value={profile.preferred || '—'} />
+        <Row label="Emergency contact" value={profile.ec_name || '—'} />
+        <Row label="Emergency phone" value={profile.ec_phone || '—'} last />
       </div>
-      <p className="dim mt-3" style={{ fontSize: 12 }}>
-        Editing your details lands soon. Email is your login — the manager changes that.
-      </p>
+      <button className="btn btn-ghost btn-block mt-3" onClick={() => setEditing(true)}>Edit your details</button>
+      <p className="dim mt-2" style={{ fontSize: 12 }}>Email is your login — the manager changes that.</p>
+
+      <ProfileEdit open={editing} onClose={() => setEditing(false)} profile={profile} onSaved={refreshProfile} />
 
       <p className="kicker mt-5"><span className="kicker-rule">NOTIFICATIONS</span></p>
       <div className="mt-3"><NotificationToggle /></div>
     </div>
   )
+}
+
+function formatDob(dob) {
+  if (!dob) return '—'
+  const [y, m, d] = dob.split('-')
+  return `${d}/${m}/${y}`
 }
 
 function Row({ label, value, last }) {
