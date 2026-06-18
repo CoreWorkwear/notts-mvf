@@ -46,23 +46,27 @@ export default function AvailControl({ value, onChange, compact = false, unanswe
       )}
 
       <style>{`
-        .avail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .avail.compact { gap: 6px; }
+        /* Full control (the hero "YOU IN?" bar): a fixed 3-up grid so the row NEVER
+           wraps — the long "Can't make it" label wraps inside its own button and all
+           three stay equal height. Beats flex-wrap, which dropped the 3rd button to
+           its own line on narrow phones. */
+        .avail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: stretch; }
         .av-btn {
           border: 1px solid var(--line); background: var(--slate); color: var(--bone-mute);
-          border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 600;
+          border-radius: 10px; padding: 8px 6px; font-size: 14px; font-weight: 600;
+          min-height: 48px; line-height: 1.15;
+          display: flex; align-items: center; justify-content: center; text-align: center;
           transition: transform var(--t-fast), background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
-          flex: 1; min-width: 92px;
         }
-        /* Inline row control: still compact, but a comfortable 44px touch target
-           for the player's most-used action (was ~32px). */
-        .avail.compact .av-btn { flex: none; padding: 8px 14px; font-size: 14px;
-          min-width: 46px; min-height: 44px; }
+        /* Inline row control (list rows / manager "You"): a compact flex row of short
+           In/Maybe/Out buttons, kept at a comfortable 44px touch target. */
+        .avail.compact { display: flex; flex-wrap: wrap; gap: 6px; }
+        .avail.compact .av-btn { padding: 8px 14px; font-size: 14px; min-width: 46px; min-height: 44px; }
         .av-btn:active { transform: scale(.96); }
         .av-in.on    { background: var(--green-dim-2); border-color: var(--green); color: var(--green-bright); }
         .av-maybe.on { background: var(--amber-dim);   border-color: var(--amber); color: var(--amber); }
         .av-out.on   { background: var(--red-dim-2);   border-color: var(--red);   color: var(--red-bright); }
-        .av-saved { width: 100%; font-size: 13px; color: var(--bone-mute); transition: color var(--t-fast); }
+        .av-saved { grid-column: 1 / -1; font-size: 13px; color: var(--bone-mute); transition: color var(--t-fast); }
         .av-saved.show { color: var(--green-bright); }
         .avail.compact .av-saved { display: none; }
         @keyframes nudge { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
