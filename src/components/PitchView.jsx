@@ -59,11 +59,16 @@ export default function PitchView({ formation, starters, names, photos = {}, onT
       onTapSlot(p.slot)
     }
   }
+  // A cancelled gesture (e.g. the OS taking over) must clear state cleanly.
+  function onPointerCancel() {
+    press.current = null
+    setDrag(null)
+  }
 
   const dragName = drag ? names[starters[drag.from]] : ''
 
   return (
-    <div className={'pitch' + (drag ? ' dragging' : '')}>
+    <div className={'pitch' + (editor ? ' editing' : '') + (drag ? ' dragging' : '')}>
       {lines.map((line, i) => (
         <div className="pitch-line" key={i}>
           {line.map((s) => {
@@ -78,7 +83,8 @@ export default function PitchView({ formation, starters, names, photos = {}, onT
                   + (drag?.from === s.slot ? ' lifting' : '') + (drag && drag.over === s.slot && drag.from !== s.slot ? ' drop-target' : '')}
                 onPointerDown={editor ? (e) => onPointerDown(e, s.slot) : undefined}
                 onPointerMove={editor ? onPointerMove : undefined}
-                onPointerUp={editor ? onPointerUp : undefined}>
+                onPointerUp={editor ? onPointerUp : undefined}
+                onPointerCancel={editor ? onPointerCancel : undefined}>
                 <span className="shirt-pos mono">{s.pos}</span>
                 <span className="shirt-badge">
                   {id
@@ -112,7 +118,9 @@ export default function PitchView({ formation, starters, names, photos = {}, onT
         .pitch-line { display: flex; justify-content: space-around; gap: 6px; }
         .shirt { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
           color: var(--bone); padding: 0; min-width: 60px; max-width: 72px; }
-        .pitch.dragging .shirt { touch-action: none; }
+        /* In the editor the shirts must own the touch gesture from the FIRST move,
+           or a phone scrolls the page instead of starting the drag. */
+        .pitch.editing .shirt { touch-action: none; -webkit-user-select: none; user-select: none; }
         .shirt-pos { font-size: 9px; color: var(--bone-dim); letter-spacing: .04em; }
         .shirt-badge { position: relative; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
           overflow: hidden; background: var(--slate); border: 1.5px dashed var(--line-2); font-size: 13px; font-weight: 700; color: var(--bone-mute);
