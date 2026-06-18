@@ -11,7 +11,7 @@ import Toast from '../components/Toast'
 // for now it shows the real record + badges, and lets the player set their own
 // avatar (image-only, compressed by ImageUpload; RLS lets you write your own row).
 export default function Profile() {
-  const { profile, teamKeys, isAdmin, refreshProfile } = useAuth()
+  const { profile, teamKeys, isRealAdmin, refreshProfile } = useAuth()
   const [error, setError] = useState(null)
   if (!profile) return null
 
@@ -54,7 +54,7 @@ export default function Profile() {
             {TEAMS[k]?.label ?? k}
           </span>
         ))}
-        {isAdmin && <span className="chip" aria-pressed="true">Manager</span>}
+        {isRealAdmin && <span className="chip" aria-pressed="true">Manager</span>}
       </div>
 
       <div className="card mt-5" style={{ padding: 16 }}>

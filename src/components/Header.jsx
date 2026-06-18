@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import Crest from './Crest'
-import { IconLogout, IconBell } from './Icons'
+import { IconLogout, IconBell, IconManage } from './Icons'
 import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 
 // Sticky header: crest, wordmark, season picker (scopes the app), sign-out.
 export default function Header() {
-  const { signOut } = useAuth()
+  const { signOut, isRealAdmin, managerView, setManagerView } = useAuth()
   const { seasons, seasonId, setSeasonId } = useSeason()
   const [confirming, setConfirming] = useState(false)
 
@@ -29,6 +29,20 @@ export default function Header() {
             <option key={s.id} value={s.id}>{s.label}</option>
           ))}
         </select>
+      )}
+
+      {/* §3 Manager view: cosmetic on/off, admins only. Off = the player view. */}
+      {isRealAdmin && (
+        <button
+          className="nav-item mgr-toggle"
+          style={{ flex: 'none', color: managerView ? 'var(--red-bright)' : 'var(--bone-mute)' }}
+          onClick={() => setManagerView(!managerView)}
+          aria-label="Manager view"
+          aria-pressed={managerView}
+          title={managerView ? 'Manager view on — tap to use the app as a player' : 'Manager view off — tap to show management tools'}
+        >
+          <IconManage />
+        </button>
       )}
 
       <NavLink

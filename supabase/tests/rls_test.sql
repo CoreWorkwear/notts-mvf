@@ -12,6 +12,8 @@
 --   • a plain player still cannot write admin-only data (fixtures)               [T7]
 --   • the admin still cannot demote/deactivate himself (lockout guard)           [T8]
 --   • a player cannot write availability AS someone else (own-row only)          [T9]
+--   • §3 manager view is cosmetic: a non-admin is refused EVERY admin-only write  [T10]
+--     (competitions, squad registration, promoting another player) regardless of UI
 --   • the admin write path still works                                           [T1]
 --
 -- Impersonates each user by setting the JWT claim + `authenticated` role, exactly
@@ -70,6 +72,11 @@ insert into fixtures (id, club_id, season_id, team_id, opponent_id, match_date, 
   ('d0000001-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333','c0000001-0000-0000-0000-000000000001', current_date + 7, '13:00','Home','League','Forest Rec 3G'),
   ('d0000002-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','44444444-4444-4444-4444-444444444444','c0000001-0000-0000-0000-000000000001', current_date + 8, '11:00','Away','Friendly','Harvey Hadden 4G'),
   ('d0000003-0000-0000-0000-000000000003','b1111111-1111-1111-1111-111111111111','b2222222-2222-2222-2222-222222222222','b3333333-3333-3333-3333-333333333333','c0000003-0000-0000-0000-000000000003', current_date + 7, '13:00','Home','League','Their Ground');
+
+-- A competition (club 1), seeded as postgres so the §3 cosmetic-toggle test below
+-- is blocked PURELY by RLS, not by a missing FK.
+insert into competitions (id, club_id, season_id, name, type)
+  values ('e0000001-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','County Cup','cup');
 
 -- helper to impersonate
 create or replace function pg_temp.act_as(uid uuid) returns void language plpgsql as $$
@@ -167,6 +174,34 @@ do $$ declare blocked boolean; begin
   begin update profiles set active=false where id='a0000001-0000-0000-0000-000000000001'; exception when others then blocked := true; end;
   if not blocked then raise exception 'T8 FAIL: admin deactivated himself'; end if;
   raise notice 'T8 PASS: admin self-demote and self-deactivate both blocked';
+end $$;
+
+-- T10 — §3 manager view is COSMETIC. The UI toggle only shows/hides buttons; it
+-- grants no authority. Prove the DB refuses the full spread of admin-only writes
+-- the toggle would reveal — even if a non-admin's client somehow rendered them.
+-- Acting as the Community (non-admin) player throughout.
+reset role; select pg_temp.act_as('a0000002-0000-0000-0000-000000000002'); set local role authenticated;
+do $$ declare blocked boolean; begin
+  -- (a) create a competition
+  blocked := false;
+  begin insert into competitions (club_id, season_id, name, type)
+        values ('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','Sneaky League','league');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T10 FAIL: non-admin created a competition'; end if;
+
+  -- (b) register a player into a competition squad
+  blocked := false;
+  begin insert into competition_squads (competition_id, profile_id, season_id)
+        values ('e0000001-0000-0000-0000-000000000001','a0000002-0000-0000-0000-000000000002','22222222-2222-2222-2222-222222222222');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T10 FAIL: non-admin registered a competition squad'; end if;
+
+  -- (c) promote ANOTHER player to admin
+  begin update profiles set role='admin' where id='a0000003-0000-0000-0000-000000000003'; exception when others then null; end;
+  if (select role from profiles where id='a0000003-0000-0000-0000-000000000003')='admin' then
+    raise exception 'T10 FAIL: non-admin promoted another player'; end if;
+
+  raise notice 'T10 PASS: manager view is cosmetic — DB rejects every admin write from a non-admin';
 end $$;
 
 reset role;

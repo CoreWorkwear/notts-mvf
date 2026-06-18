@@ -4,6 +4,8 @@ import { canSetAvailability, accountStatus } from '../lib/players'
 
 const AuthContext = createContext(null)
 
+const MANAGER_VIEW_KEY = 'mvf:managerView'
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -11,6 +13,18 @@ export function AuthProvider({ children }) {
   const [teamKeys, setTeamKeys] = useState([]) // ['xl','community']
   const [loading, setLoading] = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
+  // §3 Manager view — a COSMETIC toggle. Default OFF, so a real admin uses the app
+  // as a player day-to-day and flips this on to reveal management tools. It NEVER
+  // grants authority: every admin action is still enforced by RLS at the database,
+  // so showing a button to a non-admin (or with the view off) changes nothing the
+  // server will accept. Persisted so it survives reloads.
+  const [managerView, setManagerViewState] = useState(() => {
+    try { return localStorage.getItem(MANAGER_VIEW_KEY) === '1' } catch { return false }
+  })
+  const setManagerView = useCallback((on) => {
+    setManagerViewState(on)
+    try { localStorage.setItem(MANAGER_VIEW_KEY, on ? '1' : '0') } catch { /* private mode */ }
+  }, [])
 
   // Pull the profile row + team memberships + club for the signed-in user.
   const loadProfile = useCallback(async (uid) => {
@@ -81,7 +95,13 @@ export function AuthProvider({ children }) {
     teamKeys,
     loading,
     isAuthed: !!session,
-    isAdmin: profile?.role === 'admin',
+    // isRealAdmin = the actual DB role (the truth). isAdmin = the EFFECTIVE,
+    // view-aware flag every UI gate reads: an admin only sees management UI when
+    // manager view is on. Security never depends on either — RLS does that.
+    isRealAdmin: profile?.role === 'admin',
+    isAdmin: profile?.role === 'admin' && managerView,
+    managerView,
+    setManagerView,
     // Account state for the "can view, can't act" gate.
     approved: !!profile?.approved,
     isPlayer: profile?.is_player !== false,
