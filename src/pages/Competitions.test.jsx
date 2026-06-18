@@ -7,6 +7,7 @@ const remove = vi.fn().mockResolvedValue({ error: null })
 let comps
 vi.mock('../context/SeasonContext', () => ({ useSeason: () => ({ seasonId: 's1', seasons: [{ id: 's1', label: '2026/27' }] }) }))
 vi.mock('../hooks/useCompetitions', () => ({ useCompetitions: () => ({ competitions: comps, loading: false, save, remove }) }))
+vi.mock('../components/SquadPicker', () => ({ default: () => null })) // covered by its own test
 
 import Competitions from './Competitions'
 

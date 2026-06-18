@@ -5,6 +5,7 @@ import { COMPETITION_TYPES, competitionTypeLabel, squadRuleSummary, validateComp
 import Sheet from '../components/Sheet'
 import Toast from '../components/Toast'
 import Loader from '../components/Loader'
+import SquadPicker from '../components/SquadPicker'
 
 // Admin: the competitions a club runs this season (league / cup / friendlies),
 // each carrying its squad-registration rule (§2). Fixtures attach to these.
@@ -13,6 +14,7 @@ export default function Competitions() {
   const { competitions, loading, save, remove } = useCompetitions(seasonId)
   const [editing, setEditing] = useState(null) // competition or null
   const [open, setOpen] = useState(false)
+  const [squadFor, setSquadFor] = useState(null) // competition whose squad we're picking
   const seasonLabel = seasons?.find((s) => s.id === seasonId)?.label
 
   if (loading) return <Loader label="Loading competitions…" />
@@ -31,26 +33,27 @@ export default function Competitions() {
       ) : (
         <div className="col gap-2 mt-4">
           {competitions.map((c) => (
-            <button key={c.id} className="card comp-row" onClick={() => { setEditing(c); setOpen(true) }}>
-              <span className="comp-main">
+            <div key={c.id} className="card comp-row">
+              <button className="comp-main" onClick={() => { setEditing(c); setOpen(true) }}>
                 <span className="comp-name">{c.name}</span>
                 <span className="comp-sub">{competitionTypeLabel(c.type)} · {squadRuleSummary(c)}</span>
-              </span>
-              <span className="comp-go">›</span>
-            </button>
+              </button>
+              <button className="chip" onClick={() => setSquadFor(c)}>Squad</button>
+            </div>
           ))}
         </div>
       )}
 
       <CompetitionForm open={open} competition={editing} onClose={() => setOpen(false)} onSave={save} onRemove={remove} />
+      <SquadPicker open={!!squadFor} competition={squadFor} onClose={() => setSquadFor(null)} />
 
       <style>{`
         .comp-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--coal);
-          color: var(--bone); border: 1px solid var(--line); text-align: left; }
-        .comp-main { flex: 1; min-width: 0; }
-        .comp-name { display: block; font-family: var(--font-display); font-weight: 600; font-size: 17px; }
+          color: var(--bone); border: 1px solid var(--line); }
+        .comp-main { flex: 1; min-width: 0; background: none; border: none; color: inherit; text-align: left;
+          display: flex; flex-direction: column; gap: 2px; cursor: pointer; padding: 0; }
+        .comp-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
         .comp-sub { font-size: 12px; color: var(--bone-mute); }
-        .comp-go { color: var(--bone-dim); font-size: 20px; }
       `}</style>
     </div>
   )
