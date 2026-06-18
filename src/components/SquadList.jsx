@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSquad } from '../hooks/useSquad'
 import { squadByPosition, primaryPosition } from '../lib/squadList'
+import { TEAMS, TEAM_ORDER } from '../lib/constants'
 import { Stagger, StaggerItem } from './Stagger'
 import SquadDepth from './SquadDepth'
 import Loader from './Loader'
@@ -8,33 +9,38 @@ import Loader from './Loader'
 const initials = (p) => `${(p.first_name?.[0] ?? '')}${(p.last_name?.[0] ?? '')}`.toUpperCase()
 
 // §4 — the squad. Two views: 4.1 list by position (with avatars), and 4.2 an
-// FM-style depth chart (pitch + tap-a-position). Player-facing (Club tab), so it
-// reads a PII-free roster via useSquad.
+// FM-style depth chart (pitch + tap-a-position), each filterable by team via the
+// red/green toggle. Player-facing (Club tab), so it reads a PII-free roster.
 export default function SquadList() {
   const { players, loading } = useSquad()
   const [view, setView] = useState('list') // 'list' | 'depth'
+  const [team, setTeam] = useState('all')  // 'all' | 'xl' | 'community'
   if (loading) return <Loader label="Naming the squad…" />
 
-  const groups = squadByPosition(players)
+  const filtered = team === 'all' ? players : players.filter((p) => p.teamKeys?.includes(team))
+  const groups = squadByPosition(filtered)
   const total = groups.reduce((n, g) => n + g.players.length, 0)
-
-  if (total === 0) {
-    return (
-      <div className="empty mt-4">
-        <p className="empty-title">No squad yet</p>
-        <p>Once the manager signs players off, they'll line up here by position.</p>
-      </div>
-    )
-  }
 
   return (
     <div className="mt-4">
-      <div className="row gap-2">
+      {/* Team toggle (red = First Team, green = Community) + view toggle. */}
+      <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+        <button className="chip" aria-pressed={team === 'all'} onClick={() => setTeam('all')}>All</button>
+        {TEAM_ORDER.map((k) => (
+          <button key={k} className={'chip' + (k === 'community' ? ' community' : '')} aria-pressed={team === k} onClick={() => setTeam(k)}>{TEAMS[k].label}</button>
+        ))}
+      </div>
+      <div className="row gap-2 mt-2">
         <button className="chip" aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
         <button className="chip" aria-pressed={view === 'depth'} onClick={() => setView('depth')}>Depth chart</button>
       </div>
 
-      {view === 'depth' ? <SquadDepth players={players} /> : (
+      {total === 0 ? (
+        <div className="empty mt-4">
+          <p className="empty-title">No squad yet</p>
+          <p>Once the manager signs players off, they'll line up here by position.</p>
+        </div>
+      ) : view === 'depth' ? <SquadDepth players={filtered} /> : (
         <SquadByPosition groups={groups} total={total} />
       )}
     </div>
