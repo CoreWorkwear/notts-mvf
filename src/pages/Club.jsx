@@ -5,6 +5,7 @@ import { useClub } from '../hooks/useClub'
 import { useCompetitions } from '../hooks/useCompetitions'
 import LeagueTablePanel from '../components/LeagueTablePanel'
 import StatsPanel from '../components/StatsPanel'
+import SquadList from '../components/SquadList'
 import SponsorsList from '../components/SponsorsList'
 import Loader from '../components/Loader'
 
@@ -23,13 +24,15 @@ export default function Club() {
     <div className="page">
       <p className="kicker"><span className="kicker-rule">THE CLUB</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>{club?.name ?? 'The Club'}</h1>
-      <div className="row gap-2 mt-3">
+      <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
         <button className={'btn grow club-tab ' + (view === 'table' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('table')}>Table</button>
+        <button className={'btn grow club-tab ' + (view === 'squad' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('squad')}>Squad</button>
         <button className={'btn grow club-tab ' + (view === 'stats' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('stats')}>Stats</button>
         <button className={'btn grow club-tab ' + (view === 'sponsors' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('sponsors')}>Sponsors</button>
       </div>
 
       {view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
+        : view === 'squad' ? <SquadList />
         : view === 'stats' ? <StatsPanel stats={stats} />
         : <SponsorsList />}
 
