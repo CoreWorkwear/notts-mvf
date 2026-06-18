@@ -44,6 +44,9 @@ export const IconSponsors = (p) => (
 export const IconDiagnostics = (p) => (
   <svg {...base} {...p}><path d="M3 12h4l3 8 4-16 3 8h4" /></svg>
 )
+export const IconCompetitions = (p) => (
+  <svg {...base} {...p}><path d="M6 9H4a2 2 0 0 1-2-2V5h4M18 9h2a2 2 0 0 0 2-2V5h-4M6 4h12v6a6 6 0 0 1-12 0V4ZM9 18h6M12 14v4" /></svg>
+)
 export const IconReminders = (p) => (
   <svg {...base} {...p}><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M5 3 2 6M22 6l-3-3" /></svg>
 )

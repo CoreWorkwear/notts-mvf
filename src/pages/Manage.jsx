@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { IconWhosIn, IconPlayers, IconOpponents, IconSeasons, IconMedia, IconReminders, IconSponsors, IconDiagnostics } from '../components/Icons'
+import { IconWhosIn, IconPlayers, IconOpponents, IconSeasons, IconMedia, IconReminders, IconSponsors, IconDiagnostics, IconCompetitions } from '../components/Icons'
 
 // Admin hub — keeps the bottom nav uncluttered by gathering the management /
 // config screens in one place (rather than as extra tabs + buried toggles).
@@ -7,6 +7,7 @@ const TOOLS = [
   { to: '/whos-in',   label: "Who's In",  blurb: 'Availability across games + chase the no-shows', Icon: IconWhosIn },
   { to: '/players',   label: 'Players',   blurb: 'Squad records, roles, positions, approvals', Icon: IconPlayers },
   { to: '/opponents', label: 'Opponents', blurb: 'The teams you play + their badges',              Icon: IconOpponents },
+  { to: '/competitions', label: 'Competitions', blurb: 'Leagues & cups + registered-squad limits', Icon: IconCompetitions },
   { to: '/seasons',   label: 'Seasons',   blurb: 'Create a season, set current, roll over',        Icon: IconSeasons },
   { to: '/media',     label: 'Media',     blurb: 'Club crest + photo pool for posters',            Icon: IconMedia },
   { to: '/reminders', label: 'Reminders', blurb: 'Auto-nudge the squad before kickoff',            Icon: IconReminders },

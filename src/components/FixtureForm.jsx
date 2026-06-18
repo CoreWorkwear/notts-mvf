@@ -13,7 +13,7 @@ import { geocodePostcode, normalizePostcode } from '../lib/geocode'
 // League name shows only for League type, auto-filled from the team, overridable.
 // The form stays mounted (so the bottom-sheet's hardware-back stays sane); we
 // reset the fields each time it opens so Edit prefills the right fixture.
-export default function FixtureForm({ open, onClose, onSaved, teams, opponents, seasonId, fixture }) {
+export default function FixtureForm({ open, onClose, onSaved, teams, opponents, competitions = [], seasonId, fixture }) {
   const { profile } = useAuth()
   const editing = !!fixture
   const [busy, setBusy] = useState(false)
@@ -42,7 +42,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const [postcode, setPostcode] = useState('')
   const [w3w, setW3w] = useState('')
   const [status, setStatus] = useState('scheduled')
-  const [leagueName, setLeagueName] = useState('')
+  const [competitionId, setCompetitionId] = useState('')
 
   // Prefill (or clear) when the sheet opens.
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
     setPostcode(fixture?.postcode ?? '')
     setW3w(fixture?.w3w ?? '')
     setStatus(fixture?.status ?? 'scheduled')
-    setLeagueName(fixture?.league_name ?? '')
+    setCompetitionId(fixture?.competition_id ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -79,8 +79,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const team = teams.find((t) => t.id === teamId)
   // League defaults from the team but is shown as a placeholder hint, not a
   // pre-filled value (which reads as stale). The default is applied on save.
-  const leaguePlaceholder = (type === 'League' && team?.league_name) ? team.league_name : 'League name'
-  const leagueToSave = leagueName.trim() || (type === 'League' ? team?.league_name ?? '' : '')
+  const competition = competitions.find((c) => c.id === competitionId) || null
 
   async function onDelete() {
     if (!confirm('Bin this fixture off? This removes it and any availability for it.')) return
@@ -142,7 +141,8 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         kickoff,
         home_away: homeAway,
         fixture_type: type,
-        league_name: type === 'League' ? (leagueToSave || null) : null,
+        competition_id: competitionId || null,
+        league_name: competition?.name ?? null, // denormalised for display fallback
         venue: venue.trim(),
         address: address.trim() || null,
         postcode: pc || null,
@@ -237,12 +237,14 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           </div>
         </div>
 
-        {type === 'League' && (
-          <div className="field">
-            <label className="label">League</label>
-            <input className="input" value={leagueName} onChange={(e) => setLeagueName(e.target.value)} placeholder={leaguePlaceholder} />
-          </div>
-        )}
+        <div className="field">
+          <label className="label">Competition</label>
+          <select className="select" aria-label="Competition" value={competitionId} onChange={(e) => setCompetitionId(e.target.value)}>
+            <option value="">— none (friendly) —</option>
+            {competitions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <span className="dim" style={{ fontSize: 12 }}>Set up leagues & cups in Manage → Competitions.</span>
+        </div>
 
         <div className="field">
           <label className="label">Venue</label>

@@ -35,6 +35,10 @@ const OPPONENTS = [
   { id: 'opp-1', name: 'Long Eaton' }, // name-only (existing tests rely on this)
   { id: 'opp-2', name: 'Carlton Town', home_venue: 'Stoke Lane', home_address: 'Stoke Lane, Gedling', home_postcode: 'NG4 2QT' },
 ]
+const COMPETITIONS = [
+  { id: 'comp-1', name: 'MvF XL National League', type: 'league' },
+  { id: 'comp-2', name: 'County Cup', type: 'cup' },
+]
 const EXISTING = {
   id: 'fix-9', team_id: 't-xl', opponent_id: 'opp-1', match_date: '2026-03-08',
   kickoff: '13:00:00', home_away: 'Home', fixture_type: 'League', venue: 'Forest Rec 3G',
@@ -58,6 +62,7 @@ function Harness({ fixture = null, seasonId = 'season-1', onSaved = () => {} }) 
         onSaved={onSaved}
         teams={TEAMS}
         opponents={OPPONENTS}
+        competitions={COMPETITIONS}
         seasonId={seasonId}
         fixture={fixture}
       />
@@ -175,24 +180,38 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     expect(ins[2]).toMatchObject({ postcode: 'NG7 1AB', venue_lat: 52.95, venue_lng: -1.15 })
   })
 
-  test('league is a placeholder hint (not a pre-filled value) but still saves the team default', async () => {
+  test('linking a competition saves competition_id and denormalises its name (§1.5)', async () => {
     const onSaved = vi.fn()
     render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
     await userEvent.click(screen.getByText('Open form'))
     await flush()
 
-    // the box looks EMPTY, with the team's league shown only as a hint
-    const league = screen.getByPlaceholderText('MvF XL National League')
-    expect(league).toHaveValue('')
+    // competition defaults to "none (friendly)"
+    const comp = screen.getByLabelText('Competition')
+    expect(comp).toHaveValue('')
 
     const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Long Eaton'))
     await userEvent.selectOptions(oppSelect, 'opp-1')
     await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec 3G')
+    await userEvent.selectOptions(comp, 'comp-1')
     await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
-    expect(ins[2].league_name).toBe('MvF XL National League') // defaulted from the team on save
+    expect(ins[2]).toMatchObject({ competition_id: 'comp-1', league_name: 'MvF XL National League' })
+  })
+
+  test('no competition (friendly) saves null competition_id + null league_name', async () => {
+    const onSaved = vi.fn()
+    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+    await userEvent.type(screen.getByPlaceholderText('New opponent name'), 'Friendly FC')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Rec')
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins[2]).toMatchObject({ competition_id: null, league_name: null })
   })
 
   test('save is blocked (not a silent no-op) when no season is selected', async () => {

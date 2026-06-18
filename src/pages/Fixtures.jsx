@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { useFixtures, setAvailability } from '../hooks/useFixtures'
+import { useCompetitions } from '../hooks/useCompetitions'
 import { usePhotoPool } from '../hooks/useMedia'
 import { logError } from '../lib/logger'
 import { todayISO, fmtDate, hasKickedOff } from '../lib/format'
@@ -21,6 +22,7 @@ export default function Fixtures() {
   const { user, profile, isAdmin, teamKeys, canRespond, accountStatus } = useAuth()
   const { seasonId } = useSeason()
   const { upcoming, past, teams, opponents, fixtures, loading, refetch } = useFixtures(seasonId)
+  const { competitions } = useCompetitions(seasonId)
   const pool = usePhotoPool()
   const navigate = useNavigate()
 
@@ -209,6 +211,7 @@ export default function Fixtures() {
           onSaved={refetch}
           teams={teams}
           opponents={opponents}
+          competitions={competitions}
           seasonId={seasonId}
           fixture={editing}
         />

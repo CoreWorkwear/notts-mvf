@@ -19,6 +19,7 @@ import Media from './pages/Media'
 import Reminders from './pages/Reminders'
 import Sponsors from './pages/Sponsors'
 import Diagnostics from './pages/Diagnostics'
+import Competitions from './pages/Competitions'
 import SponsorStrip from './components/SponsorStrip'
 
 export default function App() {
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/reminders" element={adminOnly(<Reminders />)} />
           <Route path="/sponsors" element={adminOnly(<Sponsors />)} />
           <Route path="/diagnostics" element={adminOnly(<Diagnostics />)} />
+          <Route path="/competitions" element={adminOnly(<Competitions />)} />
           <Route path="*" element={<Navigate to="/fixtures" replace />} />
         </Routes>
         <SponsorStrip />
