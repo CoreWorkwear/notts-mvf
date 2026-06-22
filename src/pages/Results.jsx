@@ -10,6 +10,7 @@ import ScoreBug from '../components/ScoreBug'
 import MatchCentre from '../components/MatchCentre'
 import ResultForm from '../components/ResultForm'
 import Loader from '../components/Loader'
+import { Stagger, StaggerItem } from '../components/Stagger'
 
 const OUTCOME_LABEL = { W: 'Won', D: 'Drawn', L: 'Lost' }
 
