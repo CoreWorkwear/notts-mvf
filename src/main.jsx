@@ -7,12 +7,18 @@ import './styles/tokens.css'
 // Catch uncaught errors + unhandled promise rejections app-wide.
 installGlobalErrorLogging()
 
-// Keep installed apps current. An installed Android PWA only re-checks the
-// service worker on navigation/~daily, so it can sit on a stale build. Poll for
-// a new build hourly AND whenever the app returns to the foreground; with
-// registerType:'autoUpdate' a found update is applied + reloaded automatically.
-registerSW({
+// Keep installed apps current WITHOUT interrupting a launch. An installed Android
+// PWA only re-checks the service worker on navigation/~daily, so we still poll for
+// a new build hourly AND whenever the app returns to the foreground — but with
+// registerType:'prompt' a found update is NOT auto-applied (that reloaded the page
+// mid-startup = the cold-start hang). Instead onNeedRefresh surfaces a quiet
+// "Refresh" prompt (UpdatePrompt) the user taps when it suits them.
+const updateSW = registerSW({
   immediate: true,
+  onNeedRefresh() {
+    window.__mvfUpdateSW = () => updateSW(true) // applies the update + reloads, on tap
+    window.dispatchEvent(new Event('mvf-sw-update'))
+  },
   onRegisteredSW(_swUrl, r) {
     if (!r) return
     setInterval(() => r.update(), 60 * 60 * 1000)
@@ -24,6 +30,7 @@ registerSW({
 import App from './App'
 import GrainOverlay from './components/GrainOverlay'
 import InstallPrompt from './components/InstallPrompt'
+import UpdatePrompt from './components/UpdatePrompt'
 import PushActions from './components/PushActions'
 import NotificationPrompt from './components/NotificationPrompt'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -39,6 +46,7 @@ createRoot(document.getElementById('root')).render(
           <SeasonProvider>
             <App />
             <GrainOverlay />
+            <UpdatePrompt />
             <InstallPrompt />
             <PushActions />
             <NotificationPrompt />

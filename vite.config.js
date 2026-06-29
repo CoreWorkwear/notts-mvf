@@ -9,7 +9,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (not autoUpdate): a new build installs in the background but is
+      // NOT force-applied. autoUpdate reloaded the page mid-launch on the first
+      // open after every deploy — the cold-start "hang". We surface a quiet
+      // "Refresh" prompt instead (main.jsx + UpdatePrompt), so cold open serves
+      // the cached shell instantly.
+      registerType: 'prompt',
       injectRegister: false, // we register manually in main.jsx to poll for updates
       includeAssets: ['icon.svg', 'apple-touch-icon.png', 'favicon.png'],
       manifest: {
