@@ -33,9 +33,9 @@ export default function Competitions() {
       ) : (
         <div className="col gap-2 mt-4">
           {competitions.map((c) => (
-            <div key={c.id} className="card comp-row">
+            <div key={c.id} className={'card comp-row' + (c.active === false ? ' retired' : '')}>
               <button className="comp-main" onClick={() => { setEditing(c); setOpen(true) }}>
-                <span className="comp-name">{c.name}</span>
+                <span className="comp-name">{c.name}{c.active === false && <span className="comp-tag mono">RETIRED</span>}</span>
                 <span className="comp-sub">{competitionTypeLabel(c.type)} · {squadRuleSummary(c)}</span>
               </button>
               <button className="chip" onClick={() => setSquadFor(c)}>Squad</button>
@@ -52,8 +52,11 @@ export default function Competitions() {
           color: var(--bone); border: 1px solid var(--line); }
         .comp-main { flex: 1; min-width: 0; background: none; border: none; color: inherit; text-align: left;
           display: flex; flex-direction: column; gap: 2px; cursor: pointer; padding: 0; }
-        .comp-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
+        .comp-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; display: flex; align-items: center; gap: 8px; }
         .comp-sub { font-size: 12px; color: var(--bone-mute); }
+        .comp-row.retired { opacity: .6; }
+        .comp-tag { font-size: 9px; letter-spacing: .08em; color: var(--bone-dim); border: 1px solid var(--line-2);
+          border-radius: 5px; padding: 1px 6px; }
       `}</style>
     </div>
   )
@@ -65,6 +68,8 @@ function CompetitionForm({ open, competition, onClose, onSave, onRemove }) {
   const [type, setType] = useState('league')
   const [limitOn, setLimitOn] = useState(false)
   const [limit, setLimit] = useState('')
+  const [active, setActive] = useState(true)
+  const [sortOrder, setSortOrder] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -75,11 +80,13 @@ function CompetitionForm({ open, competition, onClose, onSave, onRemove }) {
     setType(competition?.type ?? 'league')
     setLimitOn(!!competition?.squad_limit_enabled)
     setLimit(competition?.squad_limit ?? '')
+    setActive(competition?.active !== false)
+    setSortOrder(competition?.sort_order ?? 0)
   }, [open, competition])
 
   async function submit(e) {
     e.preventDefault()
-    const draft = { id: competition?.id, name, type, squad_limit_enabled: limitOn, squad_limit: limit }
+    const draft = { id: competition?.id, name, type, squad_limit_enabled: limitOn, squad_limit: limit, active, sort_order: sortOrder }
     const v = validateCompetition(draft)
     if (v) { setError(v); return }
     setBusy(true); setError(null)
@@ -110,6 +117,21 @@ function CompetitionForm({ open, competition, onClose, onSave, onRemove }) {
           <select className="select" aria-label="Type" value={type} onChange={(e) => setType(e.target.value)}>
             {COMPETITION_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select></div>
+
+        <div className="field"><label className="label">Status & order</label>
+          <div className="row gap-2">
+            <button type="button" className="chip" aria-pressed={active} onClick={() => setActive(true)}>Active</button>
+            <button type="button" className="chip" aria-pressed={!active} onClick={() => setActive(false)}>Retired</button>
+            <label className="row gap-2" style={{ alignItems: 'center', marginLeft: 'auto' }}>
+              <span className="dim" style={{ fontSize: 12 }}>Order</span>
+              <input className="input" type="number" aria-label="Order" value={sortOrder}
+                style={{ width: 70, textAlign: 'center' }} onChange={(e) => setSortOrder(e.target.value)} />
+            </label>
+          </div>
+          <span className="dim" style={{ fontSize: 12 }}>
+            Retired leagues keep their fixtures & results but drop out of the standings. Lower order shows first (First Team league first).
+          </span>
+        </div>
 
         <div className="field"><label className="label">Registered squad</label>
           <div className="row gap-2">

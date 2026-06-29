@@ -12,18 +12,21 @@ import { teamMatchName } from '../lib/teams'
 export default function LeagueTablePanel({ table, competitions = [], teams = [], seasonId, onSaved }) {
   const { isAdmin } = useAuth()
   const { opponents } = useOpponents()
-  const [competitionId, setCompetitionId] = useState(competitions[0]?.id ?? '')
+  // Only ACTIVE leagues show here (retired ones keep their history but drop out),
+  // ordered by sort_order so the First Team league is the default + first.
+  const comps = competitions.filter((c) => c.active !== false)
+  const [competitionId, setCompetitionId] = useState(comps[0]?.id ?? '')
   const [editing, setEditing] = useState(false)
 
   // Keep a valid selection as competitions load/change.
   useEffect(() => {
-    if (competitions.length && !competitions.some((c) => c.id === competitionId)) setCompetitionId(competitions[0].id)
-  }, [competitions, competitionId])
+    if (comps.length && !comps.some((c) => c.id === competitionId)) setCompetitionId(comps[0].id)
+  }, [comps, competitionId])
 
   const ourNames = new Set(teams.flatMap((t) => [teamMatchName(t), t.label]).filter(Boolean))
   const rows = sortStandings(table.filter((r) => r.competition_id === competitionId))
 
-  if (competitions.length === 0) {
+  if (comps.length === 0) {
     return (
       <div className="empty mt-5">
         <p className="empty-title">No competitions yet</p>
@@ -34,9 +37,9 @@ export default function LeagueTablePanel({ table, competitions = [], teams = [],
 
   return (
     <div className="mt-4">
-      {competitions.length > 1 && (
+      {comps.length > 1 && (
         <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
-          {competitions.map((c) => (
+          {comps.map((c) => (
             <button key={c.id} className="chip" aria-pressed={competitionId === c.id} onClick={() => setCompetitionId(c.id)}>{c.name}</button>
           ))}
         </div>

@@ -15,8 +15,9 @@ export function useCompetitions(seasonId) {
     setLoading(true)
     const { data, error } = await supabase
       .from('competitions')
-      .select('id, name, type, season_id, squad_limit_enabled, squad_limit')
+      .select('id, name, type, season_id, squad_limit_enabled, squad_limit, active, sort_order')
       .eq('season_id', seasonId)
+      .order('sort_order')
       .order('name')
     if (error) logError('fetch', error.message, { hook: 'useCompetitions', seasonId })
     setCompetitions(data ?? [])

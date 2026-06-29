@@ -50,6 +50,23 @@ describe('LeagueTablePanel (per competition)', () => {
     expect(calls.find((c) => c[1] === 'teams')).toBeFalsy()
   })
 
+  test('retired competitions are hidden; the first active league is the default', () => {
+    const comps = [
+      { id: 'first', name: 'MvF Midlands League', type: 'league', active: true, sort_order: 1 },
+      { id: 'comm', name: 'MvF Community League', type: 'league', active: true, sort_order: 2 },
+      { id: 'old', name: 'MvF XL National League', type: 'league', active: false, sort_order: 9 },
+    ]
+    const table = [
+      { id: 'r1', competition_id: 'first', team_name: 'Nottingham', played: 1, won: 1, drawn: 0, lost: 0, gf: 2, ga: 0, pts: 3 },
+    ]
+    render(<LeagueTablePanel table={table} competitions={comps} teams={TEAMS} seasonId="s1" onSaved={vi.fn()} />)
+    // retired one is not offered as a chip…
+    expect(screen.queryByRole('button', { name: 'MvF XL National League' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'MvF Midlands League' })).toBeInTheDocument()
+    // …and the default selection is the first active league (its row renders)
+    expect(screen.getByText('Nottingham')).toBeInTheDocument()
+  })
+
   test('highlights our row (by match name) in the standings', () => {
     const table = [
       { id: 'r1', competition_id: 'comp-1', team_name: 'Nottingham', played: 1, won: 1, drawn: 0, lost: 0, gf: 2, ga: 0, pts: 3 },

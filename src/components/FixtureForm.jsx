@@ -241,7 +241,9 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           <label className="label">Competition</label>
           <select className="select" aria-label="Competition" value={competitionId} onChange={(e) => setCompetitionId(e.target.value)}>
             <option value="">— none (friendly) —</option>
-            {competitions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {/* Active leagues only, but keep a retired one selectable if this fixture already uses it. */}
+            {competitions.filter((c) => c.active !== false || c.id === competitionId)
+              .map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (retired)' : ''}</option>)}
           </select>
           <span className="dim" style={{ fontSize: 12 }}>Set up leagues & cups in Manage → Competitions.</span>
         </div>

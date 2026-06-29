@@ -25,6 +25,10 @@ export function competitionPayload(c) {
     type: c.type || 'league',
     squad_limit_enabled: enabled,
     squad_limit: enabled ? (Number(c.squad_limit) || null) : null,
+    // Retire-not-delete + ordering. New competitions default active; sort_order
+    // controls listing order (First Team league first, Community next, …).
+    active: c.active === undefined ? true : !!c.active,
+    sort_order: Number(c.sort_order) || 0,
   }
 }
 
