@@ -18,6 +18,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   const [lineNames, setLineNames] = useState({}) // profile_id -> 'First Last'
   const [linePhotos, setLinePhotos] = useState({}) // profile_id -> headshot url
   const [motmSponsor, setMotmSponsor] = useState(null)
+  const [zoom, setZoom] = useState(false) // MOTM photo lightbox
 
   useEffect(() => {
     if (!open) return
@@ -27,7 +28,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
 
   useEffect(() => {
     if (!open || !fixture) return
-    setLineup(null); setLineNames({}); setLinePhotos({}); setPlayed([])
+    setLineup(null); setLineNames({}); setLinePhotos({}); setPlayed([]); setZoom(false)
     ;(async () => {
       const { data: lrows } = await supabase
         .from('lineups')
@@ -106,7 +107,14 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
 
       {motm && (
         <div className="mc-motm mt-4">
-          <span className="mc-star">★</span>
+          {r.motm_photo_url ? (
+            <button type="button" className="mc-motm-thumb" onClick={() => setZoom(true)}
+              aria-label={motm ? `Enlarge ${motm}'s photo` : 'Enlarge man of the match photo'}>
+              <img src={r.motm_photo_url} alt="" />
+            </button>
+          ) : (
+            <span className="mc-star">★</span>
+          )}
           <div className="grow">
             <span className="kicker">MAN OF THE MATCH</span>
             <div style={{ fontWeight: 600 }}>{motm}</div>
@@ -120,10 +128,10 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         </div>
       )}
 
-      {r.motm_photo_url && (
-        <img className="mc-motm-photo mt-2" src={r.motm_photo_url}
-          alt={motm ? `${motm} — man of the match` : 'Man of the match'}
-          style={{ width: '100%', borderRadius: 14, maxHeight: 380, objectFit: 'cover', display: 'block' }} />
+      {zoom && r.motm_photo_url && (
+        <div className="mc-motm-zoom" role="dialog" aria-modal="true" onClick={() => setZoom(false)}>
+          <img src={r.motm_photo_url} alt={motm ? `${motm} — man of the match` : 'Man of the match'} />
+        </div>
       )}
 
       <p className="kicker mt-5"><span className="kicker-rule">GOALS</span></p>
@@ -187,6 +195,15 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         .mc-motm { display: flex; align-items: center; gap: 12px; background: var(--slate);
           border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
         .mc-star { color: var(--gold); font-size: 26px; }
+        /* MOTM photo as a small avatar in the row; tap to enlarge. */
+        .mc-motm-thumb { flex: none; width: 56px; height: 56px; border-radius: 12px; padding: 0;
+          overflow: hidden; border: 1.5px solid var(--gold); background: var(--slate); cursor: zoom-in; }
+        .mc-motm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .mc-motm-zoom { position: fixed; inset: 0; z-index: 210; background: rgba(0,0,0,.85);
+          display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out;
+          animation: fade var(--t-fast); }
+        .mc-motm-zoom img { max-width: 100%; max-height: 100%; border-radius: 14px; object-fit: contain;
+          box-shadow: 0 20px 50px -12px rgba(0,0,0,.8); }
         .mc-motm-sponsor { display: flex; align-items: center; gap: 8px; margin-top: 6px;
           font-size: 11px; color: var(--bone-dim); }
         .mc-motm-sponsor img { height: 18px; width: auto; background: var(--bone); border-radius: 4px; padding: 2px 4px; }
