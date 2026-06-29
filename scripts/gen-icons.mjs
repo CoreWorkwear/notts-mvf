@@ -4,7 +4,7 @@
 //   node scripts/gen-icons.mjs <crest-url-or-path>   # from the club crest
 // The crest is centred (with a maskable safe-zone) on the charcoal theme bg.
 import sharp from 'sharp'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -14,6 +14,7 @@ const BG = { r: 12, g: 15, b: 13, alpha: 1 } // #0c0f0d (theme background)
 
 async function source() {
   if (src && /^https?:/.test(src)) return Buffer.from(await (await fetch(src)).arrayBuffer())
+  if (src && existsSync(src)) return readFileSync(src) // a path relative to cwd / absolute
   return readFileSync(join(pub, src || 'icon.svg'))
 }
 
@@ -34,3 +35,4 @@ await make(192, 'pwa-192x192.png')
 await make(512, 'pwa-512x512.png')
 await make(512, 'maskable-512.png', true)
 await make(180, 'apple-touch-icon.png')
+await make(48, 'favicon.png') // browser tab

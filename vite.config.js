@@ -11,7 +11,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false, // we register manually in main.jsx to poll for updates
-      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['icon.svg', 'apple-touch-icon.png', 'favicon.png'],
       manifest: {
         name: 'Nottinghamshire MvF',
         short_name: 'Notts MvF',
