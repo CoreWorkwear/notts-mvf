@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { canSetAvailability, accountStatus } from '../lib/players'
+import { logError } from '../lib/logger'
 
 const AuthContext = createContext(null)
 
@@ -43,21 +44,31 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!active) return
-      setSession(data.session)
-      await loadProfile(data.session?.user?.id)
-      setLoading(false)
-    })
+    // Never let startup hang on the splash. If session restore stalls or fails
+    // (slow cold-start network / a token refresh that errors), we STILL release the
+    // UI: the `finally` clears loading on resolve OR reject, and the safety timer is
+    // a backstop for the rare case getSession never settles at all. onAuthStateChange
+    // (INITIAL_SESSION / TOKEN_REFRESHED) backfills the session when it does resolve.
+    const safety = setTimeout(() => { if (active) setLoading(false) }, 6000)
+
+    supabase.auth.getSession()
+      .then(async ({ data }) => {
+        if (!active) return
+        setSession(data.session)
+        await loadProfile(data.session?.user?.id)
+      })
+      .catch((e) => logError('auth', 'session restore failed', { message: e?.message }))
+      .finally(() => { if (active) { clearTimeout(safety); setLoading(false) } })
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, s) => {
       // Clicking a reset-password email lands here with a recovery session —
       // flag it so the app shows the set-new-password screen, not the app.
       if (_e === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(s)
-      await loadProfile(s?.user?.id)
+      if (active) { clearTimeout(safety); setLoading(false) } // any resolution releases the splash
+      try { await loadProfile(s?.user?.id) } catch (e) { logError('auth', 'profile load failed', { message: e?.message }) }
     })
-    return () => { active = false; sub.subscription.unsubscribe() }
+    return () => { active = false; clearTimeout(safety); sub.subscription.unsubscribe() }
   }, [loadProfile])
 
   // --- auth actions -------------------------------------------------------

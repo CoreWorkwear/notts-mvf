@@ -11,9 +11,25 @@ if (!url || !anonKey) {
   )
 }
 
+// A fetch that can't hang forever. On a cold start (esp. Android waking its radio)
+// a token refresh or query could otherwise stall indefinitely and freeze the app on
+// its splash. This aborts after a ceiling so the call rejects and callers recover.
+const REQUEST_TIMEOUT_MS = 20000
+function timeoutFetch(input, init = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), REQUEST_TIMEOUT_MS)
+  const upstream = init.signal // still honour a caller's own cancellation
+  if (upstream) {
+    if (upstream.aborted) controller.abort(upstream.reason)
+    else upstream.addEventListener('abort', () => controller.abort(upstream.reason), { once: true })
+  }
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer))
+}
+
 // The anon key is safe in the client — RLS enforces every rule at the DB.
 export const supabase = createClient(url, anonKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  global: { fetch: timeoutFetch },
 })
 
 // A throwaway, session-less client. Lets an admin create another player's login
