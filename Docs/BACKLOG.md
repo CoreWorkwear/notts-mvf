@@ -22,14 +22,14 @@ risk the "busy" feeling we explicitly avoided. Revisit only with a concrete reas
   diagonal where a hero photo meets a card).
 
 ## Security / privacy
-- 🔒 **Profiles column-level PII exposure.** RLS on `profiles` is row-level: any
-  authenticated club member can `select` *every* column of *every* club profile —
-  including `email`, `phone`, `dob`, `ec_name`, `ec_phone`. The app doesn't surface
-  this (admin-only screens use `usePlayers`; the player-facing Squad page uses the
-  PII-free `useSquad`), but a member could still craft the query directly. Proper
-  fix: restrict columns for non-admins — e.g. a public `squad` view, a split
-  contact table, or column privileges + a SECURITY DEFINER accessor. Sizeable; flag
-  before any wider rollout.
+- ✅ **Profiles column-level PII exposure — DONE (2026-08-25, migration 0033).**
+  Went with the split contact table: `profile_private` holds `email`, `phone`,
+  `dob`, `ec_name`, `ec_phone` with self-or-same-club-admin RLS; the columns are
+  dropped from `profiles`, `handle_new_user` writes both tables, and the RLS
+  harness T11 proves a member can no longer read or write anyone else's contact
+  details (and an admin can't read another club's). Frontend: usePlayers embeds
+  + flattens, PlayerForm/ProfileEdit split their saves, Who's In stopped
+  selecting phone (it never rendered it).
 
 ## Features
 - 🚧 **§4.2 — FM-style depth chart.** The Squad page's second view. **Gated on
