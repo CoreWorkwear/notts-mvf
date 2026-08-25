@@ -28,11 +28,11 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       const [availRes, rosterRes, payRes] = await Promise.all([
         supabase
           .from('availability')
-          .select('status, profile:profiles(id, first_name, last_name, phone, preferred)')
+          .select('status, profile:profiles(id, first_name, last_name, preferred)')
           .eq('fixture_id', fixture.id),
         supabase
           .from('team_memberships')
-          .select('profiles!inner(id, first_name, last_name, phone, active, approved, is_player)')
+          .select('profiles!inner(id, first_name, last_name, active, approved, is_player)')
           .eq('team_id', fixture.team_id),
         supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
       ])
@@ -201,13 +201,14 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   )
 }
 
+// No PII here: phone/email live in profile_private (self-or-admin RLS) and
+// this sheet never renders them — names + preferred position are enough.
 function person(p, user) {
   return {
     id: p.id,
     first: p.first_name,
     name: `${p.first_name} ${(p.last_name ?? '').slice(0, 1)}`,
     initials: `${(p.first_name ?? '?')[0] ?? ''}${(p.last_name ?? '')[0] ?? ''}`.toUpperCase(),
-    phone: p.phone,
     preferred: p.preferred ?? null,
     isMe: p.id === user?.id,
   }

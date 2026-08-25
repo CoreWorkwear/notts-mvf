@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { logError } from '../lib/logger'
@@ -16,7 +16,19 @@ export default function Profile() {
   const { profile, teamKeys, isRealAdmin, refreshProfile } = useAuth()
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(false)
+  // The personal fields live in profile_private (self-or-admin RLS) — fetch
+  // your own row; re-fetch when the edit sheet closes so a save shows at once.
+  const [priv, setPriv] = useState(null)
+  useEffect(() => {
+    if (!profile?.id || editing) return
+    supabase.from('profile_private')
+      .select('email, phone, dob, ec_name, ec_phone')
+      .eq('profile_id', profile.id).maybeSingle()
+      .then(({ data }) => setPriv(data ?? null))
+      .catch(() => {})
+  }, [profile?.id, editing])
   if (!profile) return null
+  const full = { ...profile, ...(priv ?? {}) }
 
   const initials = `${(profile.first_name?.[0] ?? '')}${(profile.last_name?.[0] ?? '')}`.toUpperCase()
 
@@ -61,18 +73,18 @@ export default function Profile() {
       </div>
 
       <div className="card mt-5" style={{ padding: 16 }}>
-        <Row label="Email" value={profile.email} />
-        <Row label="Phone" value={profile.phone} />
-        <Row label="Date of birth" value={formatDob(profile.dob)} />
-        <Row label="Positions" value={profile.positions?.join(', ') || '—'} />
-        <Row label="Preferred" value={profile.preferred || '—'} />
-        <Row label="Emergency contact" value={profile.ec_name || '—'} />
-        <Row label="Emergency phone" value={profile.ec_phone || '—'} last />
+        <Row label="Email" value={full.email ?? '—'} />
+        <Row label="Phone" value={full.phone ?? '—'} />
+        <Row label="Date of birth" value={formatDob(full.dob)} />
+        <Row label="Positions" value={full.positions?.join(', ') || '—'} />
+        <Row label="Preferred" value={full.preferred || '—'} />
+        <Row label="Emergency contact" value={full.ec_name || '—'} />
+        <Row label="Emergency phone" value={full.ec_phone || '—'} last />
       </div>
       <button className="btn btn-ghost btn-block mt-3" onClick={() => setEditing(true)}>Edit your details</button>
       <p className="dim mt-2" style={{ fontSize: 12 }}>Email is your login — the manager changes that.</p>
 
-      <ProfileEdit open={editing} onClose={() => setEditing(false)} profile={profile} onSaved={refreshProfile} />
+      <ProfileEdit open={editing} onClose={() => setEditing(false)} profile={full} onSaved={refreshProfile} />
 
       <p className="kicker mt-5"><span className="kicker-rule">NOTIFICATIONS</span></p>
       <div className="mt-3"><NotificationToggle /></div>

@@ -60,12 +60,18 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
     }
     setError(null); setBusy(true)
     try {
+      // Squad-visible fields on profiles; the personal ones on profile_private
+      // (self-or-admin RLS — the row always exists, created at signup).
       const { error: upErr } = await supabase.from('profiles').update({
-        first_name: firstName.trim(), last_name: lastName.trim(), phone: phone.trim(),
-        dob: dob || null, ec_name: ecName.trim() || null, ec_phone: ecPhone.trim() || null,
+        first_name: firstName.trim(), last_name: lastName.trim(),
         positions, preferred: preferred || null,
       }).eq('id', profile.id)
       if (upErr) throw upErr
+      const { error: pvErr } = await supabase.from('profile_private').update({
+        phone: phone.trim(), dob: dob || null,
+        ec_name: ecName.trim() || null, ec_phone: ecPhone.trim() || null,
+      }).eq('profile_id', profile.id)
+      if (pvErr) throw pvErr
       onSaved?.(); onClose()
     } catch (err) {
       setError(err.message)

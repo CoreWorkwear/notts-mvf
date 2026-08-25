@@ -134,17 +134,23 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
         }
         if (data?.error) throw new Error(data.error)
       } else {
-        // Duplicate-email guard (excluding this player).
-        const { data: dupe } = await supabase.from('profiles').select('id').eq('email', email.trim()).neq('id', player.id)
+        // Duplicate-email guard (excluding this player). PII lives in
+        // profile_private (self-or-admin RLS) — only admins reach this form.
+        const { data: dupe } = await supabase.from('profile_private').select('profile_id').eq('email', email.trim()).neq('profile_id', player.id)
         if (dupe && dupe.length) throw new Error('Another player already uses that email.')
 
         const { error: upErr } = await supabase.from('profiles').update({
-          first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), phone: phone.trim(),
-          dob: dob || null, ec_name: ecName.trim() || null, ec_phone: ecPhone.trim() || null,
+          first_name: firstName.trim(), last_name: lastName.trim(),
           positions, preferred: preferred || null,
           role, active, is_player: isPlayer, approved,
         }).eq('id', player.id)
         if (upErr) throw upErr
+
+        const { error: pvErr } = await supabase.from('profile_private').update({
+          email: email.trim(), phone: phone.trim(), dob: dob || null,
+          ec_name: ecName.trim() || null, ec_phone: ecPhone.trim() || null,
+        }).eq('profile_id', player.id)
+        if (pvErr) throw pvErr
 
         const { toAdd, toRemove } = diffMemberships(player.teamIds, teamKeys, teams)
         if (toRemove.length) {

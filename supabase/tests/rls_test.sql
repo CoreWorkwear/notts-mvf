@@ -14,6 +14,8 @@
 --   • a player cannot write availability AS someone else (own-row only)          [T9]
 --   • §3 manager view is cosmetic: a non-admin is refused EVERY admin-only write  [T10]
 --     (competitions, squad registration, promoting another player) regardless of UI
+--   • PII split (0033): profile_private readable/writable ONLY by self or a       [T11]
+--     same-club admin — a member sees nobody else's contact details
 --   • the admin write path still works                                           [T1]
 --
 -- Impersonates each user by setting the JWT claim + `authenticated` role, exactly
@@ -202,6 +204,34 @@ do $$ declare blocked boolean; begin
     raise exception 'T10 FAIL: non-admin promoted another player'; end if;
 
   raise notice 'T10 PASS: manager view is cosmetic — DB rejects every admin write from a non-admin';
+end $$;
+
+-- T11 — PII split (0033): profile_private is self-or-same-club-admin ONLY.
+reset role; select pg_temp.act_as('a0000002-0000-0000-0000-000000000002'); set local role authenticated;
+do $$ declare others int; mine int; begin
+  -- (a) a member sees ONLY their own private row — nobody else's PII
+  select count(*) into others from profile_private where profile_id <> 'a0000002-0000-0000-0000-000000000002';
+  if others > 0 then raise exception 'T11 FAIL: member can read % other private row(s) (PII leak)', others; end if;
+  select count(*) into mine from profile_private where profile_id = 'a0000002-0000-0000-0000-000000000002';
+  if mine <> 1 then raise exception 'T11 FAIL: member cannot read their OWN private row'; end if;
+  -- (b) a member's write against another player's private row must not land
+  update profile_private set phone = '00000' where profile_id = 'a0000003-0000-0000-0000-000000000003';
+end $$;
+reset role; -- (b) verified as postgres: the sneaky update above changed nothing
+do $$ declare ph text; begin
+  select phone into ph from profile_private where profile_id = 'a0000003-0000-0000-0000-000000000003';
+  if ph = '00000' then raise exception 'T11 FAIL: member updated another player''s private row'; end if;
+end $$;
+-- (c) the club's admin CAN read the squad's private rows (contact details are the job)
+select pg_temp.act_as('a0000001-0000-0000-0000-000000000001'); set local role authenticated;
+do $$ declare n int; leak int; begin
+  select count(*) into n from profile_private where profile_id in
+    ('a0000002-0000-0000-0000-000000000002','a0000003-0000-0000-0000-000000000003');
+  if n <> 2 then raise exception 'T11 FAIL: admin cannot read the squad''s private rows (saw %)', n; end if;
+  -- (d) …but NOT another club's (is_admin is global; the policy's club check gates it)
+  select count(*) into leak from profile_private where profile_id = 'a0000005-0000-0000-0000-000000000005';
+  if leak > 0 then raise exception 'T11 FAIL: an admin can read ANOTHER CLUB''s private rows'; end if;
+  raise notice 'T11 PASS: PII is self-or-same-club-admin only';
 end $$;
 
 reset role;

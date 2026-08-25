@@ -32,7 +32,7 @@ const PLAYER = {
 beforeEach(() => { h.calls.length = 0 })
 
 describe('PlayerForm', () => {
-  test('edit saves changed fields to profiles', async () => {
+  test('edit splits the save: squad fields → profiles, PII → profile_private', async () => {
     const onSaved = vi.fn()
     render(<PlayerForm open onClose={() => {}} onSaved={onSaved} player={PLAYER} teams={TEAMS} currentUserId="admin" />)
 
@@ -44,7 +44,12 @@ describe('PlayerForm', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     const upd = h.calls.find((c) => c[0] === 'update' && c[1] === 'profiles')
     expect(upd).toBeTruthy()
-    expect(upd[2]).toMatchObject({ first_name: 'Joey', email: 'joe@notts.test' })
+    expect(upd[2]).toMatchObject({ first_name: 'Joey' })
+    // PII never hits the club-readable table
+    for (const k of ['email', 'phone', 'dob', 'ec_name', 'ec_phone']) expect(k in upd[2]).toBe(false)
+    const pv = h.calls.find((c) => c[0] === 'update' && c[1] === 'profile_private')
+    expect(pv).toBeTruthy()
+    expect(pv[2]).toMatchObject({ email: 'joe@notts.test', phone: '07700900000' })
   })
 
   test('an admin cannot demote or deactivate their own row', async () => {
