@@ -22,7 +22,7 @@ import { fixtureMatchup } from '../lib/teams'
 export default function Fixtures() {
   const { user, profile, isAdmin, teamKeys, canRespond, accountStatus } = useAuth()
   const { seasonId } = useSeason()
-  const { upcoming, past, teams, opponents, fixtures, loading, refetch } = useFixtures(seasonId)
+  const { upcoming, past, teams, opponents, fixtures, loading, error, refetch } = useFixtures(seasonId)
   const { competitions } = useCompetitions(seasonId)
   const pool = usePhotoPool()
   const navigate = useNavigate()
@@ -73,6 +73,18 @@ export default function Fixtures() {
   const lowNumbers = upcoming.filter((f) => f.match_date <= addDays(todayISO(), 7) && f.counts.in < 8).length
 
   if (loading && fixtures.length === 0) return <Loader label="Pulling the fixtures…" />
+
+  // A first load that failed on the network: don't pretend the diary is empty,
+  // and don't hang. Say what happened and let them have another go.
+  if (error && fixtures.length === 0) return (
+    <div className="page">
+      <div className="empty mt-5">
+        <p className="empty-title">Couldn't pull the fixtures</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page">

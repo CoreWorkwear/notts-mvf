@@ -65,4 +65,22 @@ test.describe('player', () => {
     // Immediate reflection — the bug class in §2.2/§3.4 (write OK, UI stale).
     await expect(page.getByText(/saved|you're down as in/i)).toBeVisible({ timeout: 8_000 })
   })
+
+  // Regression: "hang after login on Fixtures". A rejected fixtures read (the
+  // "TypeError: Load failed" rejections logged in prod on /fixtures) used to
+  // leave the "Pulling the fixtures…" loader stuck on forever. It must resolve
+  // to a retry affordance instead, and recover when the network comes back.
+  test('a failed fixtures load shows a retry, not an endless spinner', async ({ page }) => {
+    await signIn(page, PLAYER.email, PLAYER.password)
+    // Fail the fixtures read at the network layer, then reload so it fires on a
+    // cold render — exactly the cold-start path users hit.
+    await page.route('**/rest/v1/fixtures*', (r) => r.abort())
+    await page.reload()
+    await expect(page.getByText(/couldn't pull the fixtures/i)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/pulling the fixtures/i)).toBeHidden() // no infinite loader
+    // Recovery: stop failing, hit Try again, the fixtures surface loads.
+    await page.unroute('**/rest/v1/fixtures*')
+    await page.getByRole('button', { name: /try again/i }).click()
+    await expect(page.getByText(/couldn't pull the fixtures/i)).toBeHidden({ timeout: 15_000 })
+  })
 })
