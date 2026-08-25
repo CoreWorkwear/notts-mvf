@@ -32,9 +32,11 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
       .select('status, profile:profiles(id, first_name, last_name)')
       .eq('fixture_id', fixture.id)
       .then(({ data }) => setRows(data ?? []))
+      .catch(() => {}) // secondary detail — a dropped fetch just leaves it empty
     if (isAdmin) {
       supabase.from('media_assets').select('id, url').eq('type', 'photo')
         .then(({ data }) => setPhotoAssets(data ?? []))
+        .catch(() => {})
     }
   }, [open, fixture, isAdmin])
 
@@ -89,7 +91,10 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
             ? <AvailControl value={myStatus} onChange={async (s) => {
                 const prev = myStatus
                 setMyStatus(s) // optimistic — reflect the pick immediately
-                try { await onSetAvail(s) } catch { setMyStatus(prev) }
+                // onSetAvail resolves false (rather than throwing) when the
+                // write failed after retrying — put the old pick back.
+                try { const ok = await onSetAvail(s); if (ok === false) setMyStatus(prev) }
+                catch { setMyStatus(prev) }
               }} />
             : <p className="muted" style={{ fontSize: 14 }}>You can set your availability once the manager's signed you off.</p>}
 

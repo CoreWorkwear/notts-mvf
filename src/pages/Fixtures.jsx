@@ -16,13 +16,14 @@ import ResultForm from '../components/ResultForm'
 import CalendarView from '../components/CalendarView'
 import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
+import Toast from '../components/Toast'
 import { fixtureMatchup } from '../lib/teams'
 
 // The landing + primary action surface (UX-AND-IA §1). Everyone lands here.
 export default function Fixtures() {
   const { user, profile, isAdmin, teamKeys, canRespond, accountStatus } = useAuth()
-  const { seasonId } = useSeason()
-  const { upcoming, past, teams, opponents, fixtures, loading, error, refetch } = useFixtures(seasonId)
+  const { seasonId, error: seasonError, refreshSeasons } = useSeason()
+  const { upcoming, past, teams, opponents, fixtures, loading, error, refetch, applyMyStatus } = useFixtures(seasonId)
   const { competitions } = useCompetitions(seasonId)
   const pool = usePhotoPool()
   const navigate = useNavigate()
@@ -34,12 +35,14 @@ export default function Fixtures() {
   const [editing, setEditing] = useState(null)   // fixture being edited
   const [resultFor, setResultFor] = useState(null) // fixture to log a result for
   const [squad, setSquad] = useState([])         // for the result form
+  const [toast, setToast] = useState(null)       // availability write failures
 
   // Admin needs the squad for the result form's scorer/MOTM pickers.
   useEffect(() => {
     if (!isAdmin) return
     supabase.from('profiles').select('id, first_name, last_name').eq('active', true)
       .then(({ data }) => setSquad((data ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, first: p.first_name }))))
+      .catch(() => {}) // result-form pickers just start empty on a dropped fetch
   }, [isAdmin])
 
   // Team filter only for admins or players in both squads.
@@ -55,12 +58,25 @@ export default function Fixtures() {
   const rest = active.slice(1)
   const postponedList = filtered.filter((f) => f.postponed)
 
+  // Returns true when the write landed, false when it failed (after one retry)
+  // — no throw, so a dropped connection never becomes an unhandled rejection.
+  // The tap reflects instantly via applyMyStatus and rolls back on failure;
+  // "TypeError: Load failed" here is the one error real players keep hitting.
   async function handleSetAvail(fixtureId, status) {
     // Pending players + supporters can view but not act (DB blocks it too).
-    if (!canRespond) return
-    const { error } = await setAvailability(fixtureId, user.id, status)
-    if (error) { logError('write', error.message, { op: 'setAvailability', fixtureId, status }); alert(error.message); throw error }
+    if (!canRespond) return false
+    const prev = fixtures.find((f) => f.id === fixtureId)?.myStatus ?? null
+    applyMyStatus(fixtureId, status)
+    let { error } = await setAvailability(fixtureId, user.id, status)
+    if (error) ({ error } = await setAvailability(fixtureId, user.id, status))
+    if (error) {
+      logError('write', error.message, { op: 'setAvailability', fixtureId, status })
+      applyMyStatus(fixtureId, prev)
+      setToast("Couldn't save that — check your signal and give it another go.")
+      return false
+    }
     await refetch()
+    return true
   }
 
   function openEdit(f) { setEditing(f); setFormOpen(true) }
@@ -75,19 +91,22 @@ export default function Fixtures() {
   if (loading && fixtures.length === 0) return <Loader label="Pulling the fixtures…" />
 
   // A first load that failed on the network: don't pretend the diary is empty,
-  // and don't hang. Say what happened and let them have another go.
-  if (error && fixtures.length === 0) return (
+  // and don't hang. Say what happened and let them have another go. A failed
+  // seasons fetch counts too — without a season this page would show the
+  // "nothing in the diary" empty state, which is a lie.
+  if ((error || seasonError) && fixtures.length === 0) return (
     <div className="page">
       <div className="empty mt-5">
         <p className="empty-title">Couldn't pull the fixtures</p>
         <p>Looks like a dodgy connection. Have another go.</p>
-        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+        <button className="btn btn-primary mt-3" onClick={() => { if (seasonError) refreshSeasons(); refetch() }}>Try again</button>
       </div>
     </div>
   )
 
   return (
     <div className="page">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <div className="row spread" style={{ alignItems: 'flex-end' }}>
         <div>
           <p className="kicker"><span className="kicker-rule">{isAdmin ? 'THE MANAGER' : 'NEXT UP'}</span></p>
@@ -211,7 +230,7 @@ export default function Fixtures() {
         canLogResult={!!detail && isAdmin && hasKickedOff(detail.match_date, detail.kickoff)}
         onChanged={refetch}
         onClose={() => setDetail(null)}
-        onSetAvail={async (s) => { await handleSetAvail(detail.id, s) }}
+        onSetAvail={(s) => handleSetAvail(detail.id, s)}
         onEdit={() => { const d = detail; setDetail(null); openEdit(d) }}
         onLogResult={() => { const d = detail; setDetail(null); setResultFor(d) }}
       />

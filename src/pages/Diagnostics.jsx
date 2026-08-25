@@ -15,6 +15,7 @@ export default function Diagnostics() {
     .order('created_at', { ascending: false })
     .limit(100)
     .then(({ data }) => setRows(data ?? []))
+    .catch(() => {})
 
   useEffect(() => { load() }, [])
 

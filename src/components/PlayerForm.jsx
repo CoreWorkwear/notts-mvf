@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
 import ImageUpload from './ImageUpload'
-import { supabase, makeSignupClient } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { POSITIONS } from '../lib/constants'
 import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
 
@@ -116,21 +116,23 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
           dob: dob || null, positions, preferred: preferred || null, teams: teamKeys,
           is_player: isPlayer,
         }
-        // Prefer the admin Edge Function (proper server-side create). If it's
-        // not deployed yet, fall back to the throwaway signUp (which keeps the
-        // admin's session intact). Either way the trigger forces player/not-eligible.
-        let created = false
-        try {
-          const { data, error } = await supabase.functions.invoke('admin-create-player', {
-            body: { email: email.trim(), password, ...meta },
-          })
-          created = !error && !!data?.id
-        } catch { /* function not deployed — fall through */ }
-        if (!created) {
-          const tmp = makeSignupClient()
-          const { error } = await tmp.auth.signUp({ email: email.trim(), password, options: { data: meta } })
-          if (error) throw error
+        // Server-side create via the admin Edge Function (service role). No
+        // fallback: the old throwaway-signUp path could silently mask a broken
+        // function deploy — surface the function's real error instead. On a
+        // non-2xx, invoke() returns a FunctionsHttpError whose context is the
+        // Response; the function puts the reason in its JSON body as { error }.
+        const { data, error } = await supabase.functions.invoke('admin-create-player', {
+          body: { email: email.trim(), password, ...meta },
+        })
+        if (error) {
+          let msg = 'Could not create the player — check the connection and try again.'
+          try {
+            const body = await error.context?.json?.()
+            if (body?.error) msg = body.error
+          } catch { /* keep the fallback message */ }
+          throw new Error(msg)
         }
+        if (data?.error) throw new Error(data.error)
       } else {
         // Duplicate-email guard (excluding this player).
         const { data: dupe } = await supabase.from('profiles').select('id').eq('email', email.trim()).neq('id', player.id)

@@ -1,5 +1,17 @@
 import { describe, test, expect } from 'vitest'
-import { buildErrorRow, isActionableWindowError } from './logger'
+import { buildErrorRow, isActionableWindowError, isNoiseError } from './logger'
+
+describe('isNoiseError', () => {
+  test('drops offline service-worker update failures (the live-log noise)', () => {
+    expect(isNoiseError("Failed to update a ServiceWorker for scope ('https://notts-mvf.pages.dev/') with script ('https://notts-mvf.pages.dev/sw.js'): An unknown error occurred when fetching the script.")).toBe(true)
+    expect(isNoiseError("Failed to update a ServiceWorker for scope ('https://notts-mvf.pages.dev/') with script ('Unknown'): The object is in an invalid state.")).toBe(true)
+  })
+  test('keeps real failures', () => {
+    expect(isNoiseError('TypeError: Load failed')).toBe(false)
+    expect(isNoiseError('Internal error')).toBe(false)
+    expect(isNoiseError(null)).toBe(false)
+  })
+})
 
 describe('isActionableWindowError', () => {
   test('drops the opaque cross-origin "Script error." noise', () => {

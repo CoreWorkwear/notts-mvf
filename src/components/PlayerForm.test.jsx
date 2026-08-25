@@ -19,7 +19,6 @@ vi.mock('../lib/supabase', () => {
       auth: { resetPasswordForEmail: () => Promise.resolve({ error: null }) },
       functions: { invoke: (name, opts) => { h.calls.push(['invoke', name, opts]); return Promise.resolve({ data: { ok: true }, error: null }) } },
     },
-    makeSignupClient: () => ({ auth: { signUp: () => Promise.resolve({ error: null }) } }),
   }
 })
 

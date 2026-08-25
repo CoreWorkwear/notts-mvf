@@ -1,23 +1,33 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { logError } from '../lib/logger'
 
 // Club sponsors (logo banners). Anyone in the club reads; admins write.
 export function useSponsors() {
   const { profile } = useAuth()
   const [sponsors, setSponsors] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('sponsors')
-      .select('id, name, logo_url, website, tier, sort_order, active')
-      .order('tier', { ascending: true })
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true })
-    setSponsors(data ?? [])
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('sponsors')
+        .select('id, name, logo_url, website, tier, sort_order, active')
+        .order('tier', { ascending: true })
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useSponsors' })
+      setSponsors(data ?? [])
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useSponsors load failed', { hook: 'useSponsors' })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -43,7 +53,7 @@ export function useSponsors() {
     await load()
   }, [load])
 
-  return { sponsors, loading, save, remove, refetch: load }
+  return { sponsors, loading, error, save, remove, refetch: load }
 }
 
 // Active sponsors of a tier, e.g. byTier(sponsors, 'main').

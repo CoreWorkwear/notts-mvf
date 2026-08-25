@@ -14,11 +14,22 @@ import Loader from '../components/Loader'
 export default function Club() {
   const { club } = useAuth()
   const { seasonId } = useSeason()
-  const { table, teams, stats, loading, refetch } = useClub(seasonId)
+  const { table, teams, stats, loading, error, refetch } = useClub(seasonId)
   const { competitions } = useCompetitions(seasonId)
   const [view, setView] = useState('table')
 
   if (loading) return <Loader label="Totting up the club…" />
+
+  // A failed first load (flaky connection) gets a retry, not a blank club.
+  if (error && table.length === 0 && teams.length === 0) return (
+    <div className="page">
+      <div className="empty mt-5">
+        <p className="empty-title">Couldn't load the club</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page">

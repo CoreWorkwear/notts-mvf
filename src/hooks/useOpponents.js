@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { logError } from '../lib/logger'
 
 // Opponents are club-scoped and persist across seasons (BUILD-LIST A2). Admins
 // add/edit; RLS keeps writes admin-only.
@@ -8,15 +9,24 @@ export function useOpponents() {
   const { profile } = useAuth()
   const [opponents, setOpponents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('opponents')
-      .select('id, name, badge_url, home_venue, home_address, home_postcode, is_league_team')
-      .order('name', { ascending: true })
-    setOpponents(data ?? [])
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('opponents')
+        .select('id, name, badge_url, home_venue, home_address, home_postcode, is_league_team')
+        .order('name', { ascending: true })
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useOpponents' })
+      setOpponents(data ?? [])
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useOpponents load failed', { hook: 'useOpponents' })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -37,5 +47,5 @@ export function useOpponents() {
     await load()
   }, [profile?.club_id, load])
 
-  return { opponents, loading, save, refetch: load }
+  return { opponents, loading, error, save, refetch: load }
 }

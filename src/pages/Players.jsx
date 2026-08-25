@@ -17,6 +17,7 @@ export default function Players() {
   useEffect(() => {
     supabase.from('teams').select('id, key, label, is_first_team')
       .then(({ data }) => setTeams((data ?? []).sort((a, b) => Number(b.is_first_team) - Number(a.is_first_team))))
+      .catch(() => {})
   }, [])
 
   const filtered = useMemo(() => {

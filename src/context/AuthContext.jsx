@@ -60,13 +60,21 @@ export function AuthProvider({ children }) {
       .catch((e) => logError('auth', 'session restore failed', { message: e?.message }))
       .finally(() => { if (active) { clearTimeout(safety); setLoading(false) } })
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       // Clicking a reset-password email lands here with a recovery session —
       // flag it so the app shows the set-new-password screen, not the app.
-      if (_e === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(s)
       if (active) { clearTimeout(safety); setLoading(false) } // any resolution releases the splash
-      try { await loadProfile(s?.user?.id) } catch (e) { logError('auth', 'profile load failed', { message: e?.message }) }
+      // Do NOT await Supabase calls inside this callback: supabase-js holds its
+      // auth lock while it runs, and queries acquire that same lock to attach
+      // the token — the documented deadlock behind cold-start hangs. Defer the
+      // profile load out of the callback instead. TOKEN_REFRESHED changes
+      // nothing profile-shaped, so skip the 3-query reload on those.
+      if (event === 'TOKEN_REFRESHED') return
+      setTimeout(() => {
+        loadProfile(s?.user?.id).catch((e) => logError('auth', 'profile load failed', { message: e?.message }))
+      }, 0)
     })
     return () => { active = false; clearTimeout(safety); sub.subscription.unsubscribe() }
   }, [loadProfile])

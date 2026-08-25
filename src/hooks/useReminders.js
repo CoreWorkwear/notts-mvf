@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { logError } from '../lib/logger'
 
 // Per-club auto-reminder config (one row per club). RLS: club members read,
 // admins write. The run-reminders Edge Function reads this server-side hourly.
@@ -8,15 +9,24 @@ export function useReminders() {
   const { profile } = useAuth()
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('reminder_settings')
-      .select('club_id, availability_enabled, match_enabled, availability_offsets, match_offsets')
-      .maybeSingle()
-    setSettings(data ?? null)
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('reminder_settings')
+        .select('club_id, availability_enabled, match_enabled, availability_offsets, match_offsets')
+        .maybeSingle()
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useReminders' })
+      setSettings(data ?? null)
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useReminders load failed', { hook: 'useReminders' })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -37,5 +47,5 @@ export function useReminders() {
     return { error }
   }
 
-  return { settings, loading, save, refetch: load }
+  return { settings, loading, error, save, refetch: load }
 }

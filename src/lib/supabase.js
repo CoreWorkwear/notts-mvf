@@ -31,14 +31,3 @@ export const supabase = createClient(url, anonKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   global: { fetch: timeoutFetch },
 })
-
-// A throwaway, session-less client. Lets an admin create another player's login
-// via signUp WITHOUT clobbering their own session (signUp would otherwise log
-// the browser in as the new user). In-memory only; never persisted.
-// NOTE: proper admin user-creation belongs in a service_role Edge Function;
-// this is the MVP path while email confirmation is off.
-export function makeSignupClient() {
-  return createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  })
-}

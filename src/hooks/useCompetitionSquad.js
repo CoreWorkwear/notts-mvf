@@ -8,15 +8,23 @@ import { logError } from '../lib/logger'
 export function useCompetitionSquad(competitionId) {
   const [registered, setRegistered] = useState(new Set())
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (!competitionId) { setRegistered(new Set()); setLoading(false); return }
+    if (!competitionId) { setRegistered(new Set()); setLoading(false); setError(null); return }
     setLoading(true)
-    const { data, error } = await supabase
-      .from('competition_squads').select('profile_id').eq('competition_id', competitionId)
-    if (error) logError('fetch', error.message, { hook: 'useCompetitionSquad', competitionId })
-    setRegistered(new Set((data ?? []).map((r) => r.profile_id)))
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('competition_squads').select('profile_id').eq('competition_id', competitionId)
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useCompetitionSquad', competitionId })
+      setRegistered(new Set((data ?? []).map((r) => r.profile_id)))
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useCompetitionSquad load failed', { hook: 'useCompetitionSquad', competitionId })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [competitionId])
 
   useEffect(() => { load() }, [load])
@@ -35,5 +43,5 @@ export function useCompetitionSquad(competitionId) {
     return res
   }
 
-  return { registered, count: registered.size, loading, refetch: load, add, remove }
+  return { registered, count: registered.size, loading, error, refetch: load, add, remove }
 }

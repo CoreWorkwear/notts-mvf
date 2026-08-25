@@ -55,17 +55,27 @@ export function isActionableWindowError(e) {
   return !!m && m !== 'Script error.' && m !== 'Script error'
 }
 
+// Browser-generated noise with nothing actionable in it: a background
+// service-worker update check fails whenever the phone is offline, and those
+// rejections were ~80% of the live error log — drowning the real failures.
+export function isNoiseError(message) {
+  return /Failed to update a ServiceWorker/i.test(String(message ?? ''))
+}
+
 // Attach global handlers once (uncaught errors + unhandled promise rejections).
 export function installGlobalErrorLogging() {
   if (typeof window === 'undefined' || window.__mvfErrLog) return
   window.__mvfErrLog = true
   window.addEventListener('error', (e) => {
     if (!isActionableWindowError(e)) return
-    logError('error', e?.error?.message || e?.message || 'window.error',
-      { stack: e?.error?.stack, source: e?.filename, line: e?.lineno })
+    const msg = e?.error?.message || e?.message || 'window.error'
+    if (isNoiseError(msg)) return
+    logError('error', msg, { stack: e?.error?.stack, source: e?.filename, line: e?.lineno })
   })
   window.addEventListener('unhandledrejection', (e) => {
     const r = e?.reason
-    logError('rejection', r?.message || String(r) || 'unhandledrejection', { stack: r?.stack })
+    const msg = r?.message || String(r) || 'unhandledrejection'
+    if (isNoiseError(msg)) return
+    logError('rejection', msg, { stack: r?.stack })
   })
 }

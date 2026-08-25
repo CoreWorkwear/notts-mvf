@@ -9,19 +9,27 @@ export function useCompetitions(seasonId) {
   const { profile } = useAuth()
   const [competitions, setCompetitions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (!seasonId) { setCompetitions([]); setLoading(false); return }
+    if (!seasonId) { setCompetitions([]); setLoading(false); setError(null); return }
     setLoading(true)
-    const { data, error } = await supabase
-      .from('competitions')
-      .select('id, name, type, season_id, squad_limit_enabled, squad_limit, active, sort_order')
-      .eq('season_id', seasonId)
-      .order('sort_order')
-      .order('name')
-    if (error) logError('fetch', error.message, { hook: 'useCompetitions', seasonId })
-    setCompetitions(data ?? [])
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('competitions')
+        .select('id, name, type, season_id, squad_limit_enabled, squad_limit, active, sort_order')
+        .eq('season_id', seasonId)
+        .order('sort_order')
+        .order('name')
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useCompetitions', seasonId })
+      setCompetitions(data ?? [])
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useCompetitions load failed', { hook: 'useCompetitions', seasonId })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [seasonId])
 
   useEffect(() => { load() }, [load])
@@ -43,5 +51,5 @@ export function useCompetitions(seasonId) {
     return res
   }
 
-  return { competitions, loading, refetch: load, save, remove }
+  return { competitions, loading, error, refetch: load, save, remove }
 }

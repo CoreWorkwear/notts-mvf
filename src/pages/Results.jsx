@@ -17,12 +17,23 @@ const OUTCOME_LABEL = { W: 'Won', D: 'Drawn', L: 'Lost' }
 export default function Results() {
   const { isAdmin } = useAuth()
   const { seasonId } = useSeason()
-  const { played, needsResult, postponed, squad, loading, refetch } = useResults(seasonId)
+  const { played, needsResult, postponed, squad, loading, error, refetch } = useResults(seasonId)
   const pool = usePhotoPool()
   const [centre, setCentre] = useState(null)   // fixture for match centre
   const [editing, setEditing] = useState(null) // fixture for result form
 
   if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader label="Fetching the results…" />
+
+  // A failed first load (flaky connection) gets a retry, not "no games played".
+  if (error && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return (
+    <div className="page">
+      <div className="empty mt-5">
+        <p className="empty-title">Couldn't pull the results</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
 
   const [latest, ...earlier] = played
 

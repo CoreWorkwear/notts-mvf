@@ -122,13 +122,27 @@ export function useFixtures(seasonId) {
     }
   }, [load])
 
+  // Optimistically reflect the viewer's own availability tap in local state so
+  // the control moves instantly; the post-write refetch reconciles with the
+  // server, and the caller re-applies the previous status if the write fails.
+  const applyMyStatus = useCallback((fixtureId, status) => {
+    setFixtures((prev) => prev.map((f) => {
+      if (f.id !== fixtureId || f.myStatus === status) return f
+      const counts = { ...f.counts }
+      if (f.myStatus in counts) counts[f.myStatus]--
+      if (status in counts) counts[status]++
+      const replied = counts.in + counts.maybe + counts.out
+      return { ...f, myStatus: status, counts, replied, noReply: Math.max(0, f.rosterSize - replied) }
+    }))
+  }, [])
+
   // A fixture stays in Fixtures until kickoff + 4h (London). A logged result
   // moves it to Results immediately. "past" here = concluded scheduled games
   // still awaiting a result (drives the manager's "needs doing" strip).
   const upcoming = fixtures.filter((f) => !f.concluded && !f.hasResult)
   const past = fixtures.filter((f) => f.concluded && !f.hasResult && !f.postponed)
 
-  return { fixtures, upcoming, past, teams, opponents, loading, error, refetch: load }
+  return { fixtures, upcoming, past, teams, opponents, loading, error, refetch: load, applyMyStatus }
 }
 
 // Set (upsert) the current user's availability for a fixture. RLS enforces

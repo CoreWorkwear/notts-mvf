@@ -24,6 +24,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
     if (!open) return
     supabase.from('sponsors').select('name, logo_url, website').eq('tier', 'motm').eq('active', true)
       .then(({ data }) => setMotmSponsor((data ?? [])[0] ?? null))
+      .catch(() => {}) // decorative — a dropped fetch just hides the sponsor
   }, [open])
 
   useEffect(() => {

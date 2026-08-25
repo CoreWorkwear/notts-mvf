@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { logError } from '../lib/logger'
 
 // Club news/announcements. Everyone in the club reads; admins post (RLS).
 // Posting can optionally broadcast a push via the send-push Edge Function.
@@ -8,15 +9,24 @@ export function useNews() {
   const { profile, user } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('announcements')
-      .select('id, title, body, pushed, created_at, author:profiles!announcements_created_by_fkey(first_name, last_name)')
-      .order('created_at', { ascending: false })
-    setItems(data ?? [])
-    setLoading(false)
+    setError(null)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('announcements')
+        .select('id, title, body, pushed, created_at, author:profiles!announcements_created_by_fkey(first_name, last_name)')
+        .order('created_at', { ascending: false })
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useNews' })
+      setItems(data ?? [])
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useNews load failed', { hook: 'useNews' })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -41,5 +51,5 @@ export function useNews() {
     await load()
   }, [load])
 
-  return { items, loading, post, remove, refetch: load }
+  return { items, loading, error, post, remove, refetch: load }
 }

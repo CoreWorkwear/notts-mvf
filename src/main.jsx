@@ -21,9 +21,11 @@ const updateSW = registerSW({
   },
   onRegisteredSW(_swUrl, r) {
     if (!r) return
-    setInterval(() => r.update(), 60 * 60 * 1000)
+    // update() rejects whenever the phone happens to be offline — expected on
+    // a background poll, so swallow it (it was ~80% of the client error log).
+    setInterval(() => r.update().catch(() => {}), 60 * 60 * 1000)
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') r.update()
+      if (document.visibilityState === 'visible') r.update().catch(() => {})
     })
   },
 })

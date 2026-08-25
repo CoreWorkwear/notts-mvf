@@ -13,56 +13,64 @@ export function useResults(seasonId) {
   const [postponed, setPostponed] = useState([]) // concluded P-P games, archived
   const [squad, setSquad] = useState([])      // [{id, name, first}]
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     if (!seasonId) return
     setLoading(true)
+    setError(null)
 
-    const [fixRes, sqRes] = await Promise.all([
-      supabase
-        .from('fixtures')
-        .select(`
-          id, match_date, kickoff, home_away, fixture_type, league_name, venue, team_id, status,
-          team:teams(id, key, label, match_name, colour),
-          opponent:opponents(id, name, badge_url),
-          pinned:media_assets(url),
-          result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name, motm_photo_url),
-          goals(id, minute, scorer_profile_id, scorer_name, assist_profile_id, assist_name)
-        `)
-        .eq('season_id', seasonId)
-        .order('match_date', { ascending: false }),
-      supabase.from('profiles').select('id, first_name, last_name').eq('active', true),
-    ])
+    try {
+      const [fixRes, sqRes] = await Promise.all([
+        supabase
+          .from('fixtures')
+          .select(`
+            id, match_date, kickoff, home_away, fixture_type, league_name, venue, team_id, status,
+            team:teams(id, key, label, match_name, colour),
+            opponent:opponents(id, name, badge_url),
+            pinned:media_assets(url),
+            result:results(ht_us, ht_them, us, them, motm_profile_id, motm_name, motm_photo_url),
+            goals(id, minute, scorer_profile_id, scorer_name, assist_profile_id, assist_name)
+          `)
+          .eq('season_id', seasonId)
+          .order('match_date', { ascending: false }),
+        supabase.from('profiles').select('id, first_name, last_name').eq('active', true),
+      ])
 
-    const fetchErr = [fixRes, sqRes].find((r) => r?.error)?.error
-    if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useResults', seasonId })
+      const fetchErr = [fixRes, sqRes].find((r) => r?.error)?.error
+      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useResults', seasonId })
 
-    const squadList = (sqRes.data ?? []).map((p) => ({
-      id: p.id,
-      name: `${p.first_name} ${p.last_name}`,
-      first: p.first_name,
-    }))
-    const squadById = Object.fromEntries(squadList.map((p) => [p.id, p.name]))
+      const squadList = (sqRes.data ?? []).map((p) => ({
+        id: p.id,
+        name: `${p.first_name} ${p.last_name}`,
+        first: p.first_name,
+      }))
+      const squadById = Object.fromEntries(squadList.map((p) => [p.id, p.name]))
 
-    const all = (fixRes.data ?? []).map((f) => ({
-      ...f,
-      result: firstRow(f.result),
-      goals: (f.goals ?? []).slice().sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999)),
-      pinnedUrl: firstRow(f.pinned)?.url ?? null,
-      squadById,
-    }))
+      const all = (fixRes.data ?? []).map((f) => ({
+        ...f,
+        result: firstRow(f.result),
+        goals: (f.goals ?? []).slice().sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999)),
+        pinnedUrl: firstRow(f.pinned)?.url ?? null,
+        squadById,
+      }))
 
-    const concluded = (f) => fixtureConcluded(f.match_date, f.kickoff)
-    setPlayed(all.filter((f) => f.result))
-    setNeedsResult(all.filter((f) => !f.result && f.status !== 'postponed' && concluded(f)))
-    setPostponed(all.filter((f) => !f.result && f.status === 'postponed' && concluded(f)))
-    setSquad(squadList)
-    setLoading(false)
+      const concluded = (f) => fixtureConcluded(f.match_date, f.kickoff)
+      setPlayed(all.filter((f) => f.result))
+      setNeedsResult(all.filter((f) => !f.result && f.status !== 'postponed' && concluded(f)))
+      setPostponed(all.filter((f) => !f.result && f.status === 'postponed' && concluded(f)))
+      setSquad(squadList)
+    } catch (e) {
+      logError('fetch', e?.message ?? 'useResults load failed', { hook: 'useResults', seasonId })
+      setError(e ?? new Error('load failed'))
+    } finally {
+      setLoading(false)
+    }
   }, [seasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { played, needsResult, postponed, squad, loading, refetch: load }
+  return { played, needsResult, postponed, squad, loading, error, refetch: load }
 }
 
 // W / D / L from our perspective.
