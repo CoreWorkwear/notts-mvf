@@ -51,6 +51,20 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Vendor libraries in their own chunks: a deploy that only touches app
+        // code no longer invalidates ~500 kB of unchanged vendor bytes in the
+        // PWA precache, and the browser parses them in parallel.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          supabase: ['@supabase/supabase-js'],
+          motion: ['framer-motion'],
+        },
+      },
+    },
+  },
   server: { port: Number(process.env.PORT) || 5173 },
   test: {
     environment: 'jsdom',

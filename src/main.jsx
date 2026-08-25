@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { installGlobalErrorLogging } from './lib/logger'
+import './styles/fonts.css'
 import './styles/tokens.css'
 
 // Catch uncaught errors + unhandled promise rejections app-wide.

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { MotionConfig, AnimatePresence, motion } from 'framer-motion'
 import { pageTransition } from './lib/motion'
@@ -11,18 +12,23 @@ import Fixtures from './pages/Fixtures'
 import Results from './pages/Results'
 import Club from './pages/Club'
 import Profile from './pages/Profile'
-import AdminAvailability from './pages/AdminAvailability'
-import Players from './pages/Players'
 import News from './pages/News'
-import Manage from './pages/Manage'
-import Opponents from './pages/Opponents'
-import Seasons from './pages/Seasons'
-import Media from './pages/Media'
-import Reminders from './pages/Reminders'
-import Sponsors from './pages/Sponsors'
-import Diagnostics from './pages/Diagnostics'
-import Competitions from './pages/Competitions'
 import SponsorStrip from './components/SponsorStrip'
+
+// Admin-only pages are code-split: a player's phone never parses the
+// management suite (it was two-thirds of the routes in one 750 kB chunk).
+// The service worker still precaches every chunk, so an admin's screens are
+// instant and offline-safe after first load.
+const Manage = lazy(() => import('./pages/Manage'))
+const AdminAvailability = lazy(() => import('./pages/AdminAvailability'))
+const Players = lazy(() => import('./pages/Players'))
+const Opponents = lazy(() => import('./pages/Opponents'))
+const Seasons = lazy(() => import('./pages/Seasons'))
+const Media = lazy(() => import('./pages/Media'))
+const Reminders = lazy(() => import('./pages/Reminders'))
+const Sponsors = lazy(() => import('./pages/Sponsors'))
+const Diagnostics = lazy(() => import('./pages/Diagnostics'))
+const Competitions = lazy(() => import('./pages/Competitions'))
 
 export default function App() {
   const { loading, isAuthed, isAdmin, passwordRecovery } = useAuth()
@@ -54,6 +60,7 @@ function AnimatedRoutes({ adminOnly }) {
     <main>
       <AnimatePresence mode="wait">
         <motion.div key={location.pathname} {...pageTransition}>
+          <Suspense fallback={<Loader label="Opening…" />}>
           <Routes location={location}>
             <Route path="/fixtures" element={<Fixtures />} />
             <Route path="/results" element={<Results />} />
@@ -72,6 +79,7 @@ function AnimatedRoutes({ adminOnly }) {
             <Route path="/competitions" element={adminOnly(<Competitions />)} />
             <Route path="*" element={<Navigate to="/fixtures" replace />} />
           </Routes>
+          </Suspense>
         </motion.div>
       </AnimatePresence>
       <SponsorStrip />
