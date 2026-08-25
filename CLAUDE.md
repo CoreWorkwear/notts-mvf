@@ -19,7 +19,10 @@ Node lives at `C:\Program Files\nodejs` (on the user PATH; the **Bash tool has n
 - `npm run build` — production build to `dist/` (also the quickest way to typecheck/compile-verify).
 - `npm run preview`
 
-**No JS test runner exists.** The closest thing to tests is the SQL RLS harness. Database work is done by hand in the Supabase **SQL Editor**, in this order (see `supabase/README.md`):
+- `npm test` — vitest unit/component suite (`src/**/*.test.{js,jsx}`, jsdom; 200+ tests). **Testing standard: no "fixed" without a test that fails on the old code.**
+- `npm run test:e2e` — Playwright, phone-first on two engines (Android Chromium + iPhone WebKit). Builds and serves `dist/`. The no-auth smoke layer always runs; the authenticated layer needs `E2E_ADMIN_*`/`E2E_PLAYER_*` + `SUPABASE_SERVICE_ROLE_KEY` in the env (see the e2e-creds project memory) and creates/deletes its test users per run.
+
+Database work is done by hand in the Supabase **SQL Editor** (or the Supabase MCP), in this order (see `supabase/README.md`):
 1. `supabase/migrations/0001_init_schema_and_rls.sql` (+ later numbered migrations, e.g. `0002_*`)
 2. `supabase/seed.sql`
 3. `supabase/tests/rls_test.sql` — self-verifying, runs in a transaction that **rolls back**; success prints `ALL RLS TESTS PASSED` in the Messages tab.
@@ -30,9 +33,9 @@ When changing the DB, **add a new numbered migration file** under `supabase/migr
 
 ### Security model — RLS *is* the security
 The anon key ships in the client (`.env` → `VITE_SUPABASE_*`); every rule is enforced at the database via Row-Level Security, not in React. **Never implement an access rule only in the frontend.** Key pieces in `0001_init_schema_and_rls.sql`:
-- `is_admin(uid)`, `current_club_id()`, `can_select_fixture(fixture_id, uid)` — `security definer` helpers used inside policies.
-- **`can_select_fixture` is the single source of truth for the XL eligibility gate**, used by both the `fixtures` SELECT policy *and* the `availability` write policies. A Community-only / non-XL-eligible player simply never receives XL fixtures from any query, and cannot write availability for them.
-- `handle_new_user` trigger creates the `profiles` row + `team_memberships` from signup metadata and **always forces `role='player'`, `xl_eligible=false`** server-side.
+- `is_admin(uid)`, `current_club_id()`, `can_select_fixture(fixture_id, uid)`, `is_active_player(uid)`, `is_approved_member(uid)` — `security definer` helpers used inside policies. Policies wrap their per-request-constant calls in `(select …)` (initplan, evaluated once per statement — migration 0031); keep that pattern in new policies.
+- **The old XL eligibility gate is GONE** (migrations 0023–0025 removed it and dropped `xl_eligible`): `can_select_fixture` is club-scoped only, so every active club member sees every fixture. Availability writes are gated by `is_active_player` (approved + active + player) and own-row-only — a pending signup or supporter can view but not respond.
+- `handle_new_user` trigger creates the `profiles` row + `team_memberships` from signup metadata and **always forces `role='player'`, `approved=false`** server-side (self-signups land pending until a manager signs them off).
 - `protect_profile_columns` trigger: non-admins can't change role/eligibility/active/club_id; **nobody can demote or deactivate themselves**; `postgres`/`service_role` bypass so the **first admin is bootstrapped by hand** in the Table editor (set `profiles.role='admin'`).
 - Multi-tenant-ready: `clubs` is the root, every owned row carries `club_id`; one club is seeded and the trigger resolves it.
 

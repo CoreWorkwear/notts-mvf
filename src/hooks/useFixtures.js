@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
@@ -6,11 +6,15 @@ import { firstRow } from '../lib/embed'
 import { isSquadMember } from '../lib/players'
 import { logError } from '../lib/logger'
 
-// Loads everything the Fixtures screen needs for a season. RLS does the
-// eligibility gate for us: a non-eligible player simply never receives XL
-// fixtures from this query. We enrich each fixture with the viewer's own
+// A focus/visibility refetch this soon after the last load started is skipped
+// (foregrounding fires both events together). Exported for the test.
+export const FOCUS_REFETCH_MIN_MS = 5000
+
+// Loads everything the Fixtures screen needs for a season. RLS scopes the
+// rows to the viewer's club (the old eligibility gate is gone — every active
+// member sees every fixture). We enrich each fixture with the viewer's own
 // availability, the in/maybe/out tally, and the not-replied count (derived
-// from the eligible roster for that team).
+// from the approved active roster for that team).
 export function useFixtures(seasonId) {
   const { user } = useAuth()
   const [fixtures, setFixtures] = useState([])
@@ -18,12 +22,14 @@ export function useFixtures(seasonId) {
   const [opponents, setOpponents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const lastLoadStart = useRef(0)
 
   const load = useCallback(async () => {
     // No season yet — before one resolves, or if the seasons fetch itself
     // failed. Don't sit on the "Pulling the fixtures…" loader forever: resolve
     // to an empty, non-loading state so the screen renders.
     if (!seasonId) { setFixtures([]); setLoading(false); setError(null); return }
+    lastLoadStart.current = Date.now()
     setLoading(true)
     setError(null)
 
@@ -107,18 +113,23 @@ export function useFixtures(seasonId) {
   // First-cut realtime: refetch when the tab regains focus (HANDOVER §7).
   // On mobile/installed PWAs the window `focus` event is unreliable, so we also
   // refetch on `visibilitychange` — this is what makes a newly-added player show
-  // up in the counts when the manager flips back to Fixtures.
+  // up in the counts when the manager flips back to Fixtures. Foregrounding
+  // fires BOTH events back-to-back (8 queries per app switch, and the fixtures
+  // query is the busiest statement on the database), so a load that started in
+  // the last few seconds is not repeated. The availability-applied event stays
+  // unthrottled — a write just committed and must be reflected.
   useEffect(() => {
-    const refresh = () => load()
-    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    const refresh = () => { if (Date.now() - lastLoadStart.current > FOCUS_REFETCH_MIN_MS) load() }
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    const onApplied = () => load()
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', onVisible)
     // A push-notification availability action just committed → show the new value.
-    window.addEventListener('mvf-availability-applied', refresh)
+    window.addEventListener('mvf-availability-applied', onApplied)
     return () => {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('mvf-availability-applied', refresh)
+      window.removeEventListener('mvf-availability-applied', onApplied)
     }
   }, [load])
 

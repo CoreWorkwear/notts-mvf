@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
+import Toast from './Toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
@@ -18,6 +19,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   const [copied, setCopied] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState(null)
+  const [toast, setToast] = useState(null)
 
   useEffect(() => {
     if (!open || !fixture) return
@@ -71,7 +73,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       .upsert({ fixture_id: f.id, profile_id: id, paid: next }, { onConflict: 'fixture_id,profile_id' })
     if (error) {
       setGroups((g) => ({ ...g, in: g.in.map((p) => (p.id === id ? { ...p, paid: !next } : p)) }))
-      alert(error.message)
+      setToast("Couldn't save that payment — check your signal and give it another go.")
     }
   }
 
@@ -121,6 +123,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
 
   return (
     <Sheet open={open} onClose={onClose}>
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className={'kicker-rule' + (isCommunity ? ' community' : '')}>WHO'S IN</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{fixtureMatchup(f)}</h2>
       <p className="mono muted" style={{ fontSize: 13 }}>{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO</p>

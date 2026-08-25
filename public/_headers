@@ -1,0 +1,13 @@
+# Cloudflare Pages custom headers (copied into dist/ by Vite's public dir).
+#
+# /assets/* files are content-hashed by the build — a changed file gets a new
+# name — so they can be cached forever. Without this, Pages serves them with
+# max-age=0, must-revalidate and every non-PWA load revalidates ~15 files
+# that by construction never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The app is HTTPS-only and never framed.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY

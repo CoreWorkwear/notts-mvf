@@ -4,6 +4,7 @@ import { useNews } from '../hooks/useNews'
 import NewsForm from '../components/NewsForm'
 import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
+import Toast from '../components/Toast'
 import { fmtDate } from '../lib/format'
 
 // Club news / notifications — everyone reads; admins post (and optionally push).
@@ -11,15 +12,19 @@ export default function News() {
   const { isAdmin } = useAuth()
   const { items, loading, post, remove } = useNews()
   const [composing, setComposing] = useState(false)
+  const [toast, setToast] = useState(null)
 
   if (loading) return <Loader label="Catching up on the news…" />
 
   async function onDelete(id) {
-    if (confirm('Delete this post?')) { try { await remove(id) } catch (e) { alert(e.message) } }
+    if (confirm('Delete this post?')) {
+      try { await remove(id) } catch { setToast("Couldn't delete that post — give it another go.") }
+    }
   }
 
   return (
     <div className="page">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className="kicker-rule">CLUB NEWS</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>What's on</h1>
 

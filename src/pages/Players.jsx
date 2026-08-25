@@ -5,6 +5,7 @@ import { usePlayers } from '../hooks/usePlayers'
 import PlayerForm from '../components/PlayerForm'
 import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
+import Toast from '../components/Toast'
 
 export default function Players() {
   const { user } = useAuth()
@@ -13,6 +14,7 @@ export default function Players() {
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState(null) // player or null
   const [formOpen, setFormOpen] = useState(false)
+  const [toast, setToast] = useState(null)
 
   useEffect(() => {
     supabase.from('teams').select('id, key, label, is_first_team')
@@ -39,7 +41,7 @@ export default function Players() {
   // blocks everyone else.
   async function approve(id) {
     const { error } = await supabase.from('profiles').update({ approved: true }).eq('id', id)
-    if (error) { alert(error.message); return }
+    if (error) { setToast("Couldn't sign them off — check your signal and give it another go."); return }
     refetch()
   }
 
@@ -47,6 +49,7 @@ export default function Players() {
 
   return (
     <div className="page">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className="kicker-rule">THE SQUAD</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>Players</h1>
 

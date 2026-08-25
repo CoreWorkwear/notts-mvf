@@ -2,24 +2,27 @@ import { useState } from 'react'
 import { useSponsors } from '../hooks/useSponsors'
 import SponsorForm, { SPONSOR_TIERS } from '../components/SponsorForm'
 import Loader from '../components/Loader'
+import Toast from '../components/Toast'
 
 export default function Sponsors() {
   const { sponsors, loading, save, remove } = useSponsors()
   const [editing, setEditing] = useState(null)
   const [open, setOpen] = useState(false)
+  const [toast, setToast] = useState(null)
 
   const openAdd = () => { setEditing(null); setOpen(true) }
   const openEdit = (s) => { setEditing(s); setOpen(true) }
 
   async function onRemove(s) {
     if (!confirm(`Remove ${s.name}?`)) return
-    try { await remove(s.id) } catch (e) { alert(e.message) }
+    try { await remove(s.id) } catch { setToast("Couldn't remove that sponsor — give it another go.") }
   }
 
   if (loading) return <Loader label="Loading sponsors…" />
 
   return (
     <div className="page">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className="kicker-rule">SPONSORS</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>Club sponsors</h1>
       <p className="muted mt-2" style={{ fontSize: 14 }}>Logos carry through the app — the main sponsor leads, the kit sponsor sits beneath, and the Man-of-the-Match sponsor gets a line on results.</p>

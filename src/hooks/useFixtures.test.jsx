@@ -1,9 +1,10 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const store = vi.hoisted(() => ({ tables: {}, reject: false }))
+const store = vi.hoisted(() => ({ tables: {}, reject: false, calls: 0 }))
 vi.mock('../lib/supabase', () => {
   const make = (table) => {
+    store.calls++
     // store.reject simulates a network-level fetch failure (the WebKit
     // "TypeError: Load failed" seen in prod), where the promise REJECTS rather
     // than resolving to { data, error }.
@@ -24,6 +25,7 @@ import { useFixtures } from './useFixtures'
 
 beforeEach(() => {
   store.reject = false
+  store.calls = 0
   store.tables = {
     fixtures: [{
       id: 'fix-1', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
@@ -97,5 +99,28 @@ describe('useFixtures — never leaves the screen hanging', () => {
     const { result } = renderHook(() => useFixtures(null))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.fixtures).toEqual([])
+  })
+})
+
+// Foregrounding an installed PWA fires window `focus` AND `visibilitychange`
+// back-to-back; each used to trigger a full 4-query load (8 requests per app
+// switch, and the fixtures query is the busiest statement on the database).
+describe('useFixtures — focus refetch throttle', () => {
+  test('focus + visibilitychange right after a load do NOT repeat it', async () => {
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const settled = store.calls
+    window.dispatchEvent(new Event('focus'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(store.calls).toBe(settled) // both throttled — the load just ran
+  })
+
+  test('an availability push action always refetches (a write just committed — never throttled)', async () => {
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const settled = store.calls
+    await act(async () => { window.dispatchEvent(new Event('mvf-availability-applied')) })
+    await waitFor(() => expect(store.calls).toBeGreaterThan(settled))
   })
 })
