@@ -34,8 +34,10 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'unauthorized' }, 401)
     const admin = createClient(URL_, SERVICE)
-    const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single()
-    if (me?.role !== 'admin') return json({ error: 'forbidden' }, 403)
+    // Mirror the DB's is_admin(): role AND active. A soft-removed manager
+    // (Inactive, the documented removal path) must lose these powers too.
+    const { data: me } = await admin.from('profiles').select('role, active').eq('id', user.id).single()
+    if (me?.role !== 'admin' || me?.active !== true) return json({ error: 'forbidden' }, 403)
 
     const { title = 'Nottinghamshire MvF', body = '', fixtureId = null, withAvailability = false, profileIds = null, url = '/fixtures' } = await req.json()
 
