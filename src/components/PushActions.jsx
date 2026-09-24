@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { setAvailability } from '../hooks/useFixtures'
+import { syncPush } from '../lib/push'
 import { logError } from '../lib/logger'
 
 // Applies an availability choice made from a push notification's inline action
@@ -44,6 +45,16 @@ export default function PushActions() {
       }
     }
     navigator.serviceWorker?.addEventListener('message', onMsg)
+    // addEventListener alone does NOT start message delivery (only the
+    // .onmessage setter does that implicitly) — without startMessages() the
+    // SW's postMessage sits queued forever and app-open one-taps never land.
+    navigator.serviceWorker?.startMessages?.()
+
+    // Heal the push lifecycle once per app open: a server-pruned token or a
+    // rotated VAPID key otherwise means this player silently never gets a
+    // reminder again. Best-effort — failures just mean we try next open.
+    syncPush(user.id).catch((e) => logError('push', e?.message ?? 'push sync failed', { op: 'syncPush' }))
+
     return () => navigator.serviceWorker?.removeEventListener('message', onMsg)
   }, [user?.id])
 

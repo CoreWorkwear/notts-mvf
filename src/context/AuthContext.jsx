@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { canSetAvailability, accountStatus, respondBlock } from '../lib/players'
+import { disablePush } from '../lib/push'
 import { logError } from '../lib/logger'
 
 const AuthContext = createContext(null)
@@ -106,7 +107,18 @@ export function AuthProvider({ children }) {
     })
   }
 
-  async function signOut() { return supabase.auth.signOut() }
+  // Shared-device hygiene: unsubscribe push and drop this device's token row
+  // BEFORE the auth token is revoked (the delete needs RLS), or the next
+  // person on this phone receives — and can one-tap act on — the outgoing
+  // user's notifications. Best-effort and time-boxed so sign-out never hangs
+  // on a dead connection.
+  async function signOut() {
+    try {
+      const uid = session?.user?.id
+      if (uid) await Promise.race([disablePush(uid), new Promise((r) => setTimeout(r, 2500))])
+    } catch { /* best-effort — sign-out must proceed regardless */ }
+    return supabase.auth.signOut()
+  }
 
   // Send a reset link (logged-out "forgot password"). Lands back on the app via
   // the recovery email; redirectTo must be an allowed Redirect URL in Supabase.

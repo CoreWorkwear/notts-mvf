@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 import { pushSupported, currentSubscription, enablePush, disablePush } from '../lib/push'
 import Toast from './Toast'
 
@@ -11,7 +12,21 @@ export default function NotificationToggle() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => { currentSubscription().then((s) => setOn(!!s)).catch(() => {}) }, [])
+  // "On" means the server can actually reach this device FOR THIS USER: a
+  // browser subscription alone isn't enough — it can belong to a previous
+  // user on a shared phone, or its push_tokens row may have been pruned
+  // after delivery failures. Both used to show a lying "Notifications on ✓".
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      const s = await currentSubscription()
+      if (!s || !user?.id) { if (active) setOn(false); return }
+      const { data } = await supabase
+        .from('push_tokens').select('id').eq('profile_id', user.id).eq('token', JSON.stringify(s)).maybeSingle()
+      if (active) setOn(!!data)
+    })().catch(() => {})
+    return () => { active = false }
+  }, [user?.id])
 
   if (!pushSupported) {
     return <p className="dim" style={{ fontSize: 13 }}>This device can’t do notifications.</p>

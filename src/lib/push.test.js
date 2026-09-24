@@ -1,19 +1,99 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// push.js imports the supabase client (needs env); stub it for this unit test.
-vi.mock('./supabase', () => ({ supabase: {} }))
+// Store-driven supabase stub: push.js reads/writes push_tokens.
+const db = vi.hoisted(() => ({ rows: [], upserts: [] }))
+vi.mock('./supabase', () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: db.rows, error: null }) }) }),
+      upsert: (row) => { db.upserts.push(row); return Promise.resolve({ error: null }) },
+      delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+    }),
+  },
+}))
 
-import { urlBase64ToUint8Array } from './push'
+// push.js captures the VAPID key at import time — stub it BEFORE the dynamic
+// import so the key-match logic has a real value to compare against.
+vi.stubEnv('VITE_VAPID_PUBLIC_KEY', 'AQID') // -> bytes [1,2,3]
+const { urlBase64ToUint8Array, subscriptionMatchesKey, syncPush } = await import('./push')
+
+const KEY_BYTES = urlBase64ToUint8Array('AQID')
+
+// A push environment for syncPush: jsdom has no serviceWorker/PushManager.
+function pushEnv({ sub }) {
+  const reg = {
+    pushManager: {
+      getSubscription: vi.fn().mockResolvedValue(sub),
+      subscribe: vi.fn().mockResolvedValue({ endpoint: 'https://push/new' }),
+    },
+  }
+  Object.defineProperty(navigator, 'serviceWorker', { value: { ready: Promise.resolve(reg) }, configurable: true })
+  window.PushManager = function () {}
+  window.Notification = { permission: 'granted' }
+  return reg
+}
+
+beforeEach(() => { db.rows = []; db.upserts = [] })
+afterEach(() => {
+  delete navigator.serviceWorker
+  delete window.PushManager
+  delete window.Notification
+})
 
 describe('urlBase64ToUint8Array', () => {
   test('decodes standard base64 to the right bytes', () => {
-    const out = urlBase64ToUint8Array('AQID') // -> [1,2,3]
-    expect(out).toBeInstanceOf(Uint8Array)
-    expect(Array.from(out)).toEqual([1, 2, 3])
+    expect(Array.from(urlBase64ToUint8Array('AQID'))).toEqual([1, 2, 3])
   })
   test('handles url-safe chars (- _) and missing padding', () => {
     const out = urlBase64ToUint8Array('A-_-')
     expect(out).toBeInstanceOf(Uint8Array)
     expect(out.length).toBe(3)
+  })
+})
+
+describe('subscriptionMatchesKey', () => {
+  test('true when the subscription was created under our key', () => {
+    expect(subscriptionMatchesKey({ options: { applicationServerKey: KEY_BYTES.buffer } }, 'AQID')).toBe(true)
+  })
+  test('false when the key was rotated away', () => {
+    expect(subscriptionMatchesKey({ options: { applicationServerKey: urlBase64ToUint8Array('BAUG').buffer } }, 'AQID')).toBe(false)
+  })
+  test('true (no churn) when the browser hides the key', () => {
+    expect(subscriptionMatchesKey({ options: {} }, 'AQID')).toBe(true)
+  })
+})
+
+// The silent-death heal: the server prunes a token on 404/410 (expired
+// subscription) but the browser still hands back the dead sub — the player
+// never received a reminder again and nothing ever fixed it.
+describe('syncPush — startup heal', () => {
+  const liveSub = () => ({ endpoint: 'https://push/old', options: { applicationServerKey: KEY_BYTES.buffer } })
+
+  test('healthy device (sub + matching row) is left alone', async () => {
+    const sub = { ...liveSub(), unsubscribe: vi.fn() }
+    const reg = pushEnv({ sub })
+    db.rows = [{ id: 'row1' }] // the row for this exact token exists
+    await syncPush('u1')
+    expect(sub.unsubscribe).not.toHaveBeenCalled()
+    expect(reg.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(db.upserts).toHaveLength(0)
+  })
+
+  test('a pruned token row → the dead sub is replaced and the fresh one stored', async () => {
+    const sub = { ...liveSub(), unsubscribe: vi.fn().mockResolvedValue(true) }
+    const reg = pushEnv({ sub })
+    db.rows = [] // server pruned it after delivery failures
+    await syncPush('u1')
+    expect(sub.unsubscribe).toHaveBeenCalled()
+    expect(reg.pushManager.subscribe).toHaveBeenCalled()
+    expect(db.upserts).toHaveLength(1)
+    expect(db.upserts[0].profile_id).toBe('u1')
+  })
+
+  test('no subscription on this device → nothing happens (opt-in stays explicit)', async () => {
+    const reg = pushEnv({ sub: null })
+    await syncPush('u1')
+    expect(reg.pushManager.subscribe).not.toHaveBeenCalled()
+    expect(db.upserts).toHaveLength(0)
   })
 })
