@@ -5,6 +5,7 @@ import PitchView from './PitchView'
 import { supabase } from '../lib/supabase'
 import { resolveName, outcome } from '../hooks/useResults'
 import { rowsToState } from '../lib/lineup'
+import { isSquadMember } from '../lib/players'
 import { fmtDateLong } from '../lib/format'
 import { heroBackground } from '../lib/media'
 
@@ -51,11 +52,15 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
       }
       const { data } = await supabase
         .from('availability')
-        .select('status, profile:profiles(id, first_name, last_name)')
+        .select('status, profile:profiles(id, first_name, last_name, active, approved, is_player)')
         .eq('fixture_id', fixture.id)
         .eq('status', 'in')
-      setPlayed((data ?? []).map((a) => ({
-        id: a.profile?.id, name: `${a.profile?.first_name ?? ''} ${a.profile?.last_name ?? ''}`.trim(),
+      // An 'in' row is not proof of a squad place: supporters, players still
+      // waiting on the manager's sign-off and removed players can all hold one.
+      // Only squad members count towards the fallback list — anyone else who
+      // actually contributed still shows via the goals/assists tally below.
+      setPlayed((data ?? []).filter((a) => isSquadMember(a.profile)).map((a) => ({
+        id: a.profile.id, name: `${a.profile.first_name ?? ''} ${a.profile.last_name ?? ''}`.trim(),
       })))
     })()
   }, [open, fixture])

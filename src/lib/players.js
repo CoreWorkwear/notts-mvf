@@ -40,6 +40,30 @@ export function isSquadMember(p) {
   return !!(p && p.active && p.approved && p.is_player)
 }
 
+// The squad ids out of a team_memberships fetch (rows embedding profiles).
+// Anything that buckets availability rows should gate on one of these rather
+// than trusting the row: a row outlives the squad place that justified it, and
+// pre-0034 rows exist against the wrong team entirely. Same reasoning as
+// matchReminderTargets in reminders.js.
+export function squadIds(memberships) {
+  const ids = new Set()
+  for (const m of memberships ?? []) {
+    if (isSquadMember(m?.profiles)) ids.add(m.profiles.id)
+  }
+  return ids
+}
+
+// Same, keyed by team_id, for a fetch that spans every team.
+export function squadIdsByTeam(memberships) {
+  const byTeam = {}
+  for (const m of memberships ?? []) {
+    if (!isSquadMember(m?.profiles)) continue
+    if (!byTeam[m.team_id]) byTeam[m.team_id] = new Set()
+    byTeam[m.team_id].add(m.profiles.id)
+  }
+  return byTeam
+}
+
 // Can this profile set their own availability? Same gate as isSquadMember — the
 // DB enforces it via RLS, this just keeps the UI honest (view but can't act).
 export function canSetAvailability(profile) {

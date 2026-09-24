@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
 import { MATCH_FEE } from '../lib/constants'
 import { buildFixtureCsv, csvFilename, downloadCsv } from '../lib/csv'
-import { isSquadMember } from '../lib/players'
+import { isSquadMember, squadIds } from '../lib/players'
 import { fixtureMatchup } from '../lib/teams'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
@@ -38,11 +38,16 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       ])
 
       const paidById = Object.fromEntries((payRes.data ?? []).map((p) => [p.profile_id, p.paid]))
+      // The whole sheet reads off this squad, not off who happens to hold an
+      // availability row: an answer from a supporter, an unapproved signup or a
+      // player who's been moved on isn't a body on the pitch, and on the IN
+      // bucket it would also raise a subs line against someone who owes nothing.
+      const squad = squadIds(rosterRes.data)
       const replied = {}
       const buckets = { in: [], maybe: [], out: [] }
       for (const a of availRes.data ?? []) {
         const p = a.profile
-        if (!p) continue
+        if (!p || !squad.has(p.id)) continue
         replied[p.id] = true
         if (a.status in buckets) {
           const per = person(p, user)
