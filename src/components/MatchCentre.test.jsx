@@ -1,11 +1,10 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 
-const store = vi.hoisted(() => ({ lineups: [] }))
+const store = vi.hoisted(() => ({ lineups: [], availability: [] }))
 vi.mock('../lib/supabase', () => {
   const make = (table) => {
-    const data = table === 'lineups' ? store.lineups : []
-    const q = { then: (r) => Promise.resolve({ data, error: null }).then(r) }
+    const q = { then: (r) => Promise.resolve({ data: store[table] ?? [], error: null }).then(r) }
     ;['select', 'eq'].forEach((m) => { q[m] = () => q })
     return q
   }
@@ -24,7 +23,12 @@ const FIXTURE = {
   squadById: {},
 }
 
-beforeEach(() => { store.lineups = [] })
+const answered = (id, first, last, over = {}) => ({
+  status: 'in',
+  profile: { id, first_name: first, last_name: last, active: true, approved: true, is_player: true, ...over },
+})
+
+beforeEach(() => { store.lineups = []; store.availability = [] })
 
 describe('MatchCentre line-up', () => {
   test('shows the named line-up on a pitch with a goal badge, plus subs', async () => {
@@ -46,5 +50,22 @@ describe('MatchCentre line-up', () => {
     // No line-up → the old squad heading (scorer shows as a guest in the tally)
     await waitFor(() => expect(screen.getByText('THE SQUAD')).toBeInTheDocument())
     expect(screen.queryByText('LINE-UP')).not.toBeInTheDocument()
+  })
+
+  test('the availability fallback lists squad members only, not supporters, pending signups or removed players', async () => {
+    store.lineups = []
+    store.availability = [
+      answered('p2', 'Sam', 'Lee'),
+      answered('p3', 'Sue', 'Supporter', { is_player: false }),
+      answered('p4', 'Pat', 'Pending', { approved: false }),
+      answered('p5', 'Ollie', 'Old', { active: false }),
+    ]
+    render(<MatchCentre open onClose={() => {}} fixture={FIXTURE} isAdmin={false} />)
+
+    await waitFor(() => expect(screen.getByText('THE SQUAD')).toBeInTheDocument())
+    expect(screen.getByText('Sam Lee')).toBeInTheDocument()
+    expect(screen.queryByText('Sue Supporter')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pat Pending')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ollie Old')).not.toBeInTheDocument()
   })
 })

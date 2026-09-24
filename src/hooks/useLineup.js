@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { rowsToState } from '../lib/lineup'
+import { isSquadMember } from '../lib/players'
 import { logError } from '../lib/logger'
 
 // Line-up for one fixture: the saved selection (formation + starters + subs) and
@@ -19,8 +20,16 @@ export function useLineup(fixture, open) {
     if (!fixture?.id) return
     setLoading(true)
     setError(null)
+    // Fail closed: a fixture with no resolvable team has no roster, so nobody is
+    // pickable — better an empty pool for a moment than the wrong squad in it.
+    const rosterQuery = fixture.team_id
+      ? supabase.from('team_memberships')
+          .select('profiles!inner(id, active, approved, is_player)')
+          .eq('team_id', fixture.team_id)
+      : Promise.resolve({ data: [], error: null })
+
     try {
-      const [lineRes, availRes] = await Promise.all([
+      const [lineRes, availRes, rosterRes] = await Promise.all([
         supabase.from('lineups')
           .select('profile_id, player_name, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
           .eq('fixture_id', fixture.id),
@@ -28,9 +37,10 @@ export function useLineup(fixture, open) {
           .select('status, profiles!inner(id, first_name, last_name, photo_url)')
           .eq('fixture_id', fixture.id)
           .in('status', ['in', 'maybe']),
+        rosterQuery,
       ])
 
-      const fetchErr = [lineRes, availRes].find((r) => r?.error)?.error
+      const fetchErr = [lineRes, availRes, rosterRes].find((r) => r?.error)?.error
       if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useLineup', fixtureId: fixture.id })
 
       const nm = {}, ph = {}
@@ -40,9 +50,21 @@ export function useLineup(fixture, open) {
         nm[key] = r.profiles ? `${r.profiles.first_name} ${r.profiles.last_name}` : (r.player_name ?? '—')
         ph[key] = r.profiles?.photo_url ?? null
       }
+      // Who's pickable: the squad that plays THIS fixture. An availability row on
+      // its own is not enough — a supporter, a pending signup or an ex-player can
+      // still hold one, and pre-0034 rows exist against the wrong team entirely.
+      // A pick becomes an appearance (useClub reads lineups), so the pool is the
+      // only guard: lineups_admin_write does no team check.
+      const roster = new Set(
+        (rosterRes.data ?? [])
+          .map((m) => m.profiles)
+          .filter((p) => isSquadMember(p))
+          .map((p) => p.id)
+      )
+
       const rank = { in: 0, maybe: 1 }
       const p = (availRes.data ?? [])
-        .filter((a) => a.profiles)
+        .filter((a) => a.profiles && roster.has(a.profiles.id))
         .map((a) => {
           nm[a.profiles.id] = `${a.profiles.first_name} ${a.profiles.last_name}`
           ph[a.profiles.id] = a.profiles.photo_url ?? null
@@ -61,7 +83,7 @@ export function useLineup(fixture, open) {
     } finally {
       setLoading(false)
     }
-  }, [fixture?.id])
+  }, [fixture?.id, fixture?.team_id])
 
   useEffect(() => { if (open) load() }, [open, load])
 
