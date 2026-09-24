@@ -52,10 +52,15 @@ Deno.serve(async (req) => {
         .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player)
         .map((m: any) => m.profile_id)
     }
+    if (!targets) {
+      // Broadcast (news): every ACTIVE, APPROVED account — supporters included,
+      // but never deactivated or still-pending profiles, whose stored tokens
+      // used to be blasted along with everyone else's.
+      const { data: members } = await admin.from('profiles').select('id').eq('active', true).eq('approved', true)
+      targets = (members ?? []).map((m: any) => m.id)
+    }
 
-    let q = admin.from('push_tokens').select('id, token')
-    if (targets) q = q.in('profile_id', targets)
-    const { data: tokens } = await q
+    const { data: tokens } = await admin.from('push_tokens').select('id, token').in('profile_id', targets)
 
     const payload = JSON.stringify({ title, body, fixtureId, withAvailability, url })
     let sent = 0

@@ -17,6 +17,7 @@ beforeEach(() => {
   navigator.serviceWorker = {
     addEventListener: (t, fn) => { if (t === 'message') swListeners.push(fn) },
     removeEventListener: (t, fn) => { swListeners = swListeners.filter((f) => f !== fn) },
+    startMessages: vi.fn(),
   }
   window.history.replaceState(null, '', '/fixtures')
 })
@@ -42,5 +43,12 @@ describe('PushActions — notification action → availability status', () => {
     render(<PushActions />)
     swListeners.forEach((fn) => fn({ data: { type: 'mvf-avail', fixtureId: 'f3', status: 'bogus' } }))
     expect(setAvailability).not.toHaveBeenCalled()
+  })
+
+  test('starts SW message delivery — addEventListener alone leaves the queue paused', async () => {
+    // Without startMessages() the browser queues the SW's postMessage forever
+    // and the app-open one-tap availability path never delivers.
+    render(<PushActions />)
+    expect(navigator.serviceWorker.startMessages).toHaveBeenCalled()
   })
 })

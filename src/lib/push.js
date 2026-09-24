@@ -58,3 +58,58 @@ export async function disablePush(profileId) {
     await sub.unsubscribe()
   }
 }
+
+// Live capability check (unlike the import-time `pushSupported` const) so the
+// sync path can be exercised under test and reacts to the real environment.
+function supportedNow() {
+  return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+}
+
+// Is this browser subscription bound to OUR current VAPID key? A subscription
+// created under a rotated-away key can never be delivered to again (the sender
+// gets 403s, which are deliberately not pruned server-side — a config mistake
+// there would nuke every token). Returns true when it can't tell, so an odd
+// browser shape never causes churn.
+export function subscriptionMatchesKey(sub, vapidB64) {
+  try {
+    const key = sub?.options?.applicationServerKey
+    if (!key || !vapidB64) return true
+    const a = new Uint8Array(key)
+    const b = urlBase64ToUint8Array(vapidB64)
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+    return true
+  } catch { return true }
+}
+
+// Startup heal for the push lifecycle (run once per app open, signed in).
+// Two silent-death cases this recovers:
+//   • the server pruned this device's token on a 404/410 (subscription expired
+//     server-side) — the browser still hands back the dead subscription, so we
+//     re-subscribe FRESH and store the new one;
+//   • the VAPID key was rotated — same treatment.
+// Opt-in stays explicit: with no browser subscription on THIS device we do
+// nothing (disablePush removed it deliberately, and another device's rows are
+// its own business — they are never touched from here).
+export async function syncPush(profileId) {
+  if (!profileId || !supportedNow()) return
+  if (Notification.permission !== 'granted') return
+  const reg = await navigator.serviceWorker.ready
+  let sub = await reg.pushManager.getSubscription()
+  if (!sub) return
+
+  const { data: rows, error } = await supabase
+    .from('push_tokens').select('id').eq('profile_id', profileId).eq('token', JSON.stringify(sub))
+  if (error) throw error
+  const healthy = (rows ?? []).length > 0 && subscriptionMatchesKey(sub, VAPID_PUBLIC)
+  if (healthy) return
+
+  // Dead or key-mismatched: replace the subscription and store the new one.
+  if (!VAPID_PUBLIC) return
+  await sub.unsubscribe()
+  sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) })
+  const { error: upErr } = await supabase
+    .from('push_tokens')
+    .upsert({ profile_id: profileId, token: JSON.stringify(sub), platform: platform() }, { onConflict: 'profile_id,token' })
+  if (upErr) throw upErr
+}
