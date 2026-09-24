@@ -16,7 +16,9 @@ export function useClub(seasonId) {
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (!seasonId) return
+    // No season yet (or the seasons fetch failed): resolve to an empty,
+    // non-loading state — don't sit on "Totting up the club…" forever.
+    if (!seasonId) { setTable([]); setTeams([]); setStats({}); setLoading(false); setError(null); return }
     setLoading(true)
     setError(null)
 
@@ -36,8 +38,9 @@ export function useClub(seasonId) {
         supabase.from('profiles').select('id, first_name, last_name'),
       ])
 
+      // Failed load ≠ empty club: throw so the catch keeps data + sets error.
       const fetchErr = [tblRes, teamRes, fixRes, lineupRes, profRes].find((r) => r?.error)?.error
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useClub', seasonId })
+      if (fetchErr) throw fetchErr
 
       const names = Object.fromEntries((profRes.data ?? []).map((p) => [p.id, `${p.first_name} ${p.last_name}`]))
 

@@ -30,8 +30,9 @@ export function useLineup(fixture, open) {
           .in('status', ['in', 'maybe']),
       ])
 
+      // Failed load ≠ "no line-up saved": throw so the catch keeps data + error.
       const fetchErr = [lineRes, availRes].find((r) => r?.error)?.error
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useLineup', fixtureId: fixture.id })
+      if (fetchErr) throw fetchErr
 
       const nm = {}, ph = {}
       for (const r of lineRes.data ?? []) {

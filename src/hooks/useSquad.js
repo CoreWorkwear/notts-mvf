@@ -18,7 +18,7 @@ export function useSquad() {
       const { data, error: fetchErr } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, positions, preferred, active, approved, is_player, photo_url, team_memberships(teams(key))')
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useSquad' })
+      if (fetchErr) throw fetchErr // failed load ≠ empty squad — catch keeps data + sets error
       setPlayers((data ?? []).map((p) => ({
         ...p,
         teamKeys: (p.team_memberships ?? []).map((m) => m.teams?.key).filter(Boolean),

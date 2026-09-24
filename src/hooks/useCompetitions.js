@@ -22,7 +22,7 @@ export function useCompetitions(seasonId) {
         .eq('season_id', seasonId)
         .order('sort_order')
         .order('name')
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useCompetitions', seasonId })
+      if (fetchErr) throw fetchErr // failed load ≠ no competitions — catch keeps data + sets error
       setCompetitions(data ?? [])
     } catch (e) {
       logError('fetch', e?.message ?? 'useCompetitions load failed', { hook: 'useCompetitions', seasonId })

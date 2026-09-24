@@ -1,19 +1,37 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 
-// The cold-start hang: if session restore rejects or never settles, the app used to
-// sit on its loading splash forever (setLoading(false) only ran on the happy path).
-// These lock in that startup ALWAYS releases the UI.
+// Two resilience contracts:
+//  - startup ALWAYS releases the splash (the cold-start hang class), and
+//  - a FAILED profile load never wipes a loaded profile — applying an errored
+//    response used to null the profile and show an approved player as
+//    "awaiting sign-off" for the whole session.
 
-vi.mock('../lib/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: () => {} } } })),
+const store = vi.hoisted(() => ({ profile: null, profErr: null }))
+vi.mock('../lib/supabase', () => {
+  const table = (t) => {
+    const result = () =>
+      t === 'profiles'
+        ? { data: store.profErr ? null : store.profile, error: store.profErr }
+        : { data: [], error: null }
+    const q = {
+      select: () => q,
+      eq: () => q,
+      single: () => Promise.resolve(result()),
+      then: (res, rej) => Promise.resolve(result()).then(res, rej),
+    }
+    return q
+  }
+  return {
+    supabase: {
+      auth: {
+        getSession: vi.fn(),
+        onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: () => {} } } })),
+      },
+      from: (t) => table(t),
     },
-    from: vi.fn(() => ({ select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) })),
-  },
-}))
+  }
+})
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
 
 import { supabase } from '../lib/supabase'
@@ -24,7 +42,21 @@ function Probe() {
   return <div>{loading ? 'LOADING' : 'READY'}</div>
 }
 
-beforeEach(() => { vi.clearAllMocks() })
+function ProfileProbe() {
+  const { profile, refreshProfile } = useAuth()
+  return (
+    <div>
+      <span>{profile?.first_name ?? 'NO-PROFILE'}</span>
+      <button onClick={refreshProfile}>refresh</button>
+    </div>
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  store.profile = null
+  store.profErr = null
+})
 afterEach(() => { vi.useRealTimers() })
 
 describe('AuthContext startup resilience', () => {
@@ -42,5 +74,21 @@ describe('AuthContext startup resilience', () => {
     expect(screen.getByText('LOADING')).toBeInTheDocument()
     await act(async () => { vi.advanceTimersByTime(6000) })
     expect(screen.getByText('READY')).toBeInTheDocument()
+  })
+})
+
+describe('AuthContext — a failed load never wipes a loaded profile', () => {
+  test('an errored refresh keeps the profile (no phantom "awaiting sign-off")', async () => {
+    store.profile = { id: 'u1', first_name: 'Joe', role: 'player', approved: true, active: true, is_player: true, club_id: null }
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } })
+    render(<AuthProvider><ProfileProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('Joe')).toBeInTheDocument())
+
+    store.profErr = { message: 'transient 5xx' } // the next load fails at the response level
+    await act(async () => { screen.getByText('refresh').click() })
+
+    // The good profile must survive the failed refresh.
+    expect(screen.getByText('Joe')).toBeInTheDocument()
+    expect(screen.queryByText('NO-PROFILE')).toBeNull()
   })
 })

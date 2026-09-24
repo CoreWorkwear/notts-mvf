@@ -18,17 +18,33 @@ export default function Profile() {
   const [editing, setEditing] = useState(false)
   // The personal fields live in profile_private (self-or-admin RLS) — fetch
   // your own row; re-fetch when the edit sheet closes so a save shows at once.
+  // The edit sheet must NOT open until this row has loaded: ProfileEdit
+  // initialises its fields from it, so opening on a failed fetch would show
+  // blank phone/DOB/emergency contact and a save would WIPE them.
   const [priv, setPriv] = useState(null)
+  const [privReady, setPrivReady] = useState(false)
+  const [attempt, setAttempt] = useState(0) // bumped to retry a failed fetch
   useEffect(() => {
     if (!profile?.id || editing) return
+    let on = true
     supabase.from('profile_private')
       .select('email, phone, dob, ec_name, ec_phone')
       .eq('profile_id', profile.id).maybeSingle()
-      .then(({ data }) => setPriv(data ?? null))
-      .catch(() => {})
-  }, [profile?.id, editing])
+      .then(({ data, error: fetchErr }) => {
+        if (!on) return
+        if (fetchErr) throw fetchErr
+        setPriv(data ?? {}); setPrivReady(true)
+      })
+      .catch((e) => { if (on) { setPrivReady(false); logError('fetch', e?.message ?? 'profile_private load failed', { op: 'profilePrivate' }) } })
+    return () => { on = false }
+  }, [profile?.id, editing, attempt])
   if (!profile) return null
   const full = { ...profile, ...(priv ?? {}) }
+  const openEdit = () => {
+    if (privReady) { setEditing(true); return }
+    setError("Couldn't fetch your details — check your signal and try again.")
+    setAttempt((a) => a + 1) // kick off another fetch for the next tap
+  }
 
   const initials = `${(profile.first_name?.[0] ?? '')}${(profile.last_name?.[0] ?? '')}`.toUpperCase()
 
@@ -81,7 +97,7 @@ export default function Profile() {
         <Row label="Emergency contact" value={full.ec_name || '—'} />
         <Row label="Emergency phone" value={full.ec_phone || '—'} last />
       </div>
-      <button className="btn btn-ghost btn-block mt-3" onClick={() => setEditing(true)}>Edit your details</button>
+      <button className="btn btn-ghost btn-block mt-3" onClick={openEdit}>Edit your details</button>
       <p className="dim mt-2" style={{ fontSize: 12 }}>Email is your login — the manager changes that.</p>
 
       <ProfileEdit open={editing} onClose={() => setEditing(false)} profile={full} onSaved={refreshProfile} />

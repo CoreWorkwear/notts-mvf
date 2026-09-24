@@ -19,7 +19,7 @@ export function useReminders() {
         .from('reminder_settings')
         .select('club_id, availability_enabled, match_enabled, availability_offsets, match_offsets')
         .maybeSingle()
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useReminders' })
+      if (fetchErr) throw fetchErr // failed load ≠ no settings — catch keeps data + sets error
       setSettings(data ?? null)
     } catch (e) {
       logError('fetch', e?.message ?? 'useReminders load failed', { hook: 'useReminders' })

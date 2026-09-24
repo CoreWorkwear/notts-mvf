@@ -19,7 +19,7 @@ export function useNews() {
         .from('announcements')
         .select('id, title, body, pushed, created_at, author:profiles!announcements_created_by_fkey(first_name, last_name)')
         .order('created_at', { ascending: false })
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useNews' })
+      if (fetchErr) throw fetchErr // failed load ≠ no news — catch keeps data + sets error
       setItems(data ?? [])
     } catch (e) {
       logError('fetch', e?.message ?? 'useNews load failed', { hook: 'useNews' })

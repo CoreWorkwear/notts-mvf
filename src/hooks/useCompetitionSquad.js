@@ -17,7 +17,7 @@ export function useCompetitionSquad(competitionId) {
     try {
       const { data, error: fetchErr } = await supabase
         .from('competition_squads').select('profile_id').eq('competition_id', competitionId)
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useCompetitionSquad', competitionId })
+      if (fetchErr) throw fetchErr // failed load ≠ empty squad list — catch keeps data + sets error
       setRegistered(new Set((data ?? []).map((r) => r.profile_id)))
     } catch (e) {
       logError('fetch', e?.message ?? 'useCompetitionSquad load failed', { hook: 'useCompetitionSquad', competitionId })

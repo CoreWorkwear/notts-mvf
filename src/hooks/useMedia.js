@@ -20,7 +20,7 @@ export function useMedia() {
         .select('id, url, created_at')
         .eq('type', 'photo')
         .order('created_at', { ascending: false })
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useMedia' })
+      if (fetchErr) throw fetchErr // failed load ≠ empty pool — catch keeps data + sets error
       setPhotos(data ?? [])
     } catch (e) {
       logError('fetch', e?.message ?? 'useMedia load failed', { hook: 'useMedia' })
