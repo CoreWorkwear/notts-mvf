@@ -21,7 +21,7 @@ export function usePlayers() {
         .from('profiles')
         .select('id, first_name, last_name, positions, preferred, role, active, approved, is_player, photo_url, requested_teams, profile_private(email, phone, dob, ec_name, ec_phone), team_memberships(team_id, teams(key, label))')
         .order('last_name', { ascending: true })
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'usePlayers' })
+      if (fetchErr) throw fetchErr // failed load ≠ empty squad — catch keeps data + sets error
 
       setPlayers((data ?? []).map((p) => {
         const priv = firstRow(p.profile_private) ?? {}

@@ -40,8 +40,11 @@ export function useLineup(fixture, open) {
         rosterQuery,
       ])
 
+      // Failed load ≠ "no line-up saved": throw so the catch keeps data + error.
+      // The roster is in here too — a pool that silently loses the squad it's
+      // meant to be gated on is the same lie.
       const fetchErr = [lineRes, availRes, rosterRes].find((r) => r?.error)?.error
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useLineup', fixtureId: fixture.id })
+      if (fetchErr) throw fetchErr
 
       const nm = {}, ph = {}
       for (const r of lineRes.data ?? []) {

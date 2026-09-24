@@ -1,17 +1,20 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const store = vi.hoisted(() => ({ tables: {}, reject: false, calls: 0 }))
+const store = vi.hoisted(() => ({ tables: {}, reject: false, respErr: false, calls: 0 }))
 vi.mock('../lib/supabase', () => {
   const make = (table) => {
     store.calls++
     // store.reject simulates a network-level fetch failure (the WebKit
     // "TypeError: Load failed" seen in prod), where the promise REJECTS rather
-    // than resolving to { data, error }.
+    // than resolving to { data, error }. store.respErr simulates a RESPONSE-
+    // level error (RLS, 5xx): resolves with { data: null, error }.
     const q = {
       then: (onF, onR) => (store.reject
         ? Promise.reject(new TypeError('Load failed'))
-        : Promise.resolve({ data: store.tables[table] ?? [], error: null })
+        : Promise.resolve(store.respErr
+          ? { data: null, error: { message: 'RLS said no' } }
+          : { data: store.tables[table] ?? [], error: null })
       ).then(onF, onR),
     }
     ;['select', 'eq', 'order', 'in', 'gte', 'lte'].forEach((m) => { q[m] = () => q })
@@ -25,6 +28,7 @@ import { useFixtures } from './useFixtures'
 
 beforeEach(() => {
   store.reject = false
+  store.respErr = false
   store.calls = 0
   store.tables = {
     fixtures: [{
@@ -99,6 +103,22 @@ describe('useFixtures — never leaves the screen hanging', () => {
     const { result } = renderHook(() => useFixtures(null))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.fixtures).toEqual([])
+  })
+})
+
+// A response-level error (RLS, 5xx) resolves with { data: null, error } — the
+// hook used to log it, wipe the fixtures to [] and leave error null, so the
+// screen rendered a confident "Nothing in the diary yet" lie.
+describe('useFixtures — a response-level error is not an empty diary', () => {
+  test('an errored refetch keeps the fixtures and sets error', async () => {
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.fixtures).toHaveLength(1)
+
+    store.respErr = true
+    await act(async () => { window.dispatchEvent(new Event('mvf-availability-applied')) })
+    await waitFor(() => expect(result.current.error).toBeTruthy())
+    expect(result.current.fixtures).toHaveLength(1) // previous data survives
   })
 })
 

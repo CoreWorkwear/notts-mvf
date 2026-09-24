@@ -16,7 +16,9 @@ export function useResults(seasonId) {
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (!seasonId) return
+    // No season yet (or the seasons fetch failed): resolve to an empty,
+    // non-loading state — don't sit on "Fetching the results…" forever.
+    if (!seasonId) { setPlayed([]); setNeedsResult([]); setPostponed([]); setSquad([]); setLoading(false); setError(null); return }
     setLoading(true)
     setError(null)
 
@@ -37,8 +39,9 @@ export function useResults(seasonId) {
         supabase.from('profiles').select('id, first_name, last_name').eq('active', true),
       ])
 
+      // Failed load ≠ "no games played": throw so the catch keeps data + error.
       const fetchErr = [fixRes, sqRes].find((r) => r?.error)?.error
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useResults', seasonId })
+      if (fetchErr) throw fetchErr
 
       const squadList = (sqRes.data ?? []).map((p) => ({
         id: p.id,

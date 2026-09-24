@@ -19,7 +19,7 @@ export function useOpponents() {
         .from('opponents')
         .select('id, name, badge_url, home_venue, home_address, home_postcode, is_league_team')
         .order('name', { ascending: true })
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useOpponents' })
+      if (fetchErr) throw fetchErr // failed load ≠ no opponents — catch keeps data + sets error
       setOpponents(data ?? [])
     } catch (e) {
       logError('fetch', e?.message ?? 'useOpponents load failed', { hook: 'useOpponents' })

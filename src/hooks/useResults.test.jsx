@@ -39,3 +39,11 @@ describe('useResults — one-to-one result embed', () => {
     expect(result.current.needsResult).toHaveLength(0)
   })
 })
+
+describe('useResults — never leaves the screen hanging', () => {
+  test('a null seasonId resolves loading to false (no eternal "Fetching the results…")', async () => {
+    const { result } = renderHook(() => useResults(null))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.played).toEqual([])
+  })
+})

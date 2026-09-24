@@ -59,8 +59,10 @@ export function useFixtures(seasonId) {
           .select('team_id, profiles!inner(id, active, approved, is_player)'),
       ])
 
+      // A response-level error (RLS, 5xx) is a FAILED load, not an empty diary:
+      // throw into the catch below so previous data survives and error is set.
       const fetchErr = [fixRes, teamRes, oppRes, rosterRes].find((r) => r?.error)?.error
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useFixtures', seasonId })
+      if (fetchErr) throw fetchErr
 
       // Build roster size per team_id.
       const rosterByTeam = {}

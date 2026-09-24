@@ -20,7 +20,7 @@ export function useSponsors() {
         .order('tier', { ascending: true })
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'useSponsors' })
+      if (fetchErr) throw fetchErr // failed load ≠ no sponsors — catch keeps data + sets error
       setSponsors(data ?? [])
     } catch (e) {
       logError('fetch', e?.message ?? 'useSponsors load failed', { hook: 'useSponsors' })

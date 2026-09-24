@@ -21,7 +21,7 @@ export function SeasonProvider({ children }) {
     setError(null)
     try {
       const { data, error: fetchErr } = await supabase.from('seasons').select('*').order('label', { ascending: false })
-      if (fetchErr) logError('fetch', fetchErr.message, { hook: 'SeasonContext' })
+      if (fetchErr) throw fetchErr // failed load ≠ no seasons — the catch sets error + retry
       const list = data ?? []
       setSeasons(list)
       const current = list.find((s) => s.is_current) ?? list[0]

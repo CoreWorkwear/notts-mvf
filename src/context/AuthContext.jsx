@@ -33,15 +33,23 @@ export function AuthProvider({ children }) {
   // Pull the profile row + team memberships + club for the signed-in user.
   const loadProfile = useCallback(async (uid) => {
     if (!uid) { setProfile(null); setTeamKeys([]); setTeamIds([]); setClub(null); return }
-    const [{ data: prof }, { data: memberships }] = await Promise.all([
+    const [profRes, memRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).single(),
       supabase.from('team_memberships').select('team_id, teams(key)').eq('profile_id', uid),
     ])
+    // A response-level error is a FAILED load, not an empty account. Applying
+    // it would null a perfectly good profile and show an approved player as
+    // "awaiting sign-off" for the rest of the session. Keep whatever we have
+    // and throw — the caller logs it, and the next focus/refresh retries.
+    if (profRes.error || memRes.error) throw (profRes.error ?? memRes.error)
+    const prof = profRes.data
+    const memberships = memRes.data
     setProfile(prof ?? null)
     setTeamKeys((memberships ?? []).map((m) => m.teams?.key).filter(Boolean))
     setTeamIds((memberships ?? []).map((m) => m.team_id).filter(Boolean))
     if (prof?.club_id) {
-      const { data: c } = await supabase.from('clubs').select('id, name, crest_url').eq('id', prof.club_id).single()
+      const { data: c, error: cErr } = await supabase.from('clubs').select('id, name, crest_url').eq('id', prof.club_id).single()
+      if (cErr) throw cErr // keep the previous club (crest) rather than blanking it
       setClub(c ?? null)
     } else setClub(null)
   }, [])
@@ -137,7 +145,9 @@ export function AuthProvider({ children }) {
     respondBlockFor: (fixture) => respondBlock(profile, teamIds, fixture),
     passwordRecovery,
     endRecovery: () => setPasswordRecovery(false),
-    refreshProfile: () => loadProfile(session?.user?.id),
+    // Swallow-and-log: refresh is fired from onSaved handlers that don't await
+    // it, so a rejection here would surface as an unhandled rejection.
+    refreshProfile: () => loadProfile(session?.user?.id).catch((e) => logError('auth', 'profile refresh failed', { message: e?.message })),
     signIn, signUp, signOut, sendPasswordReset, updatePassword,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
