@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { validatePlayer, diffMemberships, isSelf, isSquadMember, canSetAvailability, accountStatus, respondBlock, respondBlockCopy } from './players'
+import { validatePlayer, diffMemberships, isSelf, isSquadMember, squadIds, squadIdsByTeam, canSetAvailability, accountStatus, respondBlock, respondBlockCopy } from './players'
 
 const ok = { first_name: 'Joe', last_name: 'Morris', email: 'joe@notts.test', phone: '07700900000' }
 
@@ -63,6 +63,39 @@ describe('isSquadMember / canSetAvailability (approval gate)', () => {
   test('null/undefined profile is safe', () => {
     expect(isSquadMember(null)).toBe(false)
     expect(canSetAvailability(undefined)).toBe(false)
+  })
+})
+
+describe('squadIds / squadIdsByTeam', () => {
+  const member = (id, team, over = {}) => ({
+    team_id: team,
+    profiles: { id, active: true, approved: true, is_player: true, ...over },
+  })
+
+  test('keeps approved active players and drops supporters, pending and removed', () => {
+    const ids = squadIds([
+      member('a', 't1'),
+      member('b', 't1', { is_player: false }),
+      member('c', 't1', { approved: false }),
+      member('d', 't1', { active: false }),
+    ])
+    expect([...ids]).toEqual(['a'])
+  })
+
+  test('survives a missing or empty fetch without throwing', () => {
+    expect(squadIds(null).size).toBe(0)
+    expect(squadIds([{ team_id: 't1' }]).size).toBe(0) // embed didn't resolve
+    expect(squadIdsByTeam(undefined)).toEqual({})
+  })
+
+  test('keys by team so one team’s squad never leaks into another’s', () => {
+    const byTeam = squadIdsByTeam([
+      member('a', 't-first'),
+      member('b', 't-community'),
+      member('c', 't-community', { active: false }),
+    ])
+    expect([...byTeam['t-first']]).toEqual(['a'])
+    expect([...byTeam['t-community']]).toEqual(['b'])
   })
 })
 

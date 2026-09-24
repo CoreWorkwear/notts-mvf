@@ -83,6 +83,67 @@ describe('useFixtures — one-to-one results embed', () => {
     expect(f.rosterSize).toBe(2) // a + b (eligibility no longer filters)
     expect(f.noReply).toBe(2)
   })
+
+  test('the in/maybe/out tally counts squad answers only, so noReply stays honest', async () => {
+    store.tables = {
+      fixtures: [{
+        id: 'ft-2', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
+        fixture_type: 'League', league_name: null, venue: 'X', address: null, w3w: null,
+        season_id: 's1', team_id: 't-first',
+        team: { id: 't-first', key: 'xl', label: 'First Team', colour: '#E11D2A', is_first_team: true },
+        opponent: { id: 'o1', name: 'Carlton Town', badge_url: null },
+        availability: [
+          { profile_id: 'a', status: 'in' },          // squad
+          { profile_id: 'sup', status: 'in' },        // supporter
+          { profile_id: 'pend', status: 'maybe' },    // awaiting sign-off
+          { profile_id: 'gone', status: 'out' },      // removed player
+          { profile_id: 'res', status: 'in' },        // reserves — not this squad
+        ],
+        results: null,
+      }],
+      teams: [{ id: 't-first', key: 'xl', label: 'First Team', colour: '#E11D2A', is_first_team: true, league_name: null }],
+      opponents: [],
+      team_memberships: [
+        { team_id: 't-first', profiles: { id: 'a', active: true, approved: true, is_player: true } },
+        { team_id: 't-first', profiles: { id: 'b', active: true, approved: true, is_player: true } },
+        { team_id: 't-first', profiles: { id: 'sup', active: true, approved: true, is_player: false } },
+        { team_id: 't-first', profiles: { id: 'pend', active: true, approved: false, is_player: true } },
+        { team_id: 't-first', profiles: { id: 'gone', active: false, approved: true, is_player: true } },
+        { team_id: 't-community', profiles: { id: 'res', active: true, approved: true, is_player: true } },
+      ],
+    }
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const f = result.current.fixtures.find((x) => x.id === 'ft-2')
+    expect(f.counts).toEqual({ in: 1, maybe: 0, out: 0 }) // only 'a'
+    expect(f.rosterSize).toBe(2)                          // a + b
+    expect(f.replied).toBe(1)
+    expect(f.noReply).toBe(1)                             // b, and b alone
+  })
+
+  test('your own answer still shows even when it no longer counts', async () => {
+    store.tables = {
+      fixtures: [{
+        id: 'ft-3', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
+        fixture_type: 'League', league_name: null, venue: 'X', address: null, w3w: null,
+        season_id: 's1', team_id: 't-first',
+        team: { id: 't-first', key: 'xl', label: 'First Team', colour: '#E11D2A', is_first_team: true },
+        opponent: { id: 'o1', name: 'Carlton Town', badge_url: null },
+        availability: [{ profile_id: 'u1', status: 'in' }], // the viewer, off this squad
+        results: null,
+      }],
+      teams: [{ id: 't-first', key: 'xl', label: 'First Team', colour: '#E11D2A', is_first_team: true, league_name: null }],
+      opponents: [],
+      team_memberships: [{ team_id: 't-community', profiles: { id: 'u1', active: true, approved: true, is_player: true } }],
+    }
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const f = result.current.fixtures.find((x) => x.id === 'ft-3')
+    expect(f.myStatus).toBe('in')   // honest about what you said
+    expect(f.counts.in).toBe(0)     // but it isn't a body for this game
+  })
 })
 
 // Regression: the live "hang after login on Fixtures". The screen shows a

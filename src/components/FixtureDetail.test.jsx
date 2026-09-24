@@ -1,19 +1,28 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // WeatherStrip does a network fetch — stub it out for a quiet unit test.
 vi.mock('./WeatherStrip', () => ({ default: () => null }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }))
+// Table-aware, but .eq() is not re-implemented — team_memberships holds only
+// the rows the real `.eq('team_id', fixture.team_id)` would have returned.
+const store = vi.hoisted(() => ({ tables: {} }))
 vi.mock('../lib/supabase', () => {
-  const q = { select: () => q, eq: () => q, then: (r) => Promise.resolve({ data: [], error: null }).then(r) }
-  return { supabase: { from: () => q } }
+  const make = (table) => {
+    const q = { then: (r) => Promise.resolve({ data: store.tables[table] ?? [], error: null }).then(r) }
+    ;['select', 'eq'].forEach((m) => { q[m] = () => q })
+    return q
+  }
+  return { supabase: { from: make } }
 })
 
 import FixtureDetail from './FixtureDetail'
 
+beforeEach(() => { store.tables = {} })
+
 const fx = {
-  id: 'f1', myStatus: 'out',
+  id: 'f1', myStatus: 'out', team_id: 't-first',
   team: { key: 'xl', label: 'First Team', match_name: 'Nottingham' },
   opponent: { name: 'Boston' }, home_away: 'Home', fixture_type: 'League',
   match_date: '2030-12-01', kickoff: '14:00:00', venue: 'X',
@@ -58,5 +67,32 @@ describe('FixtureDetail — team-scoped availability', () => {
     render(<FixtureDetail open fixture={fx} isAdmin={false} blockReason="kicked-off" onSetAvail={vi.fn()} onClose={() => {}} />)
     expect(screen.queryByRole('button', { name: "I'm in" })).not.toBeInTheDocument()
     expect(screen.getByText(/shut at kickoff/i)).toBeInTheDocument()
+  })
+
+  test("the Who's in tab lists this squad's answers only", async () => {
+    store.tables = {
+      availability: [
+        { status: 'in', profile: { id: 'p-in', first_name: 'Joe', last_name: 'Morris' } },
+        { status: 'in', profile: { id: 'p-sup', first_name: 'Sue', last_name: 'Supporter' } },
+        { status: 'maybe', profile: { id: 'p-pend', first_name: 'Pat', last_name: 'Pending' } },
+        { status: 'out', profile: { id: 'p-gone', first_name: 'Ollie', last_name: 'Old' } },
+      ],
+      team_memberships: [
+        { profiles: { id: 'p-in', active: true, approved: true, is_player: true } },
+        { profiles: { id: 'p-sup', active: true, approved: true, is_player: false } },
+        { profiles: { id: 'p-pend', active: true, approved: false, is_player: true } },
+        { profiles: { id: 'p-gone', active: false, approved: true, is_player: true } },
+      ],
+    }
+    render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: "Who's in" }))
+
+    await waitFor(() => expect(screen.getByText(/Available · 1/)).toBeInTheDocument())
+    expect(screen.getByText('Joe M')).toBeInTheDocument()
+    expect(screen.getByText(/Maybe · 0/)).toBeInTheDocument()
+    expect(screen.getByText(/Can't make it · 0/)).toBeInTheDocument()
+    expect(screen.queryByText('Sue S')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pat P')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ollie O')).not.toBeInTheDocument()
   })
 })

@@ -11,7 +11,7 @@ import { inForecastWindow } from '../lib/weather'
 import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
 import { teamMatchName } from '../lib/teams'
 import LineupBoard from './LineupBoard'
-import { respondBlockCopy } from '../lib/players'
+import { respondBlockCopy, squadIds } from '../lib/players'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
 // Admins can pin a club photo to this game's poster.
@@ -31,11 +31,26 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
     if (!open || !fixture) return
     setTab('me')
     setMyStatus(fixture.myStatus ?? null)
-    supabase
-      .from('availability')
-      .select('status, profile:profiles(id, first_name, last_name)')
-      .eq('fixture_id', fixture.id)
-      .then(({ data }) => setRows(data ?? []))
+    // Who's in, gated on the squad that plays this game. An availability row is
+    // not a squad place — supporters, pending signups and players who've been
+    // moved on can all still hold one — and the count under this list comes off
+    // the roster, so an ungated list wouldn't add up with it.
+    Promise.all([
+      supabase
+        .from('availability')
+        .select('status, profile:profiles(id, first_name, last_name)')
+        .eq('fixture_id', fixture.id),
+      fixture.team_id
+        ? supabase
+            .from('team_memberships')
+            .select('profiles!inner(id, active, approved, is_player)')
+            .eq('team_id', fixture.team_id)
+        : Promise.resolve({ data: [] }),
+    ])
+      .then(([availRes, rosterRes]) => {
+        const squad = squadIds(rosterRes.data)
+        setRows((availRes.data ?? []).filter((r) => r.profile && squad.has(r.profile.id)))
+      })
       .catch(() => {}) // secondary detail — a dropped fetch just leaves it empty
     if (isAdmin) {
       supabase.from('media_assets').select('id, url').eq('type', 'photo')

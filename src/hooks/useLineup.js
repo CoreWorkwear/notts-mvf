@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { rowsToState } from '../lib/lineup'
-import { isSquadMember } from '../lib/players'
+import { squadIds } from '../lib/players'
 import { logError } from '../lib/logger'
 
 // Line-up for one fixture: the saved selection (formation + starters + subs) and
@@ -58,12 +58,7 @@ export function useLineup(fixture, open) {
       // still hold one, and pre-0034 rows exist against the wrong team entirely.
       // A pick becomes an appearance (useClub reads lineups), so the pool is the
       // only guard: lineups_admin_write does no team check.
-      const roster = new Set(
-        (rosterRes.data ?? [])
-          .map((m) => m.profiles)
-          .filter((p) => isSquadMember(p))
-          .map((p) => p.id)
-      )
+      const roster = squadIds(rosterRes.data)
 
       const rank = { in: 0, maybe: 1 }
       const p = (availRes.data ?? [])

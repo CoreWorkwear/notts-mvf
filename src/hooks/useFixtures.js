@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
-import { isSquadMember } from '../lib/players'
+import { squadIdsByTeam } from '../lib/players'
 import { logError } from '../lib/logger'
 
 // A focus/visibility refetch this soon after the last load started is skipped
 // (foregrounding fires both events together). Exported for the test.
 export const FOCUS_REFETCH_MIN_MS = 5000
+
+const EMPTY_SQUAD = new Set()
 
 // Loads everything the Fixtures screen needs for a season. RLS scopes the
 // rows to the viewer's club (the old eligibility gate is gone — every active
@@ -53,7 +55,8 @@ export function useFixtures(seasonId) {
         supabase.from('teams').select('id, key, label, match_name, colour, is_first_team, league_name'),
         supabase.from('opponents').select('id, name, badge_url, home_venue, home_address, home_postcode').order('name'),
         // Roster per team: approved, active squad players. Supporters + pending
-        // players don't count. (No eligibility gate — §1.)
+        // players don't count, and neither do their availability rows. (No
+        // eligibility gate — §1.)
         supabase
           .from('team_memberships')
           .select('team_id, profiles!inner(id, active, approved, is_player)'),
@@ -64,23 +67,24 @@ export function useFixtures(seasonId) {
       const fetchErr = [fixRes, teamRes, oppRes, rosterRes].find((r) => r?.error)?.error
       if (fetchErr) throw fetchErr
 
-      // Build roster size per team_id.
-      const rosterByTeam = {}
-      for (const m of rosterRes.data ?? []) {
-        if (!isSquadMember(m.profiles)) continue
-        rosterByTeam[m.team_id] = (rosterByTeam[m.team_id] ?? 0) + 1
-      }
+      // Squad ids per team_id — the one definition of who counts for a team.
+      const squadByTeam = squadIdsByTeam(rosterRes.data)
 
       const enriched = (fixRes.data ?? []).map((f) => {
         const avail = f.availability ?? []
+        // Both halves of the no-reply sum have to mean the same thing. Counting
+        // every answer while sizing the roster on squad members only let a
+        // supporter's or an ex-player's row inflate the in/maybe numbers AND
+        // eat a name off the chase list (the Math.max hid it going negative).
+        const squad = squadByTeam[f.team_id] ?? EMPTY_SQUAD
         const counts = { in: 0, maybe: 0, out: 0 }
         let mine = null
         for (const a of avail) {
-          if (a.status in counts) counts[a.status]++
-          if (a.profile_id === user?.id) mine = a.status
+          if (a.status in counts && squad.has(a.profile_id)) counts[a.status]++
+          if (a.profile_id === user?.id) mine = a.status // your own answer, counted or not
         }
         const replied = counts.in + counts.maybe + counts.out
-        const rosterSize = rosterByTeam[f.team_id] ?? 0
+        const rosterSize = squad.size
         return {
           ...f,
           counts,
