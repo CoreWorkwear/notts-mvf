@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { MotionConfig, AnimatePresence, motion } from 'framer-motion'
 import { pageTransition } from './lib/motion'
+import { breadcrumb } from './lib/breadcrumbs'
 import { useAuth } from './context/AuthContext'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
@@ -31,24 +32,53 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'))
 const Competitions = lazy(() => import('./pages/Competitions'))
 
 export default function App() {
-  const { loading, isAuthed, isAdmin, passwordRecovery } = useAuth()
+  const { loading, isAuthed, isAdmin, profile, passwordRecovery } = useAuth()
 
   if (loading) return <Loader label="Warming up…" />
   if (passwordRecovery) return <SetNewPassword />
   if (!isAuthed) return <Auth />
 
-  // Admin-only routes fall back to Fixtures for players.
-  const adminOnly = (el) => (isAdmin ? el : <Navigate to="/fixtures" replace />)
+  // Admin-only routes fall back to Fixtures for players. Not knowing yet is
+  // not "not an admin": while the profile is still loading (a slow signal
+  // after the safety timer lifted the splash) hold the screen rather than
+  // <Navigate replace> a manager off /players on every cold start.
+  const adminOnly = (el) => (isAdmin ? el : profile ? <Navigate to="/fixtures" replace /> : <Loader label="Warming up…" />)
 
   return (
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
+        <RouteBreadcrumbs />
+        <PushNavigate />
         <Header />
         <AnimatedRoutes adminOnly={adminOnly} />
         <BottomNav />
       </BrowserRouter>
     </MotionConfig>
   )
+}
+
+// Every route change leaves a breadcrumb, so an error row in Diagnostics shows
+// the screens the player walked through to reach it.
+function RouteBreadcrumbs() {
+  const { pathname } = useLocation()
+  useEffect(() => { breadcrumb('nav', pathname) }, [pathname])
+  return null
+}
+
+// A tapped news / line-up notification with the app already open: the service
+// worker posts the deep link, PushActions re-broadcasts it as a window event,
+// and this moves the router there. Only same-app paths are honoured.
+function PushNavigate() {
+  const navigate = useNavigate()
+  useEffect(() => {
+    const onNav = (e) => {
+      const url = e.detail?.url
+      if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')) navigate(url)
+    }
+    window.addEventListener('mvf-navigate', onNav)
+    return () => window.removeEventListener('mvf-navigate', onNav)
+  }, [navigate])
+  return null
 }
 
 // Route content crossfades + drifts up on navigation (DESIGN-SYSTEM §5). The

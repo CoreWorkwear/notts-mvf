@@ -15,10 +15,16 @@ export function validatePlayer({ first_name, last_name, email, phone }, { needPa
 
 // Work out which team_membership rows to add and which to remove, given the
 // player's current team_ids and the keys ticked in the form.
+//
+// FAILS CLOSED on the squads list. An empty/missing `teams` means the fetch
+// didn't load, NOT that the manager unticked everything — with teams=[] every
+// current id looked "unticked" and a save stripped the player from every squad
+// (and, post-0034, left them unable to answer a single fixture). No list, no diff.
 export function diffMemberships(currentTeamIds, selectedKeys, teams) {
+  if (!Array.isArray(teams) || teams.length === 0) return { toAdd: [], toRemove: [] }
   const idByKey = Object.fromEntries(teams.map((t) => [t.key, t.id]))
-  const selectedIds = selectedKeys.map((k) => idByKey[k]).filter(Boolean)
-  const current = new Set(currentTeamIds)
+  const selectedIds = (selectedKeys ?? []).map((k) => idByKey[k]).filter(Boolean)
+  const current = new Set(currentTeamIds ?? [])
   const selected = new Set(selectedIds)
   return {
     toAdd: selectedIds.filter((id) => !current.has(id)),

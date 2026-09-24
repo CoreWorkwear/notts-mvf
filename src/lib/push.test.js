@@ -1,13 +1,13 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Store-driven supabase stub: push.js reads/writes push_tokens.
-const db = vi.hoisted(() => ({ rows: [], upserts: [] }))
+const db = vi.hoisted(() => ({ rows: [], upserts: [], deletes: [] }))
 vi.mock('./supabase', () => ({
   supabase: {
     from: () => ({
       select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: db.rows, error: null }) }) }),
       upsert: (row) => { db.upserts.push(row); return Promise.resolve({ error: null }) },
-      delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+      delete: () => { db.deletes.push(1); return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) } },
     }),
   },
 }))
@@ -15,7 +15,7 @@ vi.mock('./supabase', () => ({
 // push.js captures the VAPID key at import time — stub it BEFORE the dynamic
 // import so the key-match logic has a real value to compare against.
 vi.stubEnv('VITE_VAPID_PUBLIC_KEY', 'AQID') // -> bytes [1,2,3]
-const { urlBase64ToUint8Array, subscriptionMatchesKey, syncPush } = await import('./push')
+const { urlBase64ToUint8Array, subscriptionMatchesKey, syncPush, disablePush } = await import('./push')
 
 const KEY_BYTES = urlBase64ToUint8Array('AQID')
 
@@ -33,7 +33,7 @@ function pushEnv({ sub }) {
   return reg
 }
 
-beforeEach(() => { db.rows = []; db.upserts = [] })
+beforeEach(() => { db.rows = []; db.upserts = []; db.deletes = [] })
 afterEach(() => {
   delete navigator.serviceWorker
   delete window.PushManager
@@ -95,5 +95,28 @@ describe('syncPush — startup heal', () => {
     await syncPush('u1')
     expect(reg.pushManager.subscribe).not.toHaveBeenCalled()
     expect(db.upserts).toHaveLength(0)
+  })
+})
+
+// Turning notifications OFF must stick. disablePush used to delete the token
+// row FIRST and unsubscribe second; when unsubscribe() rejected (offline, SW
+// mid-update — and sign-out races it against a 2.5s timeout) the row was gone
+// but the browser subscription lived on, which is exactly the "server pruned
+// my token" shape syncPush heals by re-subscribing AND re-storing it. The
+// player switched push off; the next app open switched it back on.
+describe('disablePush — opt-out survives a flaky unsubscribe', () => {
+  test('a failed unsubscribe keeps the token row so syncPush cannot re-enable', async () => {
+    const sub = { endpoint: 'https://push/old', unsubscribe: vi.fn().mockRejectedValue(new Error('offline')) }
+    pushEnv({ sub })
+    await expect(disablePush('u1')).rejects.toThrow('offline')
+    expect(db.deletes).toHaveLength(0)
+  })
+
+  test('a successful unsubscribe then removes the row', async () => {
+    const sub = { endpoint: 'https://push/old', unsubscribe: vi.fn().mockResolvedValue(true) }
+    pushEnv({ sub })
+    await disablePush('u1')
+    expect(sub.unsubscribe).toHaveBeenCalled()
+    expect(db.deletes).toHaveLength(1)
   })
 })

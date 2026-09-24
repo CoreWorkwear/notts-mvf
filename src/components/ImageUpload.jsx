@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { uploadMedia } from '../lib/storage'
 import Toast from './Toast'
 
@@ -16,6 +16,11 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
   const [progress, setProgress] = useState(null)
   const [error, setError] = useState(null)
   const [preview, setPreview] = useState(current ?? null)
+
+  // Follow `current` when the caller points us at a different target (e.g. the
+  // fixture form switching opponent) — a fresh upload still shows at once via
+  // setPreview above, and stays until `current` catches up.
+  useEffect(() => { setPreview(current ?? null) }, [current])
 
   async function onPick(e) {
     // Picture files only (the input's accept already filters), uploaded one by

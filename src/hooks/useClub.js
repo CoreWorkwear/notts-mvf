@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildStats } from '../lib/stats'
 import { firstRow } from '../lib/embed'
@@ -14,8 +14,12 @@ export function useClub(seasonId) {
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Latest wins: a slower, older season's load must not overwrite the newer one.
+  const reqRef = useRef(0)
 
   const load = useCallback(async () => {
+    const id = ++reqRef.current
+    const fresh = () => id === reqRef.current
     // No season yet (or the seasons fetch failed): resolve to an empty,
     // non-loading state — don't sit on "Totting up the club…" forever.
     if (!seasonId) { setTable([]); setTeams([]); setStats({}); setLoading(false); setError(null); return }
@@ -37,6 +41,7 @@ export function useClub(seasonId) {
           .eq('fixtures.season_id', seasonId),
         supabase.from('profiles').select('id, first_name, last_name'),
       ])
+      if (!fresh()) return
 
       // Failed load ≠ empty club: throw so the catch keeps data + sets error.
       const fetchErr = [tblRes, teamRes, fixRes, lineupRes, profRes].find((r) => r?.error)?.error
@@ -67,12 +72,13 @@ export function useClub(seasonId) {
       setTable(tblRes.data ?? [])
       setTeams((teamRes.data ?? []).sort((a, b) => Number(b.is_first_team) - Number(a.is_first_team)))
     } catch (e) {
+      if (!fresh()) return
       // A network-level reject (seen live as "Internal error" rejections on
       // /club) must not wedge the page on its loader — surface it instead.
-      logError('fetch', e?.message ?? 'useClub load failed', { hook: 'useClub', seasonId })
+      logError('fetch', e ?? 'useClub load failed', { hook: 'useClub', seasonId })
       setError(e ?? new Error('load failed'))
     } finally {
-      setLoading(false)
+      if (fresh()) setLoading(false)
     }
   }, [seasonId])
 

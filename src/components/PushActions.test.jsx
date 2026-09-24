@@ -52,3 +52,17 @@ describe('PushActions — notification action → availability status', () => {
     expect(navigator.serviceWorker.startMessages).toHaveBeenCalled()
   })
 })
+
+// A tapped news / line-up notification with the app already open: the SW
+// posts an mvf-navigate message and the page must turn it into a route change
+// (PushActions sits outside the router, so it re-broadcasts as a window event
+// the App listens for).
+describe('PushActions — notification tap navigates the open app', () => {
+  test('an mvf-navigate SW message becomes an mvf-navigate window event with the url', async () => {
+    const seen = []
+    window.addEventListener('mvf-navigate', (e) => seen.push(e.detail?.url))
+    render(<PushActions />)
+    swListeners.forEach((fn) => fn({ data: { type: 'mvf-navigate', url: '/news' } }))
+    expect(seen).toEqual(['/news'])
+  })
+})

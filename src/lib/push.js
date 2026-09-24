@@ -26,7 +26,7 @@ function platform() {
 }
 
 export async function currentSubscription() {
-  if (!pushSupported) return null
+  if (!supportedNow()) return null
   const reg = await navigator.serviceWorker.ready
   return reg.pushManager.getSubscription()
 }
@@ -51,12 +51,21 @@ export async function enablePush(profileId) {
   return sub
 }
 
+// Unsubscribe FIRST, then drop the row. The other order left a live browser
+// subscription with no row whenever unsubscribe() rejected (offline, SW
+// mid-update — and sign-out races this against a timeout), which is exactly
+// the "server pruned my token" shape syncPush heals by re-subscribing: the
+// player switched push off and the next app open switched it back on. If the
+// unsubscribe fails the row stays and this throws, so the toggle stays "on"
+// and honest; a stale row after a successful unsubscribe is pruned by the
+// sender's next 404/410.
 export async function disablePush(profileId) {
   const sub = await currentSubscription()
-  if (sub) {
-    await supabase.from('push_tokens').delete().eq('profile_id', profileId).eq('token', JSON.stringify(sub))
-    await sub.unsubscribe()
-  }
+  if (!sub) return
+  const token = JSON.stringify(sub)
+  await sub.unsubscribe()
+  const { error } = await supabase.from('push_tokens').delete().eq('profile_id', profileId).eq('token', token)
+  if (error) throw error
 }
 
 // Live capability check (unlike the import-time `pushSupported` const) so the

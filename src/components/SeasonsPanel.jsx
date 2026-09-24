@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 import { fmtDate } from '../lib/format'
+import { friendlyError } from '../lib/errors'
 import SeasonForm from './SeasonForm'
+import Toast from './Toast'
 
 // Admin seasons + rollover (BUILD-LIST A3).
 export default function SeasonsPanel() {
@@ -11,6 +13,7 @@ export default function SeasonsPanel() {
   const { seasons, seasonId, setSeasonId, refreshSeasons } = useSeason()
   const [editing, setEditing] = useState(null)
   const [open, setOpen] = useState(false)
+  const [toast, setToast] = useState(null)
 
   async function onSave({ id, label, start_date, end_date, makeCurrent }) {
     const row = { label: label.trim(), start_date, end_date }
@@ -28,16 +31,24 @@ export default function SeasonsPanel() {
     if (makeCurrent && sid) setSeasonId(sid)
   }
 
+  // Clear the others FIRST, then set the new one, checking both: whichever
+  // write fails we can never be left with two current seasons (at worst none,
+  // which one more tap of "Set current" puts right).
   async function applyCurrent(id) {
-    await supabase.from('seasons').update({ is_current: false }).eq('club_id', profile.club_id).neq('id', id)
+    const { error: clearErr } = await supabase.from('seasons').update({ is_current: false }).eq('club_id', profile.club_id).neq('id', id)
+    if (clearErr) throw clearErr
     const { error } = await supabase.from('seasons').update({ is_current: true }).eq('id', id)
     if (error) throw error
   }
 
   async function setCurrent(id) {
-    await applyCurrent(id)
-    await refreshSeasons()
-    setSeasonId(id)
+    try {
+      await applyCurrent(id)
+      await refreshSeasons()
+      setSeasonId(id)
+    } catch (err) {
+      setToast(friendlyError(err, "Couldn't switch the current season — give it another go."))
+    }
   }
 
   const openAdd = () => { setEditing(null); setOpen(true) }
@@ -45,6 +56,7 @@ export default function SeasonsPanel() {
 
   return (
     <div className="mt-4">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <button className="btn btn-primary btn-block" onClick={openAdd}>+ Start a new season</button>
 
       <div className="col gap-2 mt-4">

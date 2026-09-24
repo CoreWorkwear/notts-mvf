@@ -10,6 +10,8 @@ import { logError } from '../lib/logger'
 // (foregrounding fires both events together). Exported for the test.
 export const FOCUS_REFETCH_MIN_MS = 5000
 
+// One shared empty set for fixtures whose team has no squad loaded — avoids
+// allocating per fixture and keeps referential equality stable.
 const EMPTY_SQUAD = new Set()
 
 // Loads everything the Fixtures screen needs for a season. RLS scopes the
@@ -25,12 +27,19 @@ export function useFixtures(seasonId) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const lastLoadStart = useRef(0)
+  // Latest-wins: only the most recent load may apply its response. A slower,
+  // OLDER response landing after a newer one used to overwrite it — on a phone
+  // waking its radio, the foreground refetch would arrive after the post-tap
+  // refetch and revert the player's In to "—" (the DB said in; the screen didn't).
+  const reqId = useRef(0)
 
   const load = useCallback(async () => {
     // No season yet — before one resolves, or if the seasons fetch itself
     // failed. Don't sit on the "Pulling the fixtures…" loader forever: resolve
     // to an empty, non-loading state so the screen renders.
-    if (!seasonId) { setFixtures([]); setLoading(false); setError(null); return }
+    if (!seasonId) { reqId.current++; setFixtures([]); setLoading(false); setError(null); return }
+    const id = ++reqId.current
+    const isCurrent = () => id === reqId.current
     lastLoadStart.current = Date.now()
     setLoading(true)
     setError(null)
@@ -55,8 +64,7 @@ export function useFixtures(seasonId) {
         supabase.from('teams').select('id, key, label, match_name, colour, is_first_team, league_name'),
         supabase.from('opponents').select('id, name, badge_url, home_venue, home_address, home_postcode').order('name'),
         // Roster per team: approved, active squad players. Supporters + pending
-        // players don't count, and neither do their availability rows. (No
-        // eligibility gate — §1.)
+        // players don't count. (No eligibility gate — §1.)
         supabase
           .from('team_memberships')
           .select('team_id, profiles!inner(id, active, approved, is_player)'),
@@ -66,25 +74,29 @@ export function useFixtures(seasonId) {
       // throw into the catch below so previous data survives and error is set.
       const fetchErr = [fixRes, teamRes, oppRes, rosterRes].find((r) => r?.error)?.error
       if (fetchErr) throw fetchErr
+      if (!isCurrent()) return // a newer load has since started — let it win
 
-      // Squad ids per team_id — the one definition of who counts for a team.
-      const squadByTeam = squadIdsByTeam(rosterRes.data)
+      // Roster per team_id: the approved, active players in that squad. Both
+      // halves of the no-reply sum have to mean the same thing, so the squad
+      // definition is shared (squadIdsByTeam) with the Who's In readers.
+      const rosterByTeam = squadIdsByTeam(rosterRes.data)
 
       const enriched = (fixRes.data ?? []).map((f) => {
         const avail = f.availability ?? []
-        // Both halves of the no-reply sum have to mean the same thing. Counting
-        // every answer while sizing the roster on squad members only let a
-        // supporter's or an ex-player's row inflate the in/maybe numbers AND
-        // eat a name off the chase list (the Math.max hid it going negative).
-        const squad = squadByTeam[f.team_id] ?? EMPTY_SQUAD
+        const roster = rosterByTeam[f.team_id] ?? EMPTY_SQUAD
         const counts = { in: 0, maybe: 0, out: 0 }
         let mine = null
+        // Only roster members count. An answer from anyone else — a player
+        // since deactivated or moved squads (their row is never cascaded
+        // away) — would put the hero's "N not replied" out of step with the
+        // Who's In sheet, which reckons it per roster member.
         for (const a of avail) {
-          if (a.status in counts && squad.has(a.profile_id)) counts[a.status]++
-          if (a.profile_id === user?.id) mine = a.status // your own answer, counted or not
+          if (a.profile_id === user?.id) mine = a.status
+          if (!roster.has(a.profile_id)) continue
+          if (a.status in counts) counts[a.status]++
         }
         const replied = counts.in + counts.maybe + counts.out
-        const rosterSize = squad.size
+        const rosterSize = roster.size
         return {
           ...f,
           counts,
@@ -107,10 +119,10 @@ export function useFixtures(seasonId) {
       // /fixtures in client_errors) must NOT wedge the loader on forever. Leave
       // any previously-loaded fixtures in place and surface the error so the
       // screen can offer a retry rather than hang.
-      logError('fetch', e?.message ?? 'useFixtures load failed', { hook: 'useFixtures', seasonId })
-      setError(e ?? new Error('load failed'))
+      logError('fetch', e ?? 'useFixtures load failed', { hook: 'useFixtures', seasonId })
+      if (isCurrent()) setError(e ?? new Error('load failed'))
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
   }, [seasonId, user?.id])
 

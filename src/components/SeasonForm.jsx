@@ -8,6 +8,7 @@ import { validateSeason } from '../lib/seasons'
 // carry; fixtures/results/table/stats are per-season, so the new one starts fresh).
 export default function SeasonForm({ open, onClose, onSave, season }) {
   const editing = !!season
+  const lockedCurrent = editing && !!season.is_current
   const [label, setLabel] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -54,9 +55,17 @@ export default function SeasonForm({ open, onClose, onSave, season }) {
             <input className="input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
         </div>
 
-        <button type="button" className={'chip' + (makeCurrent ? ' paid-on' : '')} aria-pressed={makeCurrent} onClick={() => setMakeCurrent((v) => !v)}>
+        {/* Un-ticking this on the season that IS current would be a silent no-op
+            (nothing else becomes current), so it's locked with a hint instead. */}
+        <button type="button" className={'chip' + (makeCurrent ? ' paid-on' : '')} aria-pressed={makeCurrent}
+          disabled={lockedCurrent} onClick={() => setMakeCurrent((v) => !v)}>
           {makeCurrent ? 'Current season ✓' : 'Make this the current season'}
         </button>
+        {lockedCurrent && (
+          <p className="dim" style={{ fontSize: 12 }}>
+            This is the current season. To move on, set another season as current from the list.
+          </p>
+        )}
         {makeCurrent && !editing && (
           <p className="dim" style={{ fontSize: 12 }}>
             Rolling over: players &amp; opponents carry forward; fixtures, results, the table and stats start fresh.

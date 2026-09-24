@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useMedia } from '../hooks/useMedia'
+import { friendlyError } from '../lib/errors'
 import ImageUpload from './ImageUpload'
 import Loader from './Loader'
+import Toast from './Toast'
 
 // Admin club media (HANDOVER §6): the crest + the club photo pool that sits
 // behind the poster heroes. Player headshots and opponent badges are managed
@@ -9,17 +12,34 @@ import Loader from './Loader'
 export default function MediaPanel() {
   const { club } = useAuth()
   const { photos, loading, addPhoto, removePhoto, setCrest } = useMedia()
+  const [toast, setToast] = useState(null)
+
+  // By the time these run the file is already in Storage, so a failed row write
+  // is "uploaded, but…" — it has to be said out loud, not lost as a rejection.
+  async function onCrest(url) {
+    const { error } = await setCrest(url)
+    if (error) setToast(`Uploaded, but couldn't set it as the crest. ${friendlyError(error, 'Give it another go.')}`)
+  }
+  async function onPhoto(url) {
+    const { error } = await addPhoto(url)
+    if (error) setToast(`Uploaded, but couldn't add it to the club photos. ${friendlyError(error, 'Give it another go.')}`)
+  }
+  async function onRemove(id) {
+    const { error } = await removePhoto(id)
+    if (error) setToast(`Couldn't remove that photo. ${friendlyError(error, 'Give it another go.')}`)
+  }
 
   if (loading) return <Loader label="Loading the club media…" />
 
   return (
     <div className="mt-4 col gap-5">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <div>
         <p className="kicker"><span className="kicker-rule">CLUB CREST</span></p>
         <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Shows in the header, on login and across the poster heroes.</p>
         <div className="mt-3">
           <ImageUpload folder="crest" shape="round" current={club?.crest_url} label={club?.crest_url ? 'Replace crest' : 'Upload crest'}
-            maxDim={512} onUploaded={(url) => setCrest(url)} />
+            maxDim={512} onUploaded={onCrest} />
         </div>
       </div>
 
@@ -27,7 +47,7 @@ export default function MediaPanel() {
         <p className="kicker"><span className="kicker-rule">CLUB PHOTOS</span></p>
         <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Used at random behind fixture & result heroes (pin one to a game from its detail). Pick several at once — picture files only.</p>
         <div className="mt-3">
-          <ImageUpload folder="photos" shape="square" multiple label="Add club photos" onUploaded={(url) => addPhoto(url)} />
+          <ImageUpload folder="photos" shape="square" multiple label="Add club photos" onUploaded={onPhoto} />
         </div>
 
         {photos.length === 0 ? (
@@ -37,7 +57,7 @@ export default function MediaPanel() {
             {photos.map((p) => (
               <div key={p.id} className="photo-cell">
                 <img src={p.url} alt="" />
-                <button className="photo-del" onClick={() => removePhoto(p.id)} aria-label="Remove photo">✕</button>
+                <button className="photo-del" onClick={() => onRemove(p.id)} aria-label="Remove photo">✕</button>
               </div>
             ))}
           </div>

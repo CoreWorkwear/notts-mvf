@@ -5,7 +5,7 @@ import Loader from '../components/Loader'
 import Toast from '../components/Toast'
 
 export default function Sponsors() {
-  const { sponsors, loading, save, remove } = useSponsors()
+  const { sponsors, loading, error, save, remove, refetch } = useSponsors()
   const [editing, setEditing] = useState(null)
   const [open, setOpen] = useState(false)
   const [toast, setToast] = useState(null)
@@ -18,13 +18,27 @@ export default function Sponsors() {
     try { await remove(s.id) } catch { setToast("Couldn't remove that sponsor — give it another go.") }
   }
 
-  if (loading) return <Loader label="Loading sponsors…" />
+  // Only the first load gets the Loader: a refetch after a save flips loading
+  // too, and swapping the page out would unmount the open SponsorForm sheet.
+  if (loading && sponsors.length === 0) return <Loader label="Loading sponsors…" />
+
+  // A failed first load is not "None yet." under every tier: say so, offer a retry.
+  if (error && sponsors.length === 0) return (
+    <div className="page">
+      <div className="empty mt-5" role="alert">
+        <p className="empty-title">Couldn't load the sponsors</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className="kicker-rule">SPONSORS</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>Club sponsors</h1>
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
       <p className="muted mt-2" style={{ fontSize: 14 }}>Logos carry through the app — the main sponsor leads, the kit sponsor sits beneath, and the Man-of-the-Match sponsor gets a line on results.</p>
 
       <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a sponsor</button>

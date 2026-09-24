@@ -18,12 +18,17 @@ export default function Club() {
   const { competitions } = useCompetitions(seasonId)
   const [view, setView] = useState('table')
 
-  if (loading) return <Loader label="Totting up the club…" />
+  const empty = table.length === 0 && teams.length === 0
+
+  // Only the first load gets the Loader: a refetch (e.g. after the league table
+  // is edited) flips loading too, and swapping the page out unmounted the panel
+  // and any sheet it had open.
+  if (loading && empty) return <Loader label="Totting up the club…" />
 
   // A failed first load (flaky connection) gets a retry, not a blank club.
-  if (error && table.length === 0 && teams.length === 0) return (
+  if (error && empty) return (
     <div className="page">
-      <div className="empty mt-5">
+      <div className="empty mt-5" role="alert">
         <p className="empty-title">Couldn't load the club</p>
         <p>Looks like a dodgy connection. Have another go.</p>
         <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
@@ -35,6 +40,7 @@ export default function Club() {
     <div className="page">
       <p className="kicker"><span className="kicker-rule">THE CLUB</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>{club?.name ?? 'The Club'}</h1>
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
       <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
         <button className={'btn grow club-tab ' + (view === 'table' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('table')}>Table</button>
         <button className={'btn grow club-tab ' + (view === 'squad' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('squad')}>Squad</button>

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { FORMATIONS, FORMATION_NAMES, DEFAULT_FORMATION, formationSlots, rowsToState, stateToRows, filledCount, swapStarters } from './lineup'
+import { FORMATION_NAMES, DEFAULT_FORMATION, formationSlots, rowsToState, stateToRows, filledCount, swapStarters } from './lineup'
 
 describe('formations', () => {
   test('every formation has exactly 11 outfield+GK slots', () => {

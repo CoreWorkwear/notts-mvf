@@ -10,11 +10,9 @@ import { fmtDate } from '../lib/format'
 // Club news / notifications — everyone reads; admins post (and optionally push).
 export default function News() {
   const { isAdmin } = useAuth()
-  const { items, loading, post, remove } = useNews()
+  const { items, loading, error, post, remove, refetch } = useNews()
   const [composing, setComposing] = useState(false)
   const [toast, setToast] = useState(null)
-
-  if (loading) return <Loader label="Catching up on the news…" />
 
   async function onDelete(id) {
     if (confirm('Delete this post?')) {
@@ -22,11 +20,27 @@ export default function News() {
     }
   }
 
+  // Only the first load gets the Loader: a refetch after a post flips loading
+  // too, and swapping the page out would unmount the open compose sheet.
+  if (loading && items.length === 0) return <Loader label="Catching up on the news…" />
+
+  // A failed first load is not an empty diary: say so and offer a retry.
+  if (error && items.length === 0) return (
+    <div className="page">
+      <div className="empty mt-5" role="alert">
+        <p className="empty-title">Couldn't fetch the news</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
+
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className="kicker-rule">CLUB NEWS</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>What's on</h1>
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
 
       {isAdmin && (
         <button className="btn btn-primary btn-block mt-3" onClick={() => setComposing(true)}>+ Post news</button>

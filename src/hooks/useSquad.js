@@ -24,7 +24,7 @@ export function useSquad() {
         teamKeys: (p.team_memberships ?? []).map((m) => m.teams?.key).filter(Boolean),
       })))
     } catch (e) {
-      logError('fetch', e?.message ?? 'useSquad load failed', { hook: 'useSquad' })
+      logError('fetch', e ?? 'useSquad load failed', { hook: 'useSquad' })
       setError(e ?? new Error('load failed'))
     } finally {
       setLoading(false)

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useOpponents } from '../hooks/useOpponents'
 import { sortStandings } from '../lib/stats'
 import { teamMatchName } from '../lib/teams'
+import { friendlyError } from '../lib/errors'
 
 // Manual league table, per COMPETITION / per season (§1.5). View shows pos, team,
 // P, GD, Pts, W-D-L with our row highlighted; admin edits the grid (team names
@@ -127,7 +128,9 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
     setError(null); setBusy(true)
     try {
       // Replace this competition's rows wholesale — simplest correct approach.
-      await supabase.from('league_tables').delete().eq('season_id', seasonId).eq('competition_id', competition.id)
+      // If the delete fails we MUST stop: inserting on top doubles every row.
+      const { error: dErr } = await supabase.from('league_tables').delete().eq('season_id', seasonId).eq('competition_id', competition.id)
+      if (dErr) throw dErr
       const payload = draft
         .filter((r) => r.team_name.trim())
         .map((r) => ({
@@ -141,7 +144,7 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
         if (error) throw error
       }
       onSaved(); onClose()
-    } catch (err) { setError(err.message) } finally { setBusy(false) }
+    } catch (err) { setError(friendlyError(err, "Couldn't save the table — give it another go.")) } finally { setBusy(false) }
   }
 
   const N = ['played', 'won', 'drawn', 'lost', 'gf', 'ga', 'pts']
@@ -152,7 +155,6 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
       <p className="kicker"><span className="kicker-rule">{competition?.name ?? 'TABLE'}</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>Edit the table</h2>
       <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Straight off the league's own site. GD sorts itself.</p>
-      {error && <p className="field-error mt-3">{error}</p>}
 
       {/* Pick from your saved opponents or your own team names, or free-type. */}
       <datalist id="lt-teamnames">
@@ -180,6 +182,8 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
       </div>
 
       <button type="button" className="chip mt-3" onClick={addRow}>+ Add a team</button>
+      {/* Right above the Save button so it's on screen on a phone with a long division. */}
+      {error && <p className="field-error mt-3" role="alert">{error}</p>}
       <button className="btn btn-primary btn-block mt-3" disabled={busy} onClick={save}>
         {busy ? 'Saving…' : 'Save table'}
       </button>

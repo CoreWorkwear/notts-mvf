@@ -8,6 +8,8 @@ import { MATCH_FEE } from '../lib/constants'
 import { buildFixtureCsv, csvFilename, downloadCsv } from '../lib/csv'
 import { isSquadMember, squadIds } from '../lib/players'
 import { fixtureMatchup } from '../lib/teams'
+import { friendlyError } from '../lib/errors'
+import { logError } from '../lib/logger'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
 // list — the XI filling up, a big count, and a one-tap chase for the players who
@@ -16,6 +18,8 @@ import { fixtureMatchup } from '../lib/teams'
 export default function WhosInSheet({ open, onClose, fixture }) {
   const { user, isAdmin } = useAuth()
   const [groups, setGroups] = useState(null)
+  const [error, setError] = useState(null)
+  const [attempt, setAttempt] = useState(0) // bumped by "Try again"
   const [copied, setCopied] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState(null)
@@ -23,49 +27,65 @@ export default function WhosInSheet({ open, onClose, fixture }) {
 
   useEffect(() => {
     if (!open || !fixture) return
-    setGroups(null); setCopied(false)
+    // Open A then B quickly: A's late answer must not land under B's heading.
+    let active = true
+    setGroups(null); setError(null); setCopied(false)
     ;(async () => {
-      const [availRes, rosterRes, payRes] = await Promise.all([
-        supabase
-          .from('availability')
-          .select('status, profile:profiles(id, first_name, last_name, preferred)')
-          .eq('fixture_id', fixture.id),
-        supabase
-          .from('team_memberships')
-          .select('profiles!inner(id, first_name, last_name, active, approved, is_player)')
-          .eq('team_id', fixture.team_id),
-        supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
-      ])
+      try {
+        const [availRes, rosterRes, payRes] = await Promise.all([
+          supabase
+            .from('availability')
+            .select('status, profile:profiles(id, first_name, last_name, preferred, active, approved, is_player)')
+            .eq('fixture_id', fixture.id),
+          supabase
+            .from('team_memberships')
+            .select('profiles!inner(id, first_name, last_name, active, approved, is_player)')
+            .eq('team_id', fixture.team_id),
+          supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
+        ])
+        if (!active) return
+        // A failed fetch is an error, not "0 IN / no one's in yet".
+        const failed = availRes.error ?? rosterRes.error ?? payRes.error
+        if (failed) throw failed
 
-      const paidById = Object.fromEntries((payRes.data ?? []).map((p) => [p.profile_id, p.paid]))
-      // The whole sheet reads off this squad, not off who happens to hold an
-      // availability row: an answer from a supporter, an unapproved signup or a
-      // player who's been moved on isn't a body on the pitch, and on the IN
-      // bucket it would also raise a subs line against someone who owes nothing.
-      const squad = squadIds(rosterRes.data)
-      const replied = {}
-      const buckets = { in: [], maybe: [], out: [] }
-      for (const a of availRes.data ?? []) {
-        const p = a.profile
-        if (!p || !squad.has(p.id)) continue
-        replied[p.id] = true
-        if (a.status in buckets) {
-          const per = person(p, user)
-          if (a.status === 'in') per.paid = !!paidById[p.id]
-          buckets[a.status].push(per)
+        const paidById = Object.fromEntries((payRes.data ?? []).map((p) => [p.profile_id, p.paid]))
+        // THIS team's squad — the one definition (squadIds) both halves of the
+        // sheet share, so "5 in" and "Not replied" always reckon the same set.
+        const squad = squadIds(rosterRes.data)
+        const replied = {}
+        const buckets = { in: [], maybe: [], out: [] }
+        for (const a of availRes.data ?? []) {
+          const p = a.profile
+          if (!p) continue
+          // Only THIS squad's members count — an answer from an inactive /
+          // pending / supporter account, or a player since moved to the other
+          // squad (their row is never cascaded away), is left off, so the
+          // sheet agrees with the roster-based "Not replied" (and the RLS).
+          if (!squad.has(p.id)) continue
+          replied[p.id] = true
+          if (a.status in buckets) {
+            const per = person(p, user)
+            if (a.status === 'in') per.paid = !!paidById[p.id]
+            buckets[a.status].push(per)
+          }
         }
-      }
 
-      const noReply = []
-      for (const m of rosterRes.data ?? []) {
-        const p = m.profiles
-        if (!isSquadMember(p)) continue          // skip supporters + pending players
-        if (!replied[p.id]) noReply.push(person(p, user))
-      }
+        const noReply = []
+        for (const m of rosterRes.data ?? []) {
+          const p = m.profiles
+          if (!isSquadMember(p)) continue          // skip supporters + pending players
+          if (!replied[p.id]) noReply.push(person(p, user))
+        }
 
-      setGroups({ ...buckets, noReply })
+        setGroups({ ...buckets, noReply })
+      } catch (err) {
+        if (!active) return
+        logError('fetch', err, { where: 'WhosInSheet', fixtureId: fixture.id })
+        setError(friendlyError(err, "Couldn't load who's in — check your signal and try again."))
+      }
     })()
-  }, [open, fixture, user])
+    return () => { active = false }
+  }, [open, fixture, user, attempt])
 
   if (!fixture) return null
   const f = fixture
@@ -133,7 +153,12 @@ export default function WhosInSheet({ open, onClose, fixture }) {
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{fixtureMatchup(f)}</h2>
       <p className="mono muted" style={{ fontSize: 13 }}>{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO</p>
 
-      {!groups ? (
+      {error ? (
+        <div className="mt-5">
+          <p className="field-error" role="alert">{error}</p>
+          <button className="btn btn-ghost btn-block mt-3" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+        </div>
+      ) : !groups ? (
         <p className="muted mt-5 center">Counting heads…</p>
       ) : (
         <>

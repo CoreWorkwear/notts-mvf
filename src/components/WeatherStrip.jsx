@@ -44,6 +44,9 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
       } catch { /* weather is best-effort */ }
     })()
     return () => { active = false }
+    // Keyed on the fields that change the forecast, not the fixture object —
+    // every refetch hands us a new object and would refetch the weather too.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixture?.id, fixture?.match_date, fixture?.kickoff, fixture?.venue_lat, fixture?.venue_lng])
 
   if (!wx) return null

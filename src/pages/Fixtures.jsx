@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -34,16 +34,35 @@ export default function Fixtures() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)   // fixture being edited
   const [resultFor, setResultFor] = useState(null) // fixture to log a result for
-  const [squad, setSquad] = useState([])         // for the result form
+  const [everyone, setEveryone] = useState(null) // every club profile (incl. inactive), for the result form; null = not loaded
   const [toast, setToast] = useState(null)       // availability write failures
 
-  // Admin needs the squad for the result form's scorer/MOTM pickers.
-  useEffect(() => {
-    if (!isAdmin) return
-    supabase.from('profiles').select('id, first_name, last_name').eq('active', true)
-      .then(({ data }) => setSquad((data ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, first: p.first_name }))))
-      .catch(() => {}) // result-form pickers just start empty on a dropped fetch
-  }, [isAdmin])
+  // The result form needs the club's profiles: the ACTIVE ones for its
+  // scorer/MOTM pickers, and everyone (a scorer since deactivated must still
+  // resolve by id, or editing that result would drop their goal). Stats key by
+  // profile_id, so a result logged with this list missing would save scorers
+  // as free text — never open the form without it.
+  const loadEveryone = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('id, first_name, last_name, active').order('last_name')
+      if (error) throw error
+      setEveryone((data ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, first: p.first_name, active: p.active !== false })))
+      return true
+    } catch (e) {
+      logError('fetch', e ?? 'squad list failed', { op: 'resultSquad' })
+      return false
+    }
+  }, [])
+  useEffect(() => { if (isAdmin) loadEveryone() }, [isAdmin, loadEveryone])
+  const squad = useMemo(() => (everyone ?? []).filter((p) => p.active), [everyone])
+
+  async function openResultForm(fixture) {
+    if (!everyone && !(await loadEveryone())) {
+      setToast("Squad list didn't load, so scorers wouldn't link to players — check your signal and try again.")
+      return
+    }
+    setResultFor(fixture)
+  }
 
   // Team filter only for admins or players in both squads.
   const showFilter = isAdmin || teamKeys.length > 1
@@ -74,7 +93,7 @@ export default function Fixtures() {
     let { error } = await setAvailability(fixtureId, user.id, status)
     if (error) ({ error } = await setAvailability(fixtureId, user.id, status))
     if (error) {
-      logError('write', error.message, { op: 'setAvailability', fixtureId, status })
+      logError('write', error, { op: 'setAvailability', fixtureId, status })
       applyMyStatus(fixtureId, prev)
       setToast("Couldn't save that — check your signal and give it another go.")
       return false
@@ -86,11 +105,15 @@ export default function Fixtures() {
   function openEdit(f) { setEditing(f); setFormOpen(true) }
   function openAdd() { setEditing(null); setFormOpen(true) }
 
-  // Player status line / admin "needs doing" strip.
-  const next3 = filtered.slice(0, 3)
+  // Player status line / admin "needs doing" strip. "The next N" are games
+  // this player can actually answer — visibility is club-wide but answering
+  // is squad-scoped (0034), so a Community-only player's First Team games
+  // don't count against them; nor does a postponed game.
+  const answerable = active.filter((f) => { const b = respondBlockFor(f); return b === null || b === 'kicked-off' })
+  const next3 = answerable.slice(0, 3)
   const inCount = next3.filter((f) => f.myStatus === 'in').length
   const needsResult = past.filter((f) => !f.hasResult).length
-  const lowNumbers = upcoming.filter((f) => f.match_date <= addDays(todayISO(), 7) && f.counts.in < 8).length
+  const lowNumbers = upcoming.filter((f) => !f.postponed && f.match_date <= addDays(todayISO(), 7) && f.counts.in < 8).length
 
   if (loading && fixtures.length === 0) return <Loader label="Pulling the fixtures…" />
 
@@ -134,7 +157,9 @@ export default function Fixtures() {
         </div>
       )}
 
-      {!isAdmin && !canRespond && (
+      {/* Account-state banner — only once the profile is KNOWN. Before it loads
+          canRespond is false for everyone, and this read as "awaiting sign-off". */}
+      {profile && !isAdmin && !canRespond && (
         <div className="banner mt-3">
           {accountStatus === 'supporter'
             ? "You're set up as a supporter — you can follow the fixtures and results, but you won't be picked for the squad."
@@ -236,7 +261,7 @@ export default function Fixtures() {
         onClose={() => setDetail(null)}
         onSetAvail={(s) => handleSetAvail(detail.id, s)}
         onEdit={() => { const d = detail; setDetail(null); openEdit(d) }}
-        onLogResult={() => { const d = detail; setDetail(null); setResultFor(d) }}
+        onLogResult={() => { const d = detail; setDetail(null); openResultForm(d) }}
       />
 
       {/* Always mounted (open toggled) so the sheet's hardware-back stays sane;
@@ -259,6 +284,7 @@ export default function Fixtures() {
           open={!!resultFor}
           fixture={resultFor}
           squad={squad}
+          everyone={everyone ?? undefined}
           onClose={() => setResultFor(null)}
           onSaved={refetch}
         />

@@ -67,4 +67,20 @@ describe('LineupBoard', () => {
     render(<LineupBoard fixture={{ id: 'f1' }} isAdmin={false} open />)
     expect(screen.queryByRole('button', { name: /push the line-up/i })).not.toBeInTheDocument()
   })
+
+  // "Done" is not "Save": leaving the editor without saving must show the SAVED
+  // line-up again, not the unsaved picks (which the push button wouldn't send).
+  test('Done without saving throws the unsaved picks away', async () => {
+    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] } }
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await userEvent.click(screen.getByRole('button', { name: /edit the line-up/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add sub/i }))
+    await userEvent.click(screen.getByText('Sam Lee').closest('button'))
+    expect(screen.getByText(/SUBS · 1/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^done$/i }))
+    expect(save).not.toHaveBeenCalled()
+    expect(screen.queryByText(/SUBS · 1/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Sam Lee')).not.toBeInTheDocument()
+  })
 })

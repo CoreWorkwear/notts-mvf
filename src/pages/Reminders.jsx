@@ -8,7 +8,7 @@ import Loader from '../components/Loader'
 //   • Availability nudges → not-replied + maybe, "set your availability"
 //   • Match reminders     → in + maybe, the match details
 export default function Reminders() {
-  const { settings, loading, save } = useReminders()
+  const { settings, loading, error: loadError, save, refetch } = useReminders()
   const [availabilityEnabled, setAvailabilityEnabled] = useState(false)
   const [matchEnabled, setMatchEnabled] = useState(false)
   const [availabilityOffsets, setAvailabilityOffsets] = useState([336, 168, 72])
@@ -38,7 +38,21 @@ export default function Reminders() {
     else setNotice('Reminder settings saved 👍')
   }
 
-  if (loading) return <Loader label="Loading reminders…" />
+  // Only the first load gets the Loader — a post-save refetch keeps the form up.
+  if (loading && !settings) return <Loader label="Loading reminders…" />
+
+  // A failed load is NOT "no settings yet". The form used to render its
+  // defaults (both OFF) here, and Save upserted them over the club's real
+  // settings with a success toast. No settings, no Save — retry instead.
+  if (loadError && !settings) return (
+    <div className="page">
+      <div className="empty mt-5" role="alert">
+        <p className="empty-title">Couldn't load the reminders</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page">

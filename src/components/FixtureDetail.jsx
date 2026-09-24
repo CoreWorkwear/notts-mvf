@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
+import Toast from './Toast'
 import AvailControl from './AvailControl'
 import { supabase } from '../lib/supabase'
+import { friendlyError } from '../lib/errors'
+import { logError } from '../lib/logger'
 import { useAuth } from '../context/AuthContext'
 import { fmtDateLong, fmtKO } from '../lib/format'
 import { heroBackground } from '../lib/media'
@@ -22,7 +25,11 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
   const { user } = useAuth()
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
+  const [whoLoading, setWhoLoading] = useState(false)
+  const [whoError, setWhoError] = useState(null)
+  const [whoAttempt, setWhoAttempt] = useState(0) // bumped by "Try again"
   const [photoAssets, setPhotoAssets] = useState([]) // [{id,url}] for the pin picker
+  const [toast, setToast] = useState(null)
   // Local mirror of the viewer's status so the control reflects a change at once
   // — the `fixture` prop is a frozen snapshot from the parent's list (§2.2).
   const [myStatus, setMyStatus] = useState(fixture?.myStatus ?? null)
@@ -31,27 +38,6 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
     if (!open || !fixture) return
     setTab('me')
     setMyStatus(fixture.myStatus ?? null)
-    // Who's in, gated on the squad that plays this game. An availability row is
-    // not a squad place — supporters, pending signups and players who've been
-    // moved on can all still hold one — and the count under this list comes off
-    // the roster, so an ungated list wouldn't add up with it.
-    Promise.all([
-      supabase
-        .from('availability')
-        .select('status, profile:profiles(id, first_name, last_name)')
-        .eq('fixture_id', fixture.id),
-      fixture.team_id
-        ? supabase
-            .from('team_memberships')
-            .select('profiles!inner(id, active, approved, is_player)')
-            .eq('team_id', fixture.team_id)
-        : Promise.resolve({ data: [] }),
-    ])
-      .then(([availRes, rosterRes]) => {
-        const squad = squadIds(rosterRes.data)
-        setRows((availRes.data ?? []).filter((r) => r.profile && squad.has(r.profile.id)))
-      })
-      .catch(() => {}) // secondary detail — a dropped fetch just leaves it empty
     if (isAdmin) {
       supabase.from('media_assets').select('id, url').eq('type', 'photo')
         .then(({ data }) => setPhotoAssets(data ?? []))
@@ -59,13 +45,55 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
     }
   }, [open, fixture, isAdmin])
 
+  // Who's in: reset per fixture (B must never show A's names while it loads),
+  // ignore a late answer for a previous fixture, and say so when it fails
+  // rather than posing as "Available · 0".
+  useEffect(() => {
+    if (!open || !fixture) return
+    let active = true
+    setRows([]); setWhoError(null); setWhoLoading(true)
+    Promise.all([
+      supabase
+        .from('availability')
+        .select('status, profile:profiles(id, first_name, last_name, active, approved, is_player)')
+        .eq('fixture_id', fixture.id),
+      supabase
+        .from('team_memberships')
+        .select('profiles!inner(id, active, approved, is_player)')
+        .eq('team_id', fixture.team_id),
+    ])
+      .then(([availRes, rosterRes]) => {
+        if (!active) return
+        const error = availRes.error ?? rosterRes.error
+        if (error) throw error
+        // Same squad definition as the hero counts and the Who's In sheet
+        // (squadIds): an answer from someone no longer in THIS squad is left
+        // off, so every reader of this fixture agrees on who counts.
+        const squad = squadIds(rosterRes.data)
+        setRows((availRes.data ?? []).filter((r) => r.profile && squad.has(r.profile.id)))
+        setWhoLoading(false)
+      })
+      .catch((err) => {
+        if (!active) return
+        logError('fetch', err, { where: 'FixtureDetail.whosIn', fixtureId: fixture.id })
+        setWhoError(friendlyError(err, "Couldn't load who's in — check your signal and try again."))
+        setWhoLoading(false)
+      })
+    return () => { active = false }
+  }, [open, fixture, whoAttempt])
+
   if (!fixture) return null
   const f = fixture
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
 
   async function pin(mediaId) {
-    await setPinnedImage(f.id, f.pinned_image_id === mediaId ? null : mediaId)
+    const { error } = await setPinnedImage(f.id, f.pinned_image_id === mediaId ? null : mediaId)
+    if (error) {
+      logError('write', error, { where: 'FixtureDetail.pin', fixtureId: f.id })
+      setToast(friendlyError(error, "Couldn't pin that photo — give it another go."))
+      return
+    }
     onChanged?.()
   }
   const w3wUrl = f.w3w ? `https://what3words.com/${f.w3w.replace(/^\/+/, '')}` : null
@@ -80,6 +108,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
 
   return (
     <Sheet open={open} onClose={onClose}>
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <div className="det-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>{teamMatchName(f.team)}{f.team?.is_first_team ? ' · First Team' : ''} · {f.home_away} · {f.fixture_type}</span>
         <h2 className="display" style={{ fontSize: 32, color: '#fff', marginTop: 6 }}>{f.opponent?.name}</h2>
@@ -111,9 +140,10 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
                 const prev = myStatus
                 setMyStatus(s) // optimistic — reflect the pick immediately
                 // onSetAvail resolves false (rather than throwing) when the
-                // write failed after retrying — put the old pick back.
-                try { const ok = await onSetAvail(s); if (ok === false) setMyStatus(prev) }
-                catch { setMyStatus(prev) }
+                // write failed after retrying — put the old pick back, and
+                // pass the verdict on so the control doesn't say "Saved ✓".
+                try { const ok = await onSetAvail(s); if (ok === false) setMyStatus(prev); return ok }
+                catch { setMyStatus(prev); return false }
               }} />
             : <p className="muted" style={{ fontSize: 14 }}>{respondBlockCopy(blockReason, f)}</p>}
 
@@ -161,10 +191,21 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
         </div>
       ) : (
         <div className="mt-4 col gap-4">
-          <WhoGroup title="Available" colour="var(--green-bright)" rows={group('in')} name={name} isMe={isMe} />
-          <WhoGroup title="Maybe" colour="var(--amber)" rows={group('maybe')} name={name} isMe={isMe} />
-          <WhoGroup title="Can't make it" colour="var(--red-bright)" rows={group('out')} name={name} isMe={isMe} />
-          <p className="muted center" style={{ fontSize: 14 }}>{f.noReply} not replied yet</p>
+          {whoError ? (
+            <>
+              <p className="field-error" role="alert">{whoError}</p>
+              <button className="btn btn-ghost btn-block" onClick={() => setWhoAttempt((n) => n + 1)}>Try again</button>
+            </>
+          ) : whoLoading ? (
+            <p className="muted center" style={{ fontSize: 14 }}>Counting heads…</p>
+          ) : (
+            <>
+              <WhoGroup title="Available" colour="var(--green-bright)" rows={group('in')} name={name} isMe={isMe} />
+              <WhoGroup title="Maybe" colour="var(--amber)" rows={group('maybe')} name={name} isMe={isMe} />
+              <WhoGroup title="Can't make it" colour="var(--red-bright)" rows={group('out')} name={name} isMe={isMe} />
+              <p className="muted center" style={{ fontSize: 14 }}>{f.noReply} not replied yet</p>
+            </>
+          )}
         </div>
       )}
 

@@ -3,24 +3,41 @@ import Sheet from './Sheet'
 import Toast from './Toast'
 import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
+import { friendlyError } from '../lib/errors'
 
 // Admin: log or edit a result. FT + HT scores, goals added one at a time
 // (scorer + optional minute + optional assist, squad-pick-or-free-type), MOTM.
 // Names resolve to profile_id when they match a squad member, else free text
 // (HANDOVER §3 — stats key by profile_id). Stays mounted; resets on open.
-export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
+//
+// `squad` (ACTIVE players) feeds the pickers. `everyone` (optional — every club
+// profile, leavers included, same {id, name} shape) is what stored ids resolve
+// against, so a goal or MOTM credited to a player who has since left the club
+// survives an edit. An id we can't resolve at all is carried through the save
+// untouched (shown as "Former player") rather than blanked and dropped.
+const FORMER = 'Former player'
+
+export default function ResultForm({ open, onClose, onSaved, fixture, squad, everyone }) {
   const existing = fixture?.result
   const [usScore, setUsScore] = useState(0)
   const [themScore, setThemScore] = useState(0)
   const [htUs, setHtUs] = useState(0)
   const [htThem, setHtThem] = useState(0)
   const [motm, setMotm] = useState('')
+  const [motmId, setMotmId] = useState(null) // the stored id, carried until the name is retyped
   const [motmPhoto, setMotmPhoto] = useState(null)
   const [goals, setGoals] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const nameFor = (id, free) => (id ? squad.find((s) => s.id === id)?.name ?? '' : free ?? '')
+  const people = everyone ?? squad
+
+  // A stored (id, free-text) pair → what to show + the id to carry. Only a row
+  // that came from an id carries one; retyping the name clears it (see setGoal).
+  const resolve = (id, free) => {
+    if (!id) return { text: free ?? '', id: null }
+    return { text: people.find((s) => s.id === id)?.name ?? FORMER, id }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -29,32 +46,41 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
     setThemScore(existing?.them ?? 0)
     setHtUs(existing?.ht_us ?? 0)
     setHtThem(existing?.ht_them ?? 0)
-    setMotm(nameFor(existing?.motm_profile_id, existing?.motm_name))
+    const m = resolve(existing?.motm_profile_id, existing?.motm_name)
+    setMotm(m.text); setMotmId(m.id)
     setMotmPhoto(existing?.motm_photo_url ?? null)
-    setGoals((fixture?.goals ?? []).map((g) => ({
-      scorer: nameFor(g.scorer_profile_id, g.scorer_name),
-      minute: g.minute ?? '',
-      assist: nameFor(g.assist_profile_id, g.assist_name),
-    })))
+    setGoals((fixture?.goals ?? []).map((g) => {
+      const s = resolve(g.scorer_profile_id, g.scorer_name)
+      const a = resolve(g.assist_profile_id, g.assist_name)
+      return { scorer: s.text, scorerId: s.id, minute: g.minute ?? '', assist: a.text, assistId: a.id }
+    }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   function match(name) {
     const n = (name || '').trim().toLowerCase()
     if (!n) return { id: null, name: null }
-    const hit = squad.find((s) => s.name.toLowerCase() === n)
+    const hit = people.find((s) => s.name.toLowerCase() === n)
     return hit ? { id: hit.id, name: null } : { id: null, name: name.trim() }
   }
+  // A carried id wins; otherwise resolve what was typed.
+  const pick = (text, id) => (id ? { id, name: null } : match(text))
 
-  const addGoal = () => setGoals((g) => [...g, { scorer: '', minute: '', assist: '' }])
+  const addGoal = () => setGoals((g) => [...g, { scorer: '', scorerId: null, minute: '', assist: '', assistId: null }])
   const rmGoal = (i) => setGoals((g) => g.filter((_, idx) => idx !== i))
-  const setGoal = (i, key, val) => setGoals((g) => g.map((row, idx) => (idx === i ? { ...row, [key]: val } : row)))
+  const setGoal = (i, key, val) => setGoals((g) => g.map((row, idx) => {
+    if (idx !== i) return row
+    const next = { ...row, [key]: val }
+    if (key === 'scorer') next.scorerId = null
+    if (key === 'assist') next.assistId = null
+    return next
+  }))
 
   async function onSubmit(e) {
     e.preventDefault()
     setError(null); setBusy(true)
     try {
-      const m = match(motm)
+      const m = pick(motm, motmId)
       const { error: rErr } = await supabase.from('results').upsert({
         fixture_id: fixture.id,
         us: Number(usScore) || 0, them: Number(themScore) || 0,
@@ -63,12 +89,14 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
       }, { onConflict: 'fixture_id' })
       if (rErr) throw rErr
 
-      // Replace the goal set (simplest correct approach for an edit).
-      await supabase.from('goals').delete().eq('fixture_id', fixture.id)
+      // Replace the goal set (simplest correct approach for an edit). If the
+      // delete fails we MUST stop: inserting on top would double every goal.
+      const { error: dErr } = await supabase.from('goals').delete().eq('fixture_id', fixture.id)
+      if (dErr) throw dErr
       const rows = goals
-        .filter((g) => g.scorer.trim() || g.assist.trim())
+        .filter((g) => g.scorer.trim() || g.assist.trim() || g.scorerId || g.assistId)
         .map((g) => {
-          const s = match(g.scorer), a = match(g.assist)
+          const s = pick(g.scorer, g.scorerId), a = pick(g.assist, g.assistId)
           return {
             fixture_id: fixture.id,
             scorer_profile_id: s.id, scorer_name: s.name,
@@ -83,7 +111,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
 
       onSaved(); onClose()
     } catch (err) {
-      setError(err.message)
+      setError(friendlyError(err, "Couldn't save the result — give it another go."))
     } finally {
       setBusy(false)
     }
@@ -146,7 +174,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad }) {
 
         <div className="field">
           <label className="label">Man of the match</label>
-          <input className="input" list="squad-names" placeholder="Pick or type a name" value={motm} onChange={(e) => setMotm(e.target.value)} />
+          <input className="input" list="squad-names" placeholder="Pick or type a name" value={motm} onChange={(e) => { setMotm(e.target.value); setMotmId(null) }} />
           <div className="row gap-2 mt-2" style={{ alignItems: 'center' }}>
             <ImageUpload
               folder="motm" shape="square" maxDim={1000} current={motmPhoto}

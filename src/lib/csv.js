@@ -6,9 +6,14 @@ import { teamMatchName } from './teams'
 // the fixture details, then one row per player marked IN: full name, preferred
 // position, Paid (Yes/No). The caller passes the in-only list.
 
+// Names are self-editable, and a cell starting with = + - @ (or a tab/CR) is a
+// FORMULA to Excel/LibreOffice when the manager opens the export — neutralise
+// with a leading apostrophe (the standard defence), then quote anything with a
+// separator, quote or line break (CR included, or it splits the row).
 function esc(v) {
-  const s = String(v ?? '')
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  let s = String(v ?? '')
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
 }
 
 // players: [{ name, preferred, paid }]

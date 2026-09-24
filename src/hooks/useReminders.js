@@ -22,7 +22,7 @@ export function useReminders() {
       if (fetchErr) throw fetchErr // failed load ≠ no settings — catch keeps data + sets error
       setSettings(data ?? null)
     } catch (e) {
-      logError('fetch', e?.message ?? 'useReminders load failed', { hook: 'useReminders' })
+      logError('fetch', e ?? 'useReminders load failed', { hook: 'useReminders' })
       setError(e ?? new Error('load failed'))
     } finally {
       setLoading(false)

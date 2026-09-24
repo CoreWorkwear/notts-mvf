@@ -11,9 +11,15 @@ import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
 // edit updates any field + role/eligibility/teams/active. A player can't demote
 // or deactivate themselves (DB-enforced; locked here too). Password is reset
 // (a link emailed to the player), never viewed.
-export default function PlayerForm({ open, onClose, onSaved, player, teams, currentUserId }) {
+// The squads list can't be trusted when it's empty — Players hands us [] if the
+// teams fetch failed. Saving an EDIT then would diff against nothing (see
+// diffMemberships), so the form refuses and says so instead of a clean save.
+const SQUADS_NOT_LOADED = "Squads didn't load — try again."
+
+export default function PlayerForm({ open, onClose, onSaved, player, teams = [], currentUserId }) {
   const adding = !player
   const self = isSelf(player, currentUserId)
+  const squadsMissing = teams.length === 0
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -115,6 +121,11 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
       setError(v)
       return
     }
+    // Fail closed: an edit touches team_memberships, and without the squads
+    // list we can't tell a failed fetch from "unticked everything". Nothing is
+    // written — not even the other fields — so the manager isn't told "saved"
+    // when their squad change silently didn't happen.
+    if (!adding && squadsMissing) { setError(SQUADS_NOT_LOADED); return }
     setError(null); setBusy(true)
     try {
       if (adding) {
@@ -269,6 +280,11 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
                   aria-pressed={teamKeys.includes(t.key)} onClick={() => toggle(teamKeys, setTeamKeys, t.key)}>{t.label}</button>
               ))}
             </div>
+            {squadsMissing && (
+              <p role="alert" style={{ fontSize: 13, color: 'var(--amber)', margin: 0 }}>
+                {SQUADS_NOT_LOADED}{!adding && ' Squad changes can’t be saved until they do.'}
+              </p>
+            )}
             {/* Signup no longer grants squads (0034) — everyone lands in the
                 reserves and the manager moves them up. Show what they asked
                 for so the request isn't lost between the two. */}

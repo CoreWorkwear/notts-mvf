@@ -34,7 +34,7 @@ export function usePlayers() {
         }
       }))
     } catch (e) {
-      logError('fetch', e?.message ?? 'usePlayers load failed', { hook: 'usePlayers' })
+      logError('fetch', e ?? 'usePlayers load failed', { hook: 'usePlayers' })
       setError(e ?? new Error('load failed'))
     } finally {
       setLoading(false)

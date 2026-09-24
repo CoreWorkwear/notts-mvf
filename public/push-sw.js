@@ -44,6 +44,11 @@ self.addEventListener('push', (event) => {
 // delivery here with the same key; the app upserts the fresh subscription to
 // push_tokens on its next open (syncPush in src/lib/push.js).
 self.addEventListener('pushsubscriptionchange', (event) => {
+  // Some browsers hand us the replacement already made — nothing to do but
+  // let the app store it on its next open. Without an old key we can't
+  // re-subscribe here at all (the VAPID key lives in the app), so the same
+  // app-open heal covers that case too.
+  if (event.newSubscription) return
   const key = event.oldSubscription && event.oldSubscription.options &&
     event.oldSubscription.options.applicationServerKey
   if (!key) return
@@ -64,8 +69,11 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if ('focus' in c) {
-          // App is open — tell it to apply the availability without a reload.
+          // App is open — tell it to apply the availability without a reload,
+          // or to move to the deep link (news / line-up): focusing alone left
+          // the player on whatever screen happened to be up.
           if (avail && d.fixtureId) c.postMessage({ type: 'mvf-avail', fixtureId: d.fixtureId, status: avail })
+          else c.postMessage({ type: 'mvf-navigate', url })
           return c.focus()
         }
       }

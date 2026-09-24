@@ -11,18 +11,33 @@ import SquadPicker from '../components/SquadPicker'
 // each carrying its squad-registration rule (§2). Fixtures attach to these.
 export default function Competitions() {
   const { seasonId, seasons } = useSeason()
-  const { competitions, loading, save, remove } = useCompetitions(seasonId)
+  const { competitions, loading, error, save, remove, refetch } = useCompetitions(seasonId)
   const [editing, setEditing] = useState(null) // competition or null
   const [open, setOpen] = useState(false)
   const [squadFor, setSquadFor] = useState(null) // competition whose squad we're picking
   const seasonLabel = seasons?.find((s) => s.id === seasonId)?.label
 
-  if (loading) return <Loader label="Loading competitions…" />
+  // Only the first load gets the Loader. save() → await load() flips loading
+  // true mid-save; swapping the page out unmounted the open CompetitionForm
+  // sheet and remounted it (a stray history entry each time).
+  if (loading && competitions.length === 0) return <Loader label="Loading competitions…" />
+
+  // A failed first load is not "No competitions yet": say so and offer a retry.
+  if (error && competitions.length === 0) return (
+    <div className="page">
+      <div className="empty mt-5" role="alert">
+        <p className="empty-title">Couldn't load the competitions</p>
+        <p>Looks like a dodgy connection. Have another go.</p>
+        <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page">
       <p className="kicker"><span className="kicker-rule">COMPETITIONS</span></p>
       <h1 className="display mt-2" style={{ fontSize: 28 }}>Competitions</h1>
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
       <p className="muted mt-2" style={{ fontSize: 13 }}>{seasonLabel ? `Season ${seasonLabel}.` : ''} Leagues, cups and friendly series. Each can cap a registered squad (§2).</p>
 
       <button className="btn btn-primary btn-block mt-3" onClick={() => { setEditing(null); setOpen(true) }}>+ Add a competition</button>

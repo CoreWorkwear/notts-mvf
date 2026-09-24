@@ -23,8 +23,8 @@ export default function PushActions() {
     // so at least record it — an ignored failure here silently loses the tap.
     const apply = (fixtureId, status) =>
       setAvailability(fixtureId, user.id, status)
-        .then(({ error }) => { if (error) logError('write', error.message, { op: 'pushAction', fixtureId, status }) })
-        .catch((e) => logError('write', e?.message ?? 'push action failed', { op: 'pushAction', fixtureId, status }))
+        .then(({ error }) => { if (error) logError('write', error, { op: 'pushAction', fixtureId, status }) })
+        .catch((e) => logError('write', e ?? 'push action failed', { op: 'pushAction', fixtureId, status }))
 
     const params = new URLSearchParams(window.location.search)
     const fx = params.get('mvf_fixture')
@@ -42,6 +42,10 @@ export default function PushActions() {
       const d = e.data
       if (d && d.type === 'mvf-avail' && d.fixtureId && ['in', 'maybe', 'out'].includes(d.status)) {
         apply(d.fixtureId, d.status).finally(announce)
+      } else if (d && d.type === 'mvf-navigate' && typeof d.url === 'string') {
+        // A tapped news / line-up notification with the app open. This
+        // component sits outside the router, so re-broadcast for App to route.
+        window.dispatchEvent(new CustomEvent('mvf-navigate', { detail: { url: d.url } }))
       }
     }
     navigator.serviceWorker?.addEventListener('message', onMsg)
@@ -53,9 +57,12 @@ export default function PushActions() {
     // Heal the push lifecycle once per app open: a server-pruned token or a
     // rotated VAPID key otherwise means this player silently never gets a
     // reminder again. Best-effort — failures just mean we try next open.
-    syncPush(user.id).catch((e) => logError('push', e?.message ?? 'push sync failed', { op: 'syncPush' }))
+    syncPush(user.id).catch((e) => logError('push', e ?? 'push sync failed', { op: 'syncPush' }))
 
     return () => navigator.serviceWorker?.removeEventListener('message', onMsg)
+    // Keyed on the user ID on purpose: the session object is replaced on every
+    // token refresh and would re-run the URL apply + push heal each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
   return null

@@ -4,10 +4,13 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-// Local YYYY-MM-DD for "today" (don't use toISOString — that's UTC).
-export function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+// YYYY-MM-DD for "today" — the LONDON date, the same clock the match lifecycle
+// (hasKickedOff / fixtureConcluded) runs on, so "today"/"tomorrow" and the
+// 7-day "low on numbers" window agree with kickoff maths even on a phone
+// that's abroad. (Not toISOString — that's UTC; not getDate — that's the device.)
+export function todayISO(now = new Date()) {
+  const n = londonParts(now)
+  return `${n.y}-${String(n.mo).padStart(2, '0')}-${String(n.d).padStart(2, '0')}`
 }
 
 // Parse a 'YYYY-MM-DD' as a local date (avoids TZ shifting the day).
@@ -50,15 +53,21 @@ export function relativeWhen(iso) {
 // Fixtures store a wall-clock date + kickoff entered in London time. We compare
 // against "now" also read as London wall-clock, so GMT/BST is handled correctly
 // without any manual offset maths.
-function londonNowParts() {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/London',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date())
+const LONDON_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+})
+function londonParts(at) {
+  const parts = LONDON_FMT.formatToParts(at)
   const get = (t) => Number(parts.find((p) => p.type === t).value)
-  return { y: get('year'), mo: get('month'), d: get('day'), h: get('hour'), mi: get('minute') }
+  // Some WebKit builds print midnight as "24" with hour12:false; Date.UTC
+  // normalises hour 24 to the next day, and the date parts already say the
+  // right day, so clamp it here to keep the calendar date honest too.
+  const h = get('hour') % 24
+  return { y: get('year'), mo: get('month'), d: get('day'), h, mi: get('minute') }
 }
+function londonNowParts() { return londonParts(new Date()) }
 
 // Comparable nominal-instant for the current London wall-clock.
 function londonNowMs() {

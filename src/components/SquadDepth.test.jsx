@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import SquadDepth from './SquadDepth'
 

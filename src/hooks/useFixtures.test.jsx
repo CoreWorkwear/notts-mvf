@@ -1,7 +1,7 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const store = vi.hoisted(() => ({ tables: {}, reject: false, respErr: false, calls: 0 }))
+const store = vi.hoisted(() => ({ tables: {}, reject: false, respErr: false, calls: 0, hold: false, held: [] }))
 vi.mock('../lib/supabase', () => {
   const make = (table) => {
     store.calls++
@@ -9,13 +9,18 @@ vi.mock('../lib/supabase', () => {
     // "TypeError: Load failed" seen in prod), where the promise REJECTS rather
     // than resolving to { data, error }. store.respErr simulates a RESPONSE-
     // level error (RLS, 5xx): resolves with { data: null, error }.
+    // Data is snapshotted when the request is MADE (as a real response would
+    // be), and store.hold parks the response until the test releases it — the
+    // stale-response test needs an older request to resolve after a newer one.
+    const snapshot = JSON.parse(JSON.stringify(store.tables[table] ?? []))
+    const gate = store.hold ? new Promise((r) => store.held.push(r)) : Promise.resolve()
     const q = {
-      then: (onF, onR) => (store.reject
+      then: (onF, onR) => gate.then(() => (store.reject
         ? Promise.reject(new TypeError('Load failed'))
         : Promise.resolve(store.respErr
           ? { data: null, error: { message: 'RLS said no' } }
-          : { data: store.tables[table] ?? [], error: null })
-      ).then(onF, onR),
+          : { data: snapshot, error: null })
+      )).then(onF, onR),
     }
     ;['select', 'eq', 'order', 'in', 'gte', 'lte'].forEach((m) => { q[m] = () => q })
     return q
@@ -30,6 +35,8 @@ beforeEach(() => {
   store.reject = false
   store.respErr = false
   store.calls = 0
+  store.hold = false
+  store.held = []
   store.tables = {
     fixtures: [{
       id: 'fix-1', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
@@ -203,5 +210,63 @@ describe('useFixtures — focus refetch throttle', () => {
     const settled = store.calls
     await act(async () => { window.dispatchEvent(new Event('mvf-availability-applied')) })
     await waitFor(() => expect(store.calls).toBeGreaterThan(settled))
+  })
+})
+
+// Latest-wins: no loader guarded against a SLOWER, OLDER response landing
+// after a newer one. Real sequence on a phone waking its radio: foreground →
+// load #1 starts on a cold connection; the player taps In → the write lands →
+// refetch (#2) resolves first on the warm connection; #1 then arrives with the
+// pre-tap snapshot and reverts the tap. The DB says "in"; the screen says "—".
+describe('useFixtures — a stale response never overwrites a newer one', () => {
+  test('the newer load stands even when the older one resolves last', async () => {
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.fixtures[0].myStatus).toBeNull()
+
+    // Load #2 (stale): snapshots the empty availability and is HELD.
+    store.hold = true
+    act(() => { window.dispatchEvent(new Event('mvf-availability-applied')) })
+    await waitFor(() => expect(store.held.length).toBeGreaterThanOrEqual(4))
+    const stale = store.held.splice(0)
+
+    // The tap lands; load #3 snapshots the new row and is released FIRST.
+    store.tables.fixtures[0].availability = [{ profile_id: 'u1', status: 'in' }]
+    act(() => { result.current.refetch() })
+    await waitFor(() => expect(store.held.length).toBeGreaterThanOrEqual(4))
+    const fresh = store.held.splice(0)
+    await act(async () => { fresh.forEach((r) => r()) })
+    await waitFor(() => expect(result.current.fixtures[0].myStatus).toBe('in'))
+
+    // Now the stale one lands.
+    await act(async () => { stale.forEach((r) => r()) })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(result.current.fixtures[0].myStatus).toBe('in')
+  })
+})
+
+// The roster is the approved active squad for that team; answers from anyone
+// else (a player since deactivated / moved squads — their availability row is
+// never cascaded away) must not count, or the hero's "N not replied" disagrees
+// with the Who's In sheet, which derives it per roster member.
+describe('useFixtures — counts and noReply are roster-based', () => {
+  test('an answer from someone not on the roster neither counts nor reduces noReply', async () => {
+    store.tables.fixtures[0].team_id = 't-first'
+    store.tables.fixtures[0].availability = [
+      { profile_id: 'a', status: 'in' },      // on the roster
+      { profile_id: 'zed', status: 'in' },    // deactivated since answering
+    ]
+    store.tables.team_memberships = [
+      { team_id: 't-first', profiles: { id: 'a', active: true, approved: true, is_player: true } },
+      { team_id: 't-first', profiles: { id: 'b', active: true, approved: true, is_player: true } },
+      { team_id: 't-first', profiles: { id: 'zed', active: false, approved: true, is_player: true } },
+    ]
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const f = result.current.fixtures[0]
+    expect(f.rosterSize).toBe(2)
+    expect(f.counts.in).toBe(1)
+    expect(f.replied).toBe(1)
+    expect(f.noReply).toBe(1) // b — not 0
   })
 })

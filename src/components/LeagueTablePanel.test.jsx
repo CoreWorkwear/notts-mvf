@@ -2,14 +2,14 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-const calls = vi.hoisted(() => [])
+const { calls, fail } = vi.hoisted(() => ({ calls: [], fail: {} }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ isAdmin: true, profile: { club_id: 'c1' } }) }))
 vi.mock('../hooks/useOpponents', () => ({
   useOpponents: () => ({ opponents: [{ id: 'o1', name: 'Boston' }, { id: 'o2', name: 'Lichfield' }] }),
 }))
 vi.mock('../lib/supabase', () => {
   const qb = (table) => ({
-    delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+    delete: () => ({ eq: () => ({ eq: () => { calls.push(['delete', table]); return Promise.resolve({ error: fail[`${table}.delete`] ?? null }) } }) }),
     insert: (rows) => { calls.push(['insert', table, rows]); return Promise.resolve({ error: null }) },
   })
   return { supabase: { from: qb } }
@@ -23,7 +23,7 @@ const TEAMS = [
 ]
 const COMPETITIONS = [{ id: 'comp-1', name: 'Sunday League', type: 'league' }]
 
-beforeEach(() => { calls.length = 0 })
+beforeEach(() => { calls.length = 0; for (const k of Object.keys(fail)) delete fail[k] })
 
 describe('LeagueTablePanel (per competition)', () => {
   test('with no competitions, prompts to add one', () => {
@@ -75,5 +75,23 @@ describe('LeagueTablePanel (per competition)', () => {
     const { container } = render(<LeagueTablePanel table={table} competitions={COMPETITIONS} teams={TEAMS} seasonId="s1" onSaved={vi.fn()} />)
     const ours = [...container.querySelectorAll('tr.lt-ours .lt-team')].map((td) => td.textContent)
     expect(ours).toEqual(['Nottingham'])
+  })
+
+  // The save is delete-then-insert: if the delete fails and we insert anyway,
+  // every row in the division appears twice.
+  test('a failed delete stops the save (no doubled rows) and tells the manager', async () => {
+    fail['league_tables.delete'] = { message: 'boom', code: 'XX000' }
+    const onSaved = vi.fn()
+    const table = [
+      { id: 'r1', competition_id: 'comp-1', team_name: 'Nottingham', played: 1, won: 1, drawn: 0, lost: 0, gf: 2, ga: 0, pts: 3 },
+    ]
+    render(<LeagueTablePanel table={table} competitions={COMPETITIONS} teams={TEAMS} seasonId="s1" onSaved={onSaved} />)
+    await userEvent.click(screen.getByRole('button', { name: /edit table/i }))
+    await userEvent.click(screen.getByRole('button', { name: /save table/i }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(calls.find((c) => c[0] === 'delete' && c[1] === 'league_tables')).toBeTruthy()
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'league_tables')).toBeFalsy()
+    expect(onSaved).not.toHaveBeenCalled()
   })
 })

@@ -22,7 +22,7 @@ export function useOpponents() {
       if (fetchErr) throw fetchErr // failed load ≠ no opponents — catch keeps data + sets error
       setOpponents(data ?? [])
     } catch (e) {
-      logError('fetch', e?.message ?? 'useOpponents load failed', { hook: 'useOpponents' })
+      logError('fetch', e ?? 'useOpponents load failed', { hook: 'useOpponents' })
       setError(e ?? new Error('load failed'))
     } finally {
       setLoading(false)

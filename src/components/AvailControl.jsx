@@ -17,7 +17,10 @@ export default function AvailControl({ value, onChange, compact = false, unanswe
     if (saving) return
     setSaving(key)
     try {
-      await onChange(key)
+      // onChange resolves `false` (by design, not a throw) when the write
+      // failed after retrying — only announce a write that actually landed.
+      const ok = await onChange(key)
+      if (ok === false) return
       setJustSaved(true)
       if (navigator.vibrate && key === 'in') navigator.vibrate(8) // haptic tick, Android
       setTimeout(() => setJustSaved(false), 1600)

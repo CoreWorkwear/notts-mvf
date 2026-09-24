@@ -14,6 +14,27 @@ test('the app boots to the sign-in screen', async ({ page }) => {
   await expect(page.getByRole('button', { name: /forgot password/i })).toBeVisible()
 })
 
+// A clean boot: no uncaught page errors and no console errors from OUR code.
+// The prod bundle throwing at start-up used to be invisible until a player
+// complained (the "Stagger is not defined" class). Browser-generated noise
+// (a service-worker update check failing, favicon 404s) is not our code.
+test('boots without page errors or console errors', async ({ page }) => {
+  const pageErrors = []
+  const consoleErrors = []
+  page.on('pageerror', (e) => pageErrors.push(String(e?.message ?? e)))
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return
+    const t = m.text()
+    if (/ServiceWorker|service worker|favicon|net::ERR_|Failed to load resource/i.test(t)) return
+    consoleErrors.push(t)
+  })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: /join up/i })).toBeVisible()
+  await page.waitForTimeout(500) // let any deferred start-up work surface
+  expect(pageErrors, 'uncaught page errors').toEqual([])
+  expect(consoleErrors, 'console errors').toEqual([])
+})
+
 test('register validation surfaces a VISIBLE, in-viewport error', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: /join up/i }).click()

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { competitionPayload } from '../lib/competitions'
@@ -10,8 +10,12 @@ export function useCompetitions(seasonId) {
   const [competitions, setCompetitions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Latest wins: a slower, older season's load must not overwrite the newer one.
+  const reqRef = useRef(0)
 
   const load = useCallback(async () => {
+    const id = ++reqRef.current
+    const fresh = () => id === reqRef.current
     if (!seasonId) { setCompetitions([]); setLoading(false); setError(null); return }
     setLoading(true)
     setError(null)
@@ -22,13 +26,15 @@ export function useCompetitions(seasonId) {
         .eq('season_id', seasonId)
         .order('sort_order')
         .order('name')
+      if (!fresh()) return
       if (fetchErr) throw fetchErr // failed load ≠ no competitions — catch keeps data + sets error
       setCompetitions(data ?? [])
     } catch (e) {
-      logError('fetch', e?.message ?? 'useCompetitions load failed', { hook: 'useCompetitions', seasonId })
+      if (!fresh()) return
+      logError('fetch', e ?? 'useCompetitions load failed', { hook: 'useCompetitions', seasonId })
       setError(e ?? new Error('load failed'))
     } finally {
-      setLoading(false)
+      if (fresh()) setLoading(false)
     }
   }, [seasonId])
 

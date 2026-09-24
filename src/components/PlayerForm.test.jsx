@@ -89,6 +89,26 @@ describe('PlayerForm', () => {
   })
 })
 
+// BUG: Players loaded `teams` without checking the response error, so a failed
+// fetch handed PlayerForm teams=[] — and a Save then DELETED every one of the
+// player's team_memberships (diffMemberships saw nothing ticked). The form must
+// refuse to save an edit while the squads haven't loaded, and say so.
+describe('PlayerForm — edit with the squads list not loaded (data-loss guard)', () => {
+  test('Save issues NO team_memberships delete and shows a visible alert', async () => {
+    const onSaved = vi.fn()
+    render(<PlayerForm open onClose={() => {}} onSaved={onSaved} player={PLAYER} teams={[]} currentUserId="admin" />)
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    // Give any (wrong) async save path a chance to run before asserting.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(h.calls.find((c) => c[0] === 'delete' && c[1] === 'team_memberships')).toBeFalsy()
+    expect(h.calls.find((c) => c[0] === 'update' && c[1] === 'profiles')).toBeFalsy()
+    expect(onSaved).not.toHaveBeenCalled()
+    const alerts = screen.getAllByRole('alert')
+    expect(alerts.some((el) => /squads didn't load/i.test(el.textContent))).toBe(true)
+  })
+})
+
 // Adding a player goes through the admin-create-player Edge Function, which
 // sets the squads itself (0034). If the squads don't stick, the login still
 // exists — the manager has to be told, not shown a clean save.

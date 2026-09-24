@@ -5,13 +5,14 @@ import userEvent from '@testing-library/user-event'
 import Sheet from './Sheet'
 import ResultForm from './ResultForm'
 
-// Capture every supabase write so we can assert the result was saved.
-const { calls } = vi.hoisted(() => ({ calls: [] }))
+// Capture every supabase write so we can assert the result was saved. `fail`
+// lets a test make one op answer with a response-level error (e.g. 'goals.delete').
+const { calls, fail } = vi.hoisted(() => ({ calls: [], fail: {} }))
 vi.mock('../lib/supabase', () => {
   const make = (table) => ({
-    upsert: (...a) => { calls.push(['upsert', table, ...a]); return Promise.resolve({ error: null }) },
-    insert: (...a) => { calls.push(['insert', table, ...a]); return Promise.resolve({ error: null }) },
-    delete: () => ({ eq: (...a) => { calls.push(['delete', table, ...a]); return Promise.resolve({ error: null }) } }),
+    upsert: (...a) => { calls.push(['upsert', table, ...a]); return Promise.resolve({ error: fail[`${table}.upsert`] ?? null }) },
+    insert: (...a) => { calls.push(['insert', table, ...a]); return Promise.resolve({ error: fail[`${table}.insert`] ?? null }) },
+    delete: () => ({ eq: (...a) => { calls.push(['delete', table, ...a]); return Promise.resolve({ error: fail[`${table}.delete`] ?? null }) } }),
   })
   return { supabase: { from: (t) => make(t) } }
 })
@@ -52,7 +53,7 @@ function Harness({ onSaved }) {
   )
 }
 
-beforeEach(() => { calls.length = 0 })
+beforeEach(() => { calls.length = 0; for (const k of Object.keys(fail)) delete fail[k] })
 
 describe('ResultForm — log a result', () => {
   test('opens from the detail→log transition, STAYS open, fills, submits, saves', async () => {
@@ -113,5 +114,84 @@ describe('ResultForm — log a result', () => {
 
     const upsert = calls.find((c) => c[0] === 'upsert' && c[1] === 'results')
     expect(upsert[2]).toMatchObject({ motm_photo_url: 'https://cdn/motm.jpg' })
+  })
+})
+
+// `squad` is ACTIVE players only, so a goal or MOTM credited to a player who has
+// since left the club (soft-deleted) must survive an edit — not be blanked and
+// silently dropped by the delete-then-insert.
+describe('ResultForm — editing keeps credits for players who have left', () => {
+  const RESULT = { us: 1, them: 0, ht_us: 0, ht_them: 0, motm_photo_url: null }
+  const playedByLeaver = {
+    ...FIX,
+    result: { ...RESULT, motm_profile_id: 'p-old', motm_name: null },
+    goals: [{ scorer_profile_id: 'p-old', scorer_name: null, assist_profile_id: null, assist_name: null, minute: 12 }],
+  }
+
+  test('an id not in the active squad is carried through the save untouched', async () => {
+    const onSaved = vi.fn()
+    render(<ResultForm open fixture={playedByLeaver} squad={SQUAD} onClose={() => {}} onSaved={onSaved} />)
+
+    // Shown honestly rather than blanked.
+    expect(screen.getByPlaceholderText('Scorer')).toHaveValue('Former player')
+    expect(screen.getByPlaceholderText(/pick or type a name/i)).toHaveValue('Former player')
+
+    await userEvent.click(screen.getByRole('button', { name: /save result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+
+    const upsert = calls.find((c) => c[0] === 'upsert' && c[1] === 'results')
+    expect(upsert[2]).toMatchObject({ motm_profile_id: 'p-old', motm_name: null })
+    const goalInsert = calls.find((c) => c[0] === 'insert' && c[1] === 'goals')
+    expect(goalInsert).toBeTruthy()
+    expect(goalInsert[2]).toHaveLength(1)
+    expect(goalInsert[2][0]).toMatchObject({ scorer_profile_id: 'p-old', scorer_name: null, minute: 12 })
+  })
+
+  test('with `everyone`, a former player resolves to their name and still saves by id', async () => {
+    const onSaved = vi.fn()
+    const everyone = [...SQUAD, { id: 'p-old', name: 'Old Boy', first: 'Old' }]
+    const { container } = render(
+      <ResultForm open fixture={playedByLeaver} squad={SQUAD} everyone={everyone} onClose={() => {}} onSaved={onSaved} />,
+    )
+    expect(screen.getByPlaceholderText('Scorer')).toHaveValue('Old Boy')
+    expect(screen.getByPlaceholderText(/pick or type a name/i)).toHaveValue('Old Boy')
+    // …but the pickers still only offer the active squad.
+    expect(container.querySelector('datalist#squad-names option[value="Old Boy"]')).toBeNull()
+    expect(container.querySelector('datalist#squad-names option[value="Joe Morris"]')).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: /save result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')[2]).toMatchObject({ motm_profile_id: 'p-old', motm_name: null })
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'goals')[2][0]).toMatchObject({ scorer_profile_id: 'p-old', scorer_name: null })
+  })
+
+  test('retyping the scorer drops the carried id and resolves the new name', async () => {
+    const onSaved = vi.fn()
+    render(<ResultForm open fixture={playedByLeaver} squad={SQUAD} onClose={() => {}} onSaved={onSaved} />)
+    const scorer = screen.getByPlaceholderText('Scorer')
+    await userEvent.clear(scorer)
+    await userEvent.type(scorer, 'Joe Morris')
+    await userEvent.click(screen.getByRole('button', { name: /save result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'goals')[2][0]).toMatchObject({ scorer_profile_id: 'p1', scorer_name: null })
+  })
+})
+
+describe('ResultForm — a failed goals delete stops the save', () => {
+  test('no goals are re-inserted (they would double up) and the manager is told', async () => {
+    fail['goals.delete'] = { message: 'boom', code: 'XX000' }
+    const onSaved = vi.fn()
+    const played = {
+      ...FIX,
+      result: { us: 1, them: 0, ht_us: 0, ht_them: 0, motm_profile_id: null, motm_name: null, motm_photo_url: null },
+      goals: [{ scorer_profile_id: 'p1', scorer_name: null, assist_profile_id: null, assist_name: null, minute: 40 }],
+    }
+    render(<ResultForm open fixture={played} squad={SQUAD} onClose={() => {}} onSaved={onSaved} />)
+    await userEvent.click(screen.getByRole('button', { name: /save result/i }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(calls.find((c) => c[0] === 'delete' && c[1] === 'goals')).toBeTruthy()
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'goals')).toBeFalsy()
+    expect(onSaved).not.toHaveBeenCalled()
   })
 })

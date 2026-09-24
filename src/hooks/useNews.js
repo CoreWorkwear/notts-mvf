@@ -22,7 +22,7 @@ export function useNews() {
       if (fetchErr) throw fetchErr // failed load ≠ no news — catch keeps data + sets error
       setItems(data ?? [])
     } catch (e) {
-      logError('fetch', e?.message ?? 'useNews load failed', { hook: 'useNews' })
+      logError('fetch', e ?? 'useNews load failed', { hook: 'useNews' })
       setError(e ?? new Error('load failed'))
     } finally {
       setLoading(false)
@@ -31,18 +31,35 @@ export function useNews() {
 
   useEffect(() => { load() }, [load])
 
-  // Post a news item; if push, broadcast it to everyone's devices too.
+  // Post a news item; if push, broadcast it to everyone's devices too. Resolves
+  // { pushFailed } so the composer can say "posted, but the push didn't go out".
+  // The row goes in with pushed:false and is only flagged once the push has
+  // actually gone out — the 🔔 badge must not lie. A failed push is non-fatal
+  // (the news is posted) but is logged and reported, never swallowed.
   const post = useCallback(async ({ title, body, push }) => {
-    const { error } = await supabase.from('announcements').insert({
-      club_id: profile.club_id, created_by: user.id,
-      title: title.trim(), body: body.trim(), pushed: !!push,
-    })
+    const t = title.trim(), b = body.trim()
+    const { data, error } = await supabase.from('announcements')
+      .insert({ club_id: profile.club_id, created_by: user.id, title: t, body: b, pushed: false })
+      .select('id')
+      .single()
     if (error) throw error
+    let pushFailed = false
     if (push) {
-      // Non-fatal: a failed push shouldn't lose the posted news.
-      try { await supabase.functions.invoke('send-push', { body: { title: title.trim(), body: body.trim(), url: '/news' } }) } catch {}
+      // functions.invoke resolves { error } rather than throwing (a network-level
+      // failure comes back as a FunctionsFetchError in `error` too).
+      let pushErr = null
+      try { ({ error: pushErr } = await supabase.functions.invoke('send-push', { body: { title: t, body: b, url: '/news' } })) }
+      catch (e) { pushErr = e ?? new Error('push failed') }
+      if (pushErr) {
+        pushFailed = true
+        logError('push', pushErr, { hook: 'useNews', op: 'post', announcementId: data?.id ?? null })
+      } else if (data?.id) {
+        const { error: flagErr } = await supabase.from('announcements').update({ pushed: true }).eq('id', data.id)
+        if (flagErr) logError('write', flagErr, { hook: 'useNews', op: 'post.pushed', announcementId: data.id })
+      }
     }
     await load()
+    return { pushFailed }
   }, [profile?.club_id, user?.id, load])
 
   const remove = useCallback(async (id) => {

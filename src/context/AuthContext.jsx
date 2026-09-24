@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { canSetAvailability, accountStatus, respondBlock } from '../lib/players'
 import { disablePush } from '../lib/push'
@@ -7,6 +7,9 @@ import { logError } from '../lib/logger'
 const AuthContext = createContext(null)
 
 const MANAGER_VIEW_KEY = 'mvf:managerView'
+// Session-scoped: recovery must survive a reload / iOS tab discard between
+// clicking the reset link and saving the new password, but not outlive the tab.
+const RECOVERY_KEY = 'mvf:passwordRecovery'
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
@@ -17,7 +20,16 @@ export function AuthProvider({ children }) {
   // what the per-fixture availability gate compares against (0034).
   const [teamIds, setTeamIds] = useState([])
   const [loading, setLoading] = useState(true)
-  const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const [passwordRecovery, setPasswordRecoveryState] = useState(() => {
+    try { return sessionStorage.getItem(RECOVERY_KEY) === '1' } catch { return false }
+  })
+  const setPasswordRecovery = useCallback((on) => {
+    setPasswordRecoveryState(on)
+    try { on ? sessionStorage.setItem(RECOVERY_KEY, '1') : sessionStorage.removeItem(RECOVERY_KEY) } catch { /* private mode */ }
+  }, [])
+  // A failed recovery link (expired / already used) — surfaced on the sign-in
+  // screen instead of silently swallowed.
+  const [authNotice, setAuthNotice] = useState(null)
   // §3 Manager view — a COSMETIC toggle. Default OFF, so a real admin uses the app
   // as a player day-to-day and flips this on to reveal management tools. It NEVER
   // grants authority: every admin action is still enforced by RLS at the database,
@@ -55,39 +67,78 @@ export function AuthProvider({ children }) {
     } else setClub(null)
   }, [])
 
+  // Which user's profile is in flight / already loaded, so the two start-up
+  // paths below (getSession + INITIAL_SESSION) load it once, not twice.
+  const inflightFor = useRef(null)
+  const loadedFor = useRef(null)
+
   useEffect(() => {
     let active = true
+    // An expired or already-used reset link bounces back as
+    // #error=access_denied&error_code=otp_expired&error_description=… and
+    // supabase-js drops it without an event — the player used to land on the
+    // sign-in screen with no explanation at all. Read it, say so, strip it.
+    try {
+      const h = new URLSearchParams((window.location.hash || '').replace(/^#/, ''))
+      if (h.get('error') || h.get('error_code')) {
+        const code = `${h.get('error_code') || ''} ${h.get('error') || ''}`
+        setAuthNotice(/otp_expired|access_denied/.test(code)
+          ? 'That reset link has expired or already been used — request a fresh one below.'
+          : ((h.get('error_description') || '').replace(/\+/g, ' ') || 'Something went wrong with that link — try again.'))
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
+    } catch { /* hash parsing is best-effort */ }
+
     // Never let startup hang on the splash. If session restore stalls or fails
     // (slow cold-start network / a token refresh that errors), we STILL release the
-    // UI: the `finally` clears loading on resolve OR reject, and the safety timer is
-    // a backstop for the rare case getSession never settles at all. onAuthStateChange
-    // (INITIAL_SESSION / TOKEN_REFRESHED) backfills the session when it does resolve.
+    // UI: every path below releases on resolve OR reject, and the safety timer is
+    // a backstop for the rare case nothing settles at all.
     const safety = setTimeout(() => { if (active) setLoading(false) }, 6000)
+    const release = () => { if (active) { clearTimeout(safety); setLoading(false) } }
+
+    // The splash is held until the PROFILE is known, not just the session:
+    // releasing on the bare session rendered the app with profile=null for the
+    // length of the profile round-trip (seconds on a phone waking its radio),
+    // and in that window approved players read "the manager just needs to sign
+    // you off" and managers were bounced off admin routes as non-admins.
+    const loadThenRelease = (uid, op) => {
+      if (!uid) { loadedFor.current = null; loadProfile(undefined); release(); return }
+      if (inflightFor.current === uid) return // the in-flight load will release
+      if (loadedFor.current === uid) { release(); return }
+      inflightFor.current = uid
+      loadProfile(uid)
+        .then(() => { loadedFor.current = uid })
+        .catch((e) => logError('auth', e ?? op + ' failed', { op }))
+        .finally(() => { if (inflightFor.current === uid) inflightFor.current = null; release() })
+    }
 
     supabase.auth.getSession()
-      .then(async ({ data }) => {
+      .then(({ data }) => {
         if (!active) return
         setSession(data.session)
-        await loadProfile(data.session?.user?.id)
+        // A persisted recovery flag with NO session behind it (the recovery
+        // session expired while the tab was away) would strand the app on the
+        // set-password screen with nothing to update — drop it.
+        if (!data.session) setPasswordRecovery(false)
+        loadThenRelease(data.session?.user?.id, 'sessionRestore')
       })
-      .catch((e) => logError('auth', 'session restore failed', { message: e?.message }))
-      .finally(() => { if (active) { clearTimeout(safety); setLoading(false) } })
+      .catch((e) => { logError('auth', e ?? 'session restore failed', { op: 'sessionRestore' }); release() })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       // Clicking a reset-password email lands here with a recovery session —
       // flag it so the app shows the set-new-password screen, not the app.
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(s)
-      if (active) { clearTimeout(safety); setLoading(false) } // any resolution releases the splash
+      // TOKEN_REFRESHED changes nothing profile-shaped: skip the reload.
+      if (event === 'TOKEN_REFRESHED') return
+      if (!s) { loadedFor.current = null; loadProfile(undefined); release(); return }
+      // USER_UPDATED (e.g. a password change) may carry profile-shaped changes.
+      if (event === 'USER_UPDATED') loadedFor.current = null
       // Do NOT await Supabase calls inside this callback: supabase-js holds its
       // auth lock while it runs, and queries acquire that same lock to attach
       // the token — the documented deadlock behind cold-start hangs. Defer the
-      // profile load out of the callback instead. TOKEN_REFRESHED changes
-      // nothing profile-shaped, so skip the 3-query reload on those.
-      if (event === 'TOKEN_REFRESHED') return
-      setTimeout(() => {
-        loadProfile(s?.user?.id).catch((e) => logError('auth', 'profile load failed', { message: e?.message }))
-      }, 0)
+      // profile load out of the callback instead.
+      setTimeout(() => { if (active) loadThenRelease(s.user?.id, 'profileLoad') }, 0)
     })
     return () => { active = false; clearTimeout(safety); sub.subscription.unsubscribe() }
   }, [loadProfile])
@@ -117,7 +168,13 @@ export function AuthProvider({ children }) {
       const uid = session?.user?.id
       if (uid) await Promise.race([disablePush(uid), new Promise((r) => setTimeout(r, 2500))])
     } catch { /* best-effort — sign-out must proceed regardless */ }
-    return supabase.auth.signOut()
+    // Offline, the global revoke fails and supabase-js KEEPS the local
+    // session — the button silently did nothing and the account stayed live
+    // on the device. Fall back to a local sign-out so this device signs out
+    // regardless; the server-side refresh token just expires on its own.
+    const { error } = await supabase.auth.signOut()
+    if (error) await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+    return { error: null }
   }
 
   // Send a reset link (logged-out "forgot password"). Lands back on the app via
@@ -157,9 +214,11 @@ export function AuthProvider({ children }) {
     respondBlockFor: (fixture) => respondBlock(profile, teamIds, fixture),
     passwordRecovery,
     endRecovery: () => setPasswordRecovery(false),
+    authNotice,
+    clearAuthNotice: () => setAuthNotice(null),
     // Swallow-and-log: refresh is fired from onSaved handlers that don't await
     // it, so a rejection here would surface as an unhandled rejection.
-    refreshProfile: () => loadProfile(session?.user?.id).catch((e) => logError('auth', 'profile refresh failed', { message: e?.message })),
+    refreshProfile: () => loadProfile(session?.user?.id).catch((e) => logError('auth', e ?? 'profile refresh failed', { op: 'profileRefresh' })),
     signIn, signUp, signOut, sendPasswordReset, updatePassword,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

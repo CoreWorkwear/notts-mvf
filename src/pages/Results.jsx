@@ -17,7 +17,7 @@ const OUTCOME_LABEL = { W: 'Won', D: 'Drawn', L: 'Lost' }
 export default function Results() {
   const { isAdmin } = useAuth()
   const { seasonId } = useSeason()
-  const { played, needsResult, postponed, squad, loading, error, refetch } = useResults(seasonId)
+  const { played, needsResult, postponed, squad, everyone, loading, error, refetch } = useResults(seasonId)
   const pool = usePhotoPool()
   const [centre, setCentre] = useState(null)   // fixture for match centre
   const [editing, setEditing] = useState(null) // fixture for result form
@@ -133,7 +133,7 @@ export default function Results() {
       {/* Always mounted; resets on open so prefill is correct per fixture. */}
       {isAdmin && (
         <ResultForm
-          open={!!editing} fixture={editing} squad={squad}
+          open={!!editing} fixture={editing} squad={squad} everyone={everyone}
           onClose={() => setEditing(null)} onSaved={refetch}
         />
       )}

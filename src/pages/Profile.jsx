@@ -35,7 +35,7 @@ export default function Profile() {
         if (fetchErr) throw fetchErr
         setPriv(data ?? {}); setPrivReady(true)
       })
-      .catch((e) => { if (on) { setPrivReady(false); logError('fetch', e?.message ?? 'profile_private load failed', { op: 'profilePrivate' }) } })
+      .catch((e) => { if (on) { setPrivReady(false); logError('fetch', e ?? 'profile_private load failed', { op: 'profilePrivate' }) } })
     return () => { on = false }
   }, [profile?.id, editing, attempt])
   if (!profile) return null
@@ -70,7 +70,7 @@ export default function Profile() {
           hint="A square head-and-shoulders shot works best (e.g. 512×512) — it's cropped to a circle."
           onUploaded={async (url) => {
             const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
-            if (error) { setError(error.message); logError('write', error.message, { op: 'avatar' }) }
+            if (error) { setError(error.message); logError('write', error, { op: 'avatar' }) }
             else refreshProfile?.()
           }}
         />

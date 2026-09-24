@@ -76,7 +76,6 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
     if (opp?.home_postcode) setPostcode(opp.home_postcode)
   }
 
-  const team = teams.find((t) => t.id === teamId)
   // League defaults from the team but is shown as a placeholder hint, not a
   // pre-filled value (which reads as stale). The default is applied on save.
   const competition = competitions.find((c) => c.id === competitionId) || null
@@ -196,6 +195,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
               <span className="label">Badge (reused for every game vs them)</span>
               <div className="mt-1">
                 <ImageUpload
+                  key={opponentId} // fresh picker per opponent, so the badge preview can't lag behind the pick
                   folder="opponents" shape="round" maxDim={256}
                   current={opponents.find((o) => o.id === opponentId)?.badge_url}
                   label={opponents.find((o) => o.id === opponentId)?.badge_url ? 'Replace badge' : 'Add badge'}

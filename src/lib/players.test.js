@@ -33,6 +33,19 @@ describe('diffMemberships', () => {
   test('no change when selection matches', () => {
     expect(diffMemberships(['t-co'], ['community'], teams)).toEqual({ toAdd: [], toRemove: [] })
   })
+
+  // BUG: when the teams fetch failed, Players passed teams=[] and every
+  // current membership looked "unticked" → the player was stripped from every
+  // squad (and, post-0034, could no longer answer a single fixture). A squads
+  // list that didn't load is NOT "unticked everything" — it's a no-op.
+  test('an empty teams list (fetch failed) is a no-op, never a strip-everything', () => {
+    expect(diffMemberships(['t-xl', 't-co'], ['xl'], [])).toEqual({ toAdd: [], toRemove: [] })
+    expect(diffMemberships(['t-xl'], [], [])).toEqual({ toAdd: [], toRemove: [] })
+  })
+  test('an undefined/null teams list is a no-op too (does not throw)', () => {
+    expect(diffMemberships(['t-xl'], ['xl'], undefined)).toEqual({ toAdd: [], toRemove: [] })
+    expect(diffMemberships(['t-xl'], ['xl'], null)).toEqual({ toAdd: [], toRemove: [] })
+  })
 })
 
 describe('isSelf', () => {

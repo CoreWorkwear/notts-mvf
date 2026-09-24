@@ -23,7 +23,7 @@ export function useSponsors() {
       if (fetchErr) throw fetchErr // failed load ≠ no sponsors — catch keeps data + sets error
       setSponsors(data ?? [])
     } catch (e) {
-      logError('fetch', e?.message ?? 'useSponsors load failed', { hook: 'useSponsors' })
+      logError('fetch', e ?? 'useSponsors load failed', { hook: 'useSponsors' })
       setError(e ?? new Error('load failed'))
     } finally {
       setLoading(false)

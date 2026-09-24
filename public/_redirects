@@ -1,1 +1,7 @@
+# A missing hashed asset must be a REAL 404 — the SPA catch-all below would
+# otherwise answer it with index.html carrying /assets/*'s 1-year immutable
+# Cache-Control (see public/_headers), poisoning that URL in the browser cache.
+/assets/*  /404.html  404
+
+# SPA: every other unmatched path serves the app shell.
 /*    /index.html   200

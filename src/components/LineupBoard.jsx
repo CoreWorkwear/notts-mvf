@@ -77,6 +77,13 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     else setEditing(false)
   }
 
+  // "Done" is not "Save": leave the editor showing the SAVED line-up (the one
+  // the push button sends), not the unsaved picks.
+  function onDone() {
+    setFormation(saved.formation); setStarters(saved.starters); setSubs(saved.subs)
+    setActive(null); setEditing(false)
+  }
+
   if (loading) return <p className="muted center mt-4">Loading the line-up…</p>
 
   // ---- read-only (players, or admin not editing) ----
@@ -176,7 +183,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
       )}
 
       <div className="row gap-2 mt-5">
-        <button className="btn btn-ghost grow" disabled={busy} onClick={() => setEditing(false)}>Done</button>
+        <button className="btn btn-ghost grow" disabled={busy} onClick={onDone}>Done</button>
         <button className="btn btn-primary grow" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save line-up'}</button>
       </div>
 

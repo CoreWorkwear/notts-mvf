@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { POSITIONS, TEAM_ORDER, TEAMS } from '../lib/constants'
 import Crest from '../components/Crest'
@@ -7,11 +7,17 @@ import Toast from '../components/Toast'
 // Login + Register. Register captures everything the trigger needs; the server
 // forces player / not-eligible regardless of what we send (HANDOVER §3).
 export default function Auth() {
-  const { signIn, signUp, sendPasswordReset } = useAuth()
+  const { signIn, signUp, sendPasswordReset, authNotice, clearAuthNotice } = useAuth()
   const [tab, setTab] = useState('login')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
+
+  // A failed recovery link (expired / already used) lands here — say so
+  // through the existing error toast instead of a silent sign-in screen.
+  useEffect(() => {
+    if (authNotice) { setError(authNotice); clearAuthNotice() }
+  }, [authNotice, clearAuthNotice])
 
   // shared
   const [email, setEmail] = useState('')
