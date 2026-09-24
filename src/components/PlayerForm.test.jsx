@@ -88,3 +88,34 @@ describe('PlayerForm', () => {
     expect(emailInput).toHaveFocus() // jumps to the first flagged field
   })
 })
+
+// Adding a player goes through the admin-create-player Edge Function, which
+// sets the squads itself (0034). If the squads don't stick, the login still
+// exists — the manager has to be told, not shown a clean save.
+describe('PlayerForm — add: a half-done create is reported', () => {
+  test('a squads warning refreshes the list and surfaces the message instead of closing quietly', async () => {
+    const { supabase } = await import('../lib/supabase')
+    const spy = vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: { id: 'new1', warning: "Player created, but their team(s) didn't save — set them in Players." },
+      error: null,
+    })
+    const onSaved = vi.fn()
+    const onClose = vi.fn()
+    render(<PlayerForm open onClose={onClose} onSaved={onSaved} player={null} teams={TEAMS} currentUserId="admin" />)
+
+    // Labels aren't wired to inputs in this form, so go by document order,
+    // the way the existing negative test reaches fields.
+    const inputs = document.querySelectorAll('input.input')
+    await userEvent.type(inputs[0], 'Ringer')        // first name
+    await userEvent.type(inputs[1], 'Rob')           // surname
+    await userEvent.type(inputs[2], 'rob@notts.test') // email
+    await userEvent.type(inputs[3], '07700900123')   // phone
+    await userEvent.type(screen.getByPlaceholderText(/min 6 characters/i), 'secret1')
+    await userEvent.click(screen.getByRole('button', { name: /create player/i }))
+
+    await waitFor(() => expect(screen.getByText(/team\(s\) didn't save/i)).toBeInTheDocument())
+    expect(onSaved).toHaveBeenCalled()   // the player IS there — refresh the list
+    expect(onClose).not.toHaveBeenCalled() // …but don't pretend it went clean
+    spy.mockRestore()
+  })
+})

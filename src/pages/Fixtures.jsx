@@ -21,7 +21,7 @@ import { fixtureMatchup } from '../lib/teams'
 
 // The landing + primary action surface (UX-AND-IA §1). Everyone lands here.
 export default function Fixtures() {
-  const { user, profile, isAdmin, teamKeys, canRespond, accountStatus } = useAuth()
+  const { user, profile, isAdmin, teamKeys, canRespond, accountStatus, respondBlockFor } = useAuth()
   const { seasonId, error: seasonError, refreshSeasons } = useSeason()
   const { upcoming, past, teams, opponents, fixtures, loading, error, refetch, applyMyStatus } = useFixtures(seasonId)
   const { competitions } = useCompetitions(seasonId)
@@ -63,9 +63,13 @@ export default function Fixtures() {
   // The tap reflects instantly via applyMyStatus and rolls back on failure;
   // "TypeError: Load failed" here is the one error real players keep hitting.
   async function handleSetAvail(fixtureId, status) {
-    // Pending players + supporters can view but not act (DB blocks it too).
-    if (!canRespond) return false
-    const prev = fixtures.find((f) => f.id === fixtureId)?.myStatus ?? null
+    // Last line before the write. Pending players + supporters can view but not
+    // act, and since 0034 neither can anyone outside the squad that plays this
+    // game, or anyone once it has kicked off. RLS refuses all three anyway —
+    // this just stops us firing a doomed request and rolling the UI back.
+    const target = fixtures.find((f) => f.id === fixtureId)
+    if (respondBlockFor(target)) return false
+    const prev = target?.myStatus ?? null
     applyMyStatus(fixtureId, status)
     let { error } = await setAvailability(fixtureId, user.id, status)
     if (error) ({ error } = await setAvailability(fixtureId, user.id, status))
@@ -160,7 +164,7 @@ export default function Fixtures() {
               <FixtureHero
                 fixture={hero}
                 isAdmin={isAdmin}
-                canRespond={canRespond}
+                blockReason={respondBlockFor(hero)}
                 pool={pool}
                 onSetAvail={(s) => handleSetAvail(hero.id, s)}
                 onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
@@ -194,7 +198,7 @@ export default function Fixtures() {
                   <FixtureStrip
                     fixture={f}
                     isAdmin={isAdmin}
-                    canRespond={canRespond}
+                    blockReason={respondBlockFor(f)}
                     onSetAvail={(s) => handleSetAvail(f.id, s)}
                     onOpen={() => setDetail(f)}
                   />
@@ -225,7 +229,7 @@ export default function Fixtures() {
         open={!!detail}
         fixture={detail}
         isAdmin={isAdmin}
-        canRespond={canRespond}
+        blockReason={respondBlockFor(detail)}
         pool={pool}
         canLogResult={!!detail && isAdmin && hasKickedOff(detail.match_date, detail.kickoff)}
         onChanged={refetch}

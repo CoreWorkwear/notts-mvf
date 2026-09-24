@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { canSetAvailability, accountStatus } from '../lib/players'
+import { canSetAvailability, accountStatus, respondBlock } from '../lib/players'
 import { logError } from '../lib/logger'
 
 const AuthContext = createContext(null)
@@ -12,6 +12,9 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [club, setClub] = useState(null) // club row (name, crest_url)
   const [teamKeys, setTeamKeys] = useState([]) // ['xl','community']
+  // The same squads by id. team_id is what a fixture row carries, so this is
+  // what the per-fixture availability gate compares against (0034).
+  const [teamIds, setTeamIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   // §3 Manager view — a COSMETIC toggle. Default OFF, so a real admin uses the app
@@ -29,13 +32,14 @@ export function AuthProvider({ children }) {
 
   // Pull the profile row + team memberships + club for the signed-in user.
   const loadProfile = useCallback(async (uid) => {
-    if (!uid) { setProfile(null); setTeamKeys([]); setClub(null); return }
+    if (!uid) { setProfile(null); setTeamKeys([]); setTeamIds([]); setClub(null); return }
     const [{ data: prof }, { data: memberships }] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).single(),
-      supabase.from('team_memberships').select('teams(key)').eq('profile_id', uid),
+      supabase.from('team_memberships').select('team_id, teams(key)').eq('profile_id', uid),
     ])
     setProfile(prof ?? null)
     setTeamKeys((memberships ?? []).map((m) => m.teams?.key).filter(Boolean))
+    setTeamIds((memberships ?? []).map((m) => m.team_id).filter(Boolean))
     if (prof?.club_id) {
       const { data: c } = await supabase.from('clubs').select('id, name, crest_url').eq('id', prof.club_id).single()
       setClub(c ?? null)
@@ -112,6 +116,7 @@ export function AuthProvider({ children }) {
     profile,
     club,
     teamKeys,
+    teamIds,
     loading,
     isAuthed: !!session,
     // isRealAdmin = the actual DB role (the truth). isAdmin = the EFFECTIVE,
@@ -126,6 +131,10 @@ export function AuthProvider({ children }) {
     isPlayer: profile?.is_player !== false,
     canRespond: canSetAvailability(profile),   // approved + active + a player
     accountStatus: accountStatus(profile),     // 'pending' | 'supporter' | 'inactive' | 'active'
+    // Per-FIXTURE gate (0034): account state AND being in that game's squad AND
+    // the game not having kicked off. null = they can answer. The account-level
+    // canRespond above still drives the page banner; this drives the buttons.
+    respondBlockFor: (fixture) => respondBlock(profile, teamIds, fixture),
     passwordRecovery,
     endRecovery: () => setPasswordRecovery(false),
     refreshProfile: () => loadProfile(session?.user?.id),

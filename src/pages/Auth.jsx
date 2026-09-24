@@ -165,7 +165,7 @@ export default function Auth() {
             {isPlayer && (
               <>
                 <div className="field">
-                  <label className="label">Which team(s)?</label>
+                  <label className="label">Which team(s) are you after?</label>
                   <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
                     {TEAM_ORDER.map((k) => (
                       <button
@@ -176,7 +176,7 @@ export default function Auth() {
                       >{TEAMS[k].label}</button>
                     ))}
                   </div>
-                  <span className="dim" style={{ fontSize: 12 }}>You'll join as a player — the manager signs you off for the First Team.</span>
+                  <span className="dim" style={{ fontSize: 12 }}>Let us know what you're after — the manager sorts the squads out and you'll answer for whichever you're in.</span>
                 </div>
 
                 <div className="field">

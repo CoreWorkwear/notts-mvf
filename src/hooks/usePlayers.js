@@ -19,7 +19,7 @@ export function usePlayers() {
     try {
       const { data, error: fetchErr } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, positions, preferred, role, active, approved, is_player, photo_url, profile_private(email, phone, dob, ec_name, ec_phone), team_memberships(team_id, teams(key, label))')
+        .select('id, first_name, last_name, positions, preferred, role, active, approved, is_player, photo_url, requested_teams, profile_private(email, phone, dob, ec_name, ec_phone), team_memberships(team_id, teams(key, label))')
         .order('last_name', { ascending: true })
       if (fetchErr) logError('fetch', fetchErr.message, { hook: 'usePlayers' })
 

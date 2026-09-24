@@ -51,7 +51,14 @@ export function availabilityReminderTargets(rosterIds, statusById = {}) {
   })
 }
 
-// Match reminders go to players who said in or maybe.
-export function matchReminderTargets(statusById = {}) {
-  return Object.keys(statusById).filter((id) => statusById[id] === 'in' || statusById[id] === 'maybe')
+// Match reminders go to players who said in or maybe — AND are in the squad
+// that plays this game. The roster intersection matters because availability
+// rows outlive squad membership: a player moved out of a team (or one of the
+// out-of-team rows that existed before migration 0034) keeps an old "in", and
+// without this they'd get "you're down to play 👊" for a game they're not in.
+export function matchReminderTargets(statusById = {}, rosterIds = null) {
+  const said = Object.keys(statusById).filter((id) => statusById[id] === 'in' || statusById[id] === 'maybe')
+  if (!Array.isArray(rosterIds)) return said
+  const roster = new Set(rosterIds)
+  return said.filter((id) => roster.has(id))
 }

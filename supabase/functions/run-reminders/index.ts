@@ -100,19 +100,26 @@ Deno.serve(async (req) => {
       const statusById: Record<string, string> = {}
       for (const a of avail ?? []) statusById[(a as any).profile_id] = (a as any).status
 
+      // The squad that actually plays this game — approved, active players in
+      // the fixture's team. BOTH reminder types are scoped to it: availability
+      // rows outlive squad membership (and pre-0034 rows exist from before
+      // responding was team-scoped at all), so a raw in/maybe list can contain
+      // people who aren't in this team. Fetched once, used twice.
+      const { data: members } = await admin
+        .from('team_memberships')
+        .select('profile_id, profiles!inner(active, approved, is_player)')
+        .eq('team_id', f.team_id)
+      const roster: string[] = (members ?? [])
+        .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player)
+        .map((m: any) => m.profile_id)
+      const inSquad = new Set(roster)
+
       // 1) Availability nudges → eligible roster who've NOT replied or said maybe.
       if (s.availability_enabled) {
         const due = dueOffsets(hoursToKO, s.availability_offsets ?? [], sentAvail)
         if (due.length) {
           await admin.from('reminders_sent').insert(due.map((o) => ({ fixture_id: f.id, hours_before: o, kind: 'availability' })))
           remindersSent += due.length
-          const { data: members } = await admin
-            .from('team_memberships')
-            .select('profile_id, profiles!inner(active, approved, is_player)')
-            .eq('team_id', f.team_id)
-          const roster = (members ?? [])
-            .filter((m: any) => m.profiles?.active && m.profiles?.approved && m.profiles?.is_player)
-            .map((m: any) => m.profile_id)
           // undecided only: skip those already in or out
           const targets = roster.filter((id: string) => statusById[id] !== 'in' && statusById[id] !== 'out')
           pushes += await sendTo(targets, {
@@ -128,7 +135,9 @@ Deno.serve(async (req) => {
         if (due.length) {
           await admin.from('reminders_sent').insert(due.map((o) => ({ fixture_id: f.id, hours_before: o, kind: 'match' })))
           remindersSent += due.length
-          const targets = Object.keys(statusById).filter((id) => statusById[id] === 'in' || statusById[id] === 'maybe')
+          const targets = Object.keys(statusById)
+            .filter((id) => statusById[id] === 'in' || statusById[id] === 'maybe')
+            .filter((id) => inSquad.has(id))
           const where = f.venue && f.venue !== 'TBC' ? ` at ${f.venue}` : ''
           pushes += await sendTo(targets, {
             title: matchup,

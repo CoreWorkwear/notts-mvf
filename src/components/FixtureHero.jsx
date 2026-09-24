@@ -5,11 +5,14 @@ import WeatherStrip from './WeatherStrip'
 import { fmtDateLong, fmtKO, relativeWhen } from '../lib/format'
 import { heroBackground, pickHeroImage } from '../lib/media'
 import { teamMatchName } from '../lib/teams'
+import { respondBlockCopy } from '../lib/players'
 
 // The next-game hero — an ACTION surface (DESIGN-SYSTEM §6.1 / UX-AND-IA §1).
 // Player: in/maybe/out inline, the lead. Manager: squad state leads, tappable
 // to who's-in; their own in/out is still there but secondary.
-export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool = [], onSetAvail, onOpenWhosIn, onOpenDetail, onEdit }) {
+// `blockReason` is null when the viewer may answer this game, otherwise the
+// reason from respondBlock() — squad, account state or kickoff (0034).
+export default function FixtureHero({ fixture, isAdmin, blockReason = null, pool = [], onSetAvail, onOpenWhosIn, onOpenDetail, onEdit }) {
   const f = fixture
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
@@ -78,14 +81,14 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
               </span>
               <span className="ss-cta">See who's in →</span>
             </button>
-            {canRespond && (
+            {!blockReason && (
               <div className="hero-you">
                 <span className="hero-you-lbl mono">You</span>
                 <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
               </div>
             )}
           </>
-        ) : canRespond ? (
+        ) : !blockReason ? (
           <>
             <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>YOU IN?</span>
             <div className="mt-2">
@@ -93,7 +96,7 @@ export default function FixtureHero({ fixture, isAdmin, canRespond = true, pool 
             </div>
           </>
         ) : (
-          <span style={{ fontSize: 14, opacity: .9 }}>Availability opens once the manager signs you off.</span>
+          <span style={{ fontSize: 14, opacity: .9 }}>{respondBlockCopy(blockReason, f)}</span>
         )}
       </div>
 

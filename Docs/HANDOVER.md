@@ -25,7 +25,7 @@
 
 **Two roles.** Player (default on registration) and Admin. Admins do everything players do plus manage fixtures, results, players, the league table, and media. Admins are created only by other admins. Nobody can demote or deactivate themselves (prevents lockout).
 
-**XL eligibility gate.** A boolean per player. Only XL-eligible players can see, and set availability for, XL fixtures. Community is open to anyone in the Community team. New registrations are always player / not XL eligible — both are granted by an admin, never self-claimed.
+**Seeing a game vs answering it** *(supersedes the original XL eligibility gate, removed in migrations 0023–0025 along with `xl_eligible`)*. **Visibility is club-wide**: every active member of the club sees every fixture and every line-up, both teams — the club wants everyone following the first team. **Answering is squad-scoped** (migration 0034): you may only set your availability for a fixture whose team you hold a `team_memberships` row for, and only before kickoff. No admin bypass — a manager in one squad cannot answer for the other. Squad membership is granted by an admin, never self-claimed: a signup's ticked teams are recorded as `profiles.requested_teams` (a request) and everyone lands in the reserves. A player called up from the reserves is added to that squad in Players — there is deliberately no answer-on-their-behalf path.
 
 **Seasons.** Everything (fixtures, results, stats, tables) belongs to a season (e.g. "2025/26"). A season picker in the header scopes the whole app. New fixtures default to the current season.
 
@@ -159,7 +159,7 @@ media_assets
 Positions are a frontend constant, not a table: `GK, RB, CB, LB, CDM, CM, CAM, RM, LM, RW, LW, ST, CF`.
 
 ### Profile creation trigger
-On new `auth.users` signup, a Postgres trigger (`handle_new_user`) creates the `profiles` row + `team_memberships` from signup metadata (first/last/email/phone REQUIRED, positions, preferred, teams). **Always force `role='player'` and `xl_eligible=false` server-side** regardless of what the client sends.
+On new `auth.users` signup, a Postgres trigger (`handle_new_user`) creates the `profiles` row from signup metadata (first/last/email/phone REQUIRED, positions, preferred, teams) plus the `profile_private` PII row. **Always force `role='player'` and `approved=false` server-side** regardless of what the client sends. Since migration 0034 it also **never grants the squads the client asks for** — `team_memberships` now decides who can answer a fixture, so it must not be fed by client metadata. The trigger seeds the reserves only and stores the ask in `profiles.requested_teams`; the manager grants squads in Players, and `admin-create-player` grants them with the service role after `createUser`.
 
 ### Data-integrity notes (learned in the prototype)
 - **Stats key by profile_id, not name.** The prototype tallies goals/assists/MOTM by matching the typed *name* string. That's fine for a mock but in production a typo splits one player into two on the stats table. Scorer/assister/MOTM should resolve to `profile_id` when the name matches a squad member, and only fall back to the free-typed string for genuine non-squad names.
@@ -174,8 +174,8 @@ Enable RLS on every table. The UI mirrors these rules; RLS *is* the security. He
 
 - **profiles** — SELECT: any authed user in the club (needed for squad lists / who's-in / stats). UPDATE self: only own row, and a `BEFORE UPDATE` trigger blocks non-admins changing `role`, `xl_eligible`, `active`, `club_id` (reset to old values). UPDATE admin: any profile in club, all columns. INSERT via trigger only. DELETE: none (use `active=false`).
 - **team_memberships** — SELECT authed; write admin only.
-- **fixtures** — SELECT: a player may select a fixture only if they have a matching team_membership AND (team isn't XL OR `xl_eligible`). Admins all. Write: admin only.
-- **availability** — SELECT authed in club. INSERT/UPDATE: only own row (`profile_id = auth.uid()`) AND only for a fixture they're allowed to see (same team+eligibility test). DELETE: own or admin.
+- **fixtures** — SELECT: any active member of the club, via `can_select_fixture` (club-scoped only since 0023 — no team or eligibility term). Admins all. Write: admin only. `lineups_select` reads the same helper, so tightening it hides line-ups too.
+- **availability** — SELECT authed in club (who's-in is club-wide). INSERT/UPDATE: own row (`profile_id = auth.uid()`) AND `is_active_player` (approved + active + player) AND `can_respond_to_fixture` (a team_memberships row for that fixture's team) AND `fixture_open_for_responses` (before kickoff, Europe/London) — migration 0034, no admin bypass, all of it in WITH CHECK so a refusal is a real 42501 rather than a silent zero-row update. DELETE: own or admin, deliberately ungated so a stale answer can always be withdrawn.
 - **results, goals** — SELECT authed in club. Write: admin only.
 - **league_tables** — SELECT authed; write admin only.
 - **opponents, media_assets** — SELECT authed; write admin only.
@@ -265,8 +265,8 @@ Design tokens, palette, fonts (Anton display / DM Sans body / DM Mono data), the
 ## 9. Decisions locked (don't re-litigate)
 
 - Both teams from day one; XL=red=first team, Community=green=reserves; membership is a list.
-- New registrations always player / not eligible; eligibility + admin granted by admins only.
-- XL eligibility gates XL fixture visibility AND availability writes (enforced in RLS).
+- New registrations always land player / pending / reserves; squads and admin are granted by admins only.
+- Fixture visibility is club-wide; **answering** a fixture is squad-scoped and shuts at kickoff (RLS, migration 0034).
 - First/last/email/phone are **required** to create any profile (form + DB).
 - Remove player = `active=false` (soft delete), never hard delete — preserves results history.
 - Passwords are reset, never viewed.

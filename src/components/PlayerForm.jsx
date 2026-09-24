@@ -67,6 +67,13 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
 
   const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
+  // Squads this player asked for at signup that they haven't been given. Labels,
+  // not keys, so it reads as the club says them.
+  const askedFor = (player?.requested_teams ?? [])
+    .filter((k) => !teamKeys.includes(k))
+    .map((k) => teams.find((t) => t.key === k)?.label)
+    .filter(Boolean)
+
   async function resetPassword() {
     if (!confirm(`Send ${firstName || 'this player'} a password-reset link to ${email}?`)) return
     setBusy(true); setError(null); setNotice(null)
@@ -133,6 +140,10 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
           throw new Error(msg)
         }
         if (data?.error) throw new Error(data.error)
+        // The login was created but the squads didn't stick. Refresh the list
+        // so the new player is there, then say so — closing quietly would hide
+        // a player who can't answer for the team they were added to.
+        if (data?.warning) { onSaved(); throw new Error(data.warning) }
       } else {
         // Duplicate-email guard (excluding this player). PII lives in
         // profile_private (self-or-admin RLS) — only admins reach this form.
@@ -257,7 +268,16 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams, curr
                 <button type="button" key={t.id} className={'chip' + (t.key === 'community' ? ' community' : '')}
                   aria-pressed={teamKeys.includes(t.key)} onClick={() => toggle(teamKeys, setTeamKeys, t.key)}>{t.label}</button>
               ))}
-            </div></div>
+            </div>
+            {/* Signup no longer grants squads (0034) — everyone lands in the
+                reserves and the manager moves them up. Show what they asked
+                for so the request isn't lost between the two. */}
+            {askedFor.length > 0 && (
+              <span className="dim" style={{ fontSize: 12 }}>
+                Asked for {askedFor.join(' and ')} when they signed up.
+              </span>
+            )}
+          </div>
         )}
 
         {!adding && (

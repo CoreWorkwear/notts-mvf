@@ -68,3 +68,23 @@ describe('offsetLabel', () => {
     expect(offsetLabel(6)).toBe('6h') // not a standard choice → fallback
   })
 })
+
+// Availability rows outlive squad membership, and rows written before the
+// 0034 team gate are still there on played fixtures — so "said in or maybe"
+// alone would push "you're down to play" at people not in the squad.
+describe('matchReminderTargets — squad scoping', () => {
+  test('drops anyone who answered but is not in this game squad', () => {
+    const statusById = { a: 'in', b: 'maybe', outsider: 'in' }
+    expect(matchReminderTargets(statusById, ['a', 'b']).sort()).toEqual(['a', 'b'])
+  })
+
+  test('keeps every answerer when no roster is supplied (unchanged behaviour)', () => {
+    const statusById = { a: 'in', outsider: 'in' }
+    expect(matchReminderTargets(statusById).sort()).toEqual(['a', 'outsider'])
+  })
+
+  test('still ignores out and no-reply inside the squad', () => {
+    const statusById = { a: 'in', b: 'out' }
+    expect(matchReminderTargets(statusById, ['a', 'b', 'c'])).toEqual(['a'])
+  })
+})

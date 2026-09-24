@@ -15,7 +15,8 @@ Companion to HANDOVER.md. Locks the club's terms and the language rules so the b
 
 - **Manager / Admin** — manages everything. "Manager" in player-facing copy, "Admin" in UI labels. Created only by other admins. (Club preference, set 2026-06: use **Manager**, not "Gaffer".)
 - **Player** — default role. Sets own availability, edits own profile.
-- **XL eligibility** — a flag that lets a player see and respond to **XL 11s** fixtures. Granted by an admin, never self-claimed. Without it, XL games are invisible to that player.
+- **XL eligibility** — *retired* (migrations 0023–0025). It was a flag gating both sight of and response to **XL 11s** fixtures. Sight is now club-wide; the right to respond comes from **squad membership** instead.
+- **Squad membership** — the `team_memberships` rows saying which of the club's teams a player is in. It decides who can set availability for a given fixture (migration 0034) and who gets chased about it. Granted by the manager, never self-claimed; what a player ticks at signup is only a request.
 - **Active / Inactive** — inactive players (left the club, etc.) drop off squad lists but stay on past results. Never hard-deleted.
 
 ## Match & football terms

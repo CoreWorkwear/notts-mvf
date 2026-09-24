@@ -2,11 +2,13 @@ import AvailControl from './AvailControl'
 import WeatherStrip from './WeatherStrip'
 import { fmtDate, fmtKO } from '../lib/format'
 import { fixtureMatchup } from '../lib/teams'
+import { respondBlockCopy } from '../lib/players'
 
 // One upcoming game as a strip row: team-colour spine, the matchup (home team
 // named first), tags, and the viewer's availability at a glance + settable
 // inline. Admins see live counts instead of their own control.
-export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSetAvail, onOpen }) {
+// `blockReason` null = the viewer may answer; otherwise respondBlock()'s reason.
+export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onSetAvail, onOpen }) {
   const f = fixture
   const community = f.team?.key === 'community'
   const matchup = fixtureMatchup(f)
@@ -36,17 +38,17 @@ export default function FixtureStrip({ fixture, isAdmin, canRespond = true, onSe
               <span className="sc no">{f.noReply}</span>
               <span className="sc-label">in · maybe · left</span>
             </button>
-            {canRespond && (
+            {!blockReason && (
               <div className="strip-you">
                 <span className="strip-you-lbl mono">You</span>
                 <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
               </div>
             )}
           </div>
-        ) : canRespond ? (
+        ) : !blockReason ? (
           <AvailControl value={f.myStatus} compact onChange={onSetAvail} />
         ) : (
-          <span className="strip-locked mono">Not signed off yet</span>
+          <span className="strip-locked mono">{respondBlockCopy(blockReason, f, { compact: true })}</span>
         )}
       </div>
 

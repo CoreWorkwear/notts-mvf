@@ -1,11 +1,17 @@
 -- ============================================================================
--- Nottinghamshire MvF — RLS policy test harness  (rev: eligibility gate removed)
+-- Nottinghamshire MvF — RLS policy test harness  (rev: team-scoped availability)
 -- ----------------------------------------------------------------------------
--- The XL eligibility / team-membership VISIBILITY gate has been removed (§1):
--- fixtures are now visible to any active member of the club. This harness proves
--- the NEW model AND that removing the gate opened no OTHER unintended access:
+-- Two rules that are easy to confuse, and the harness pins both down:
+--   SEEING a fixture is club-wide — the old eligibility gate went in 0023 and
+--   stays gone, so everyone follows both teams.
+--   ANSWERING one is team-scoped — 0034, after a Community-only player was
+--   found marking himself in for First Team games.
+-- It proves that split AND that neither change opened any OTHER access:
 --   • a Community-only player now SEES First Team fixtures (gate gone)           [T2]
---   • …and CAN set availability on them (write gate gone)                        [T3]
+--   • …but CANNOT set availability on them — responding is team-scoped (0034)    [T3]
+--   • …and CAN still answer their OWN squad's fixture                            [T3b]
+--   • a Community-only ADMIN is refused too: no bypass on your own row (0034)    [T12]
+--   • nobody can answer a fixture that has already kicked off (0034)             [T13]
 --   • a PENDING (unapproved) player still CANNOT set availability (approval gate)[T4]
 --   • a player still cannot self-promote (protect trigger)                       [T5]
 --   • a DIFFERENT-club player still cannot see or write our fixtures (isolation) [T6]
@@ -21,13 +27,17 @@
 -- Impersonates each user by setting the JWT claim + `authenticated` role, exactly
 -- as PostgREST does. Runs in a transaction that ROLLS BACK — repeatable, leaves
 -- nothing behind. Every check RAISEs on failure; reaching "ALL RLS TESTS PASSED"
--- means green. Run AFTER 0001…0023 + seed.
+-- means green. Run AFTER 0001…0034 + seed.
 -- ============================================================================
 
 begin;
 
 -- Actors (club 1): uG admin, uA Community-only (approved), uB both teams (approved),
--- uP pending (NOT approved). uC lives in a SECOND club.
+-- uP pending (NOT approved), uM a Community-only ADMIN. uC lives in a SECOND club.
+-- NOTE (0034): the `teams` in raw_user_meta_data below are now only a REQUEST —
+-- handle_new_user drops every signup into the reserves and squads are the
+-- manager's to grant, so the memberships each actor needs are inserted by hand
+-- further down, exactly as PlayerForm would write them.
 insert into auth.users
   (instance_id, id, aud, role, email, encrypted_password,
    email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
@@ -47,12 +57,31 @@ values
   ('00000000-0000-0000-0000-000000000000','a0000004-0000-0000-0000-000000000004','authenticated','authenticated',
    'pending@test.notts', crypt('p4', gen_salt('bf')), now(), now(), now(),
    '{"provider":"email","providers":["email"]}',
-   '{"first_name":"Pat","last_name":"Pending","phone":"07700900004","teams":["community"]}');
+   -- ASKS FOR THE FIRST TEAM. Post-0034 the trigger must ignore that and seed
+   -- the reserves only; T14 leans on this actor, so don't quietly make it
+   -- ["community"] again or the assertion goes vacuous.
+   '{"first_name":"Pat","last_name":"Pending","phone":"07700900004","teams":["xl"]}'),
+  ('00000000-0000-0000-0000-000000000000','a0000006-0000-0000-0000-000000000006','authenticated','authenticated',
+   'resadmin@test.notts', crypt('p6', gen_salt('bf')), now(), now(), now(),
+   '{"provider":"email","providers":["email"]}',
+   '{"first_name":"Mo","last_name":"Reece","phone":"07700900006","teams":["community"]}');
 
--- Bootstrap the admin + approve the active players (postgres bypasses protect).
-update profiles set role = 'admin', approved = true where id = 'a0000001-0000-0000-0000-000000000001';
+-- Bootstrap the admins + approve the active players (postgres bypasses protect).
+update profiles set role = 'admin', approved = true where id in ('a0000001-0000-0000-0000-000000000001','a0000006-0000-0000-0000-000000000006');
 update profiles set approved = true where id in ('a0000002-0000-0000-0000-000000000002','a0000003-0000-0000-0000-000000000003');
 -- uP (a0000004) deliberately left approved = false (pending).
+
+-- Squads, granted by hand because the trigger no longer does it (0034). The
+-- trigger has already put everyone in Community ('44444444'), so only the
+-- First Team ('33333333') memberships need adding:
+--   uG  admin, BOTH squads      — the real club manager's shape
+--   uB  player, BOTH squads
+--   uA  player, Community only  — the actor the reported bug was about
+--   uM  ADMIN, Community only   — proves there is no admin bypass (T12)
+insert into team_memberships (profile_id, team_id) values
+  ('a0000001-0000-0000-0000-000000000001','33333333-3333-3333-3333-333333333333'),
+  ('a0000003-0000-0000-0000-000000000003','33333333-3333-3333-3333-333333333333')
+on conflict do nothing;
 
 -- A SECOND club, with its own player uC (created in club 1 by the trigger, then moved).
 insert into clubs (id, name, created_at) values ('b1111111-1111-1111-1111-111111111111', 'Other FC', now() + interval '1 min');
@@ -73,7 +102,10 @@ insert into opponents (id, club_id, name) values ('c0000003-0000-0000-0000-00000
 insert into fixtures (id, club_id, season_id, team_id, opponent_id, match_date, kickoff, home_away, fixture_type, venue) values
   ('d0000001-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','33333333-3333-3333-3333-333333333333','c0000001-0000-0000-0000-000000000001', current_date + 7, '13:00','Home','League','Forest Rec 3G'),
   ('d0000002-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','44444444-4444-4444-4444-444444444444','c0000001-0000-0000-0000-000000000001', current_date + 8, '11:00','Away','Friendly','Harvey Hadden 4G'),
-  ('d0000003-0000-0000-0000-000000000003','b1111111-1111-1111-1111-111111111111','b2222222-2222-2222-2222-222222222222','b3333333-3333-3333-3333-333333333333','c0000003-0000-0000-0000-000000000003', current_date + 7, '13:00','Home','League','Their Ground');
+  ('d0000003-0000-0000-0000-000000000003','b1111111-1111-1111-1111-111111111111','b2222222-2222-2222-2222-222222222222','b3333333-3333-3333-3333-333333333333','c0000003-0000-0000-0000-000000000003', current_date + 7, '13:00','Home','League','Their Ground'),
+  -- A Community fixture already PLAYED, for the kickoff lock (T13). uB is in
+  -- this squad, so a refusal can only be the kickoff term doing its job.
+  ('d0000004-0000-0000-0000-000000000004','11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','44444444-4444-4444-4444-444444444444','c0000001-0000-0000-0000-000000000001', current_date - 7, '11:00','Home','League','Forest Rec 3G');
 
 -- A competition (club 1), seeded as postgres so the §3 cosmetic-toggle test below
 -- is blocked PURELY by RLS, not by a missing FK.
@@ -111,11 +143,25 @@ begin
   raise notice 'T2 PASS: Community-only player sees BOTH the First Team and Community fixtures';
 end $$;
 
--- T3 — …and CAN set availability on the First Team fixture (write gate removed).
+-- T3 — …but CANNOT set availability on it. THE REPORTED BUG (0034): seeing a
+-- First Team game is fine, answering for a squad you're not in is not. This
+-- assertion is the inverse of what it asserted before 0034 and fails on the
+-- old policy. Still acting as uA (Community-only) from T2.
+do $$ declare blocked boolean := false; begin
+  begin insert into availability (fixture_id, profile_id, status)
+        values ('d0000001-0000-0000-0000-000000000001','a0000002-0000-0000-0000-000000000002','in');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T3 FAIL: Community-only player set availability on a First Team fixture (team gate gone!)'; end if;
+  raise notice 'T3 PASS: Community-only player blocked from answering a First Team fixture';
+end $$;
+
+-- T3b — …and the gate is not a blanket ban: the SAME player answers their OWN
+-- squad's fixture fine. Deliberately still uA, so the actor stays put for T9
+-- below (which relies on the act_as set back at T2).
 do $$ begin
   insert into availability (fixture_id, profile_id, status)
-  values ('d0000001-0000-0000-0000-000000000001','a0000002-0000-0000-0000-000000000002','in');
-  raise notice 'T3 PASS: Community-only player set availability on the First Team fixture';
+  values ('d0000002-0000-0000-0000-000000000002','a0000002-0000-0000-0000-000000000002','in');
+  raise notice 'T3b PASS: Community-only player CAN answer their own squad''s fixture';
 end $$;
 
 -- T9 — but CANNOT write availability AS another player (own-row only).
@@ -232,6 +278,66 @@ do $$ declare n int; leak int; begin
   select count(*) into leak from profile_private where profile_id = 'a0000005-0000-0000-0000-000000000005';
   if leak > 0 then raise exception 'T11 FAIL: an admin can read ANOTHER CLUB''s private rows'; end if;
   raise notice 'T11 PASS: PII is self-or-same-club-admin only';
+end $$;
+
+-- T12 — the team gate has NO admin bypass on your own availability row (0034).
+-- uM is a real admin but Community-only, so he is refused on the First Team
+-- fixture exactly like uA was in T3 — and can still answer his own squad's.
+-- Deliberately a sixth actor rather than stripping uG's First Team membership:
+-- uG stands in for the real club manager, who IS in both squads, and every
+-- other admin test should keep running against that shape.
+reset role; select pg_temp.act_as('a0000006-0000-0000-0000-000000000006'); set local role authenticated;
+do $$ declare blocked boolean := false; begin
+  begin insert into availability (fixture_id, profile_id, status)
+        values ('d0000001-0000-0000-0000-000000000001','a0000006-0000-0000-0000-000000000006','in');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T12 FAIL: a Community-only ADMIN answered a First Team fixture (admin bypass leaked into the team gate)'; end if;
+  insert into availability (fixture_id, profile_id, status)
+  values ('d0000002-0000-0000-0000-000000000002','a0000006-0000-0000-0000-000000000006','in');
+  raise notice 'T12 PASS: no admin bypass — Community-only admin blocked on First Team, fine on Community';
+end $$;
+
+-- T13 — nobody answers a game that has already kicked off (0034). uB is IN the
+-- Community squad and approved and active, so the only thing left to refuse
+-- him on d0000004 (played a week ago) is the kickoff term.
+reset role; select pg_temp.act_as('a0000003-0000-0000-0000-000000000003'); set local role authenticated;
+do $$ declare blocked boolean := false; begin
+  begin insert into availability (fixture_id, profile_id, status)
+        values ('d0000004-0000-0000-0000-000000000004','a0000003-0000-0000-0000-000000000003','in');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T13 FAIL: a player answered a fixture that had already kicked off'; end if;
+  -- …and the same player is fine on an upcoming fixture in the same squad,
+  -- proving T13 caught the kickoff term and not something else.
+  insert into availability (fixture_id, profile_id, status)
+  values ('d0000002-0000-0000-0000-000000000002','a0000003-0000-0000-0000-000000000003','in');
+  raise notice 'T13 PASS: availability shuts at kickoff, still open before it';
+end $$;
+
+-- T14 — squads are NOT self-service (0034). uP signed up ASKING FOR THE FIRST
+-- TEAM and nothing has granted it since, so this is the back door itself: the
+-- trigger must have given him the reserves only, recorded the ask as a request,
+-- and left him with no way to answer a First Team game even once signed off.
+-- Fails on the pre-0034 trigger, which granted whatever the metadata asked for.
+reset role;
+do $$ declare ft int; comm int; asked text[]; begin
+  select count(*) into ft from team_memberships
+   where profile_id = 'a0000004-0000-0000-0000-000000000004'
+     and team_id = '33333333-3333-3333-3333-333333333333';
+  if ft > 0 then raise exception 'T14 FAIL: signup metadata granted itself a First Team membership (self-service back door open)'; end if;
+
+  select count(*) into comm from team_memberships
+   where profile_id = 'a0000004-0000-0000-0000-000000000004'
+     and team_id = '44444444-4444-4444-4444-444444444444';
+  if comm <> 1 then raise exception 'T14 FAIL: signup did not land in the reserves (got % rows)', comm; end if;
+
+  select requested_teams into asked from profiles where id = 'a0000004-0000-0000-0000-000000000004';
+  if not ('xl' = any(asked)) then raise exception 'T14 FAIL: the requested squad was thrown away instead of recorded'; end if;
+
+  -- …and the request alone buys nothing: even approved, he could not answer.
+  if can_respond_to_fixture('d0000001-0000-0000-0000-000000000001','a0000004-0000-0000-0000-000000000004')
+    then raise exception 'T14 FAIL: a self-requested squad let the player answer a First Team fixture'; end if;
+
+  raise notice 'T14 PASS: signup records the squad REQUEST, grants the reserves only, and buys no access';
 end $$;
 
 reset role;

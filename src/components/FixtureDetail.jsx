@@ -11,10 +11,14 @@ import { inForecastWindow } from '../lib/weather'
 import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
 import { teamMatchName } from '../lib/teams'
 import LineupBoard from './LineupBoard'
+import { respondBlockCopy } from '../lib/players'
 
 // Fixture detail: poster header, My availability, venue + directions, Who's in.
 // Admins can pin a club photo to this game's poster.
-export default function FixtureDetail({ open, onClose, fixture, isAdmin, canRespond = true, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
+// `blockReason` null = the viewer may answer; otherwise respondBlock()'s reason.
+// This sheet is also how the Calendar opens a game, so it is the one surface
+// that can be pointed at an already-played fixture — hence the kickoff reason.
+export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockReason = null, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
   const { user } = useAuth()
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
@@ -87,7 +91,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
         <LineupBoard fixture={f} isAdmin={isAdmin} open={open} />
       ) : tab === 'me' ? (
         <div className="mt-4">
-          {canRespond
+          {!blockReason
             ? <AvailControl value={myStatus} onChange={async (s) => {
                 const prev = myStatus
                 setMyStatus(s) // optimistic — reflect the pick immediately
@@ -96,7 +100,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, canResp
                 try { const ok = await onSetAvail(s); if (ok === false) setMyStatus(prev) }
                 catch { setMyStatus(prev) }
               }} />
-            : <p className="muted" style={{ fontSize: 14 }}>You can set your availability once the manager's signed you off.</p>}
+            : <p className="muted" style={{ fontSize: 14 }}>{respondBlockCopy(blockReason, f)}</p>}
 
           {showWeather && (
             <>
