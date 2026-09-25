@@ -20,7 +20,12 @@ describe('FixtureStrip availability', () => {
 
   test('a manager sees the squad counts AND their own In/Maybe/Out', () => {
     render(<FixtureStrip fixture={fixture} isAdmin onSetAvail={() => {}} onOpen={() => {}} />)
-    expect(screen.getByText('in · maybe · no reply')).toBeInTheDocument() // counts still there
+    // Each figure now carries its own caption, so assert the PAIRING rather
+    // than one caption string — that is what was misaligned before.
+    const counts = screen.getByRole('button', { name: /see who's in/i })
+    expect(counts).toHaveTextContent(/5\s*in/i)
+    expect(counts).toHaveTextContent(/2\s*maybe/i)
+    expect(counts).toHaveTextContent(/3\s*no reply/i)
     expect(screen.getByRole('button', { name: 'In' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Maybe' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Out' })).toBeInTheDocument()
@@ -53,7 +58,7 @@ describe('FixtureStrip — team-scoped availability', () => {
 
   test('a manager outside the squad keeps the counts but loses their own control', () => {
     render(<FixtureStrip fixture={xlFixture} isAdmin blockReason="other-team" onSetAvail={() => {}} onOpen={() => {}} />)
-    expect(screen.getByText('in · maybe · no reply')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /see who's in/i })).toHaveTextContent(/5\s*in/i)
     expect(screen.queryByRole('button', { name: 'In' })).not.toBeInTheDocument()
   })
 

@@ -20,14 +20,16 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
           time — the thing you actually scan a fixture list for — carried the
           same weight as the word "league". */}
       <button className="strip-main" onClick={onOpen}>
+        {/* The squad tag rides the date line, pushed right — inline after the
+            matchup it was getting bumped onto a line of its own by any opponent
+            with a long name, which read as a broken layout. Here it has a fixed
+            home whatever the name does. */}
         <div className="strip-when mono">
           <span className="sw-date">{fmtDate(f.match_date)}</span>
           <span className="sw-ko">{fmtKO(f.kickoff)}</span>
-        </div>
-        <div className="strip-line">
-          {matchup}
           {f.team?.is_first_team && <span className="pill-first">First Team</span>}
         </div>
+        <div className="strip-line">{matchup}</div>
         <div className="strip-meta mono">
           <span>{f.home_away}</span>
           <span className="sm-dot">·</span>
@@ -39,11 +41,24 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
       <div className="strip-side" onClick={(e) => e.stopPropagation()}>
         {isAdmin ? (
           <div className="strip-admin-side">
-            <button className="strip-counts mono" onClick={onOpen}>
-              <span className="sc in">{f.counts.in}</span>
-              <span className="sc maybe">{f.counts.maybe}</span>
-              <span className="sc no">{f.noReply}</span>
-              <span className="sc-label">in · maybe · no reply</span>
+            {/* Each figure carries its OWN caption. The three numbers used to sit
+                in auto-width grid columns above a single "in · maybe · no reply"
+                text run, so they never actually lined up with the words — the 3rd
+                number sat over the gap before its label. Pairing them makes the
+                alignment structural rather than a coincidence of string widths. */}
+            <button className="strip-counts mono" onClick={onOpen} aria-label="See who's in">
+              <span className="sc-col">
+                <span className="sc in">{f.counts.in}</span>
+                <span className="sc-cap">in</span>
+              </span>
+              <span className="sc-col">
+                <span className="sc maybe">{f.counts.maybe}</span>
+                <span className="sc-cap">maybe</span>
+              </span>
+              <span className="sc-col">
+                <span className="sc no">{f.noReply}</span>
+                <span className="sc-cap">no reply</span>
+              </span>
             </button>
             {!blockReason && (
               <div className="strip-you">
@@ -72,7 +87,10 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
           padding: 13px 14px 14px 18px; display: flex; flex-direction: column; gap: 5px; }
         /* The scan line: date bright, kickoff beside it, both mono so a column of
            rows aligns. */
-        .strip-when { display: flex; align-items: baseline; gap: 8px; font-size: 12px; letter-spacing: .04em; }
+        /* center, not baseline: the squad tag is a bordered box and would hang
+           off a shared text baseline. */
+        .strip-when { display: flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: .04em; }
+        .strip-when .pill-first { margin-left: auto; }
         .sw-date { color: var(--bone); font-weight: 500; text-transform: uppercase; }
         .sw-ko { color: var(--bone-mute); }
         .strip-line { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.05;
@@ -90,12 +108,15 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
         .strip-admin-side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
         .strip-you { display: flex; align-items: center; gap: 8px; }
         .strip-you-lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--bone-mute); }
-        .strip-counts { background: none; border: none; display: grid;
-          grid-template-columns: repeat(3, auto); gap: 0 10px; align-items: center; color: var(--bone); }
-        .strip-counts .sc { font-size: 19px; font-weight: 600; }
+        .strip-counts { background: none; border: none; padding: 0;
+          display: flex; align-items: flex-start; gap: 16px; color: var(--bone); }
+        /* Number over its own word, both centred on the column's axis. Holds at
+           any caption length and for a count that grows to three digits. */
+        .sc-col { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .strip-counts .sc { font-size: 19px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
         .sc.in { color: var(--green-bright); } .sc.maybe { color: var(--amber); } .sc.no { color: var(--bone-mute); }
-        .sc-label { grid-column: 1 / -1; font-size: 10px; color: var(--bone-mute); letter-spacing: .06em;
-          text-transform: uppercase; margin-top: 2px; }
+        .sc-cap { font-size: 10px; color: var(--bone-mute); letter-spacing: .06em;
+          text-transform: uppercase; white-space: nowrap; }
         @media (max-width: 520px) {
           .strip { flex-direction: column; }
           .strip-side { border-left: none; border-top: 1px solid var(--line); padding: 12px 14px 14px 18px; }
