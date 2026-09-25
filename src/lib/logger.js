@@ -51,6 +51,17 @@ export function scrub(value, depth = 0, seen = new WeakSet()) {
   return value
 }
 
+// A URL gets the same masking as a message, but percent-DECODED first: an
+// email in a query string arrives as `alan%40example.com`, which EMAIL_RE
+// cannot see. Decoding costs nothing (an error-log URL is for reading, not
+// for replaying) and it is the only form PII actually turns up in here.
+export function scrubUrl(url) {
+  const raw = String(url ?? '')
+  let decoded = raw
+  try { decoded = decodeURIComponent(raw) } catch { /* malformed %-escape — mask the raw form */ }
+  return scrub(decoded)
+}
+
 // Serialise context defensively — scrub, then drop anything circular/unserialisable.
 function safeContext(context) {
   if (!context) return null
@@ -62,7 +73,11 @@ export function buildErrorRow({ kind, message, context, profileId = null, clubId
     kind: String(kind || 'error').slice(0, 40),
     message: scrub(String(message ?? 'Unknown error')).slice(0, 1000),
     context: safeContext(context),
-    url: url ? String(url).slice(0, 500) : null,
+    // Scrubbed like the message: `url` carries location.search, and a query
+    // string is the one place a stray email or token can turn up in a route
+    // (the admin duplicate-email lookup, a pasted recovery link). client_errors
+    // is admin-readable, so PII must not reach it by that back door either.
+    url: url ? scrubUrl(url).slice(0, 500) : null,
     user_agent: userAgent ? String(userAgent).slice(0, 500) : null,
     profile_id: profileId,
     club_id: clubId,

@@ -3,7 +3,7 @@ import Sheet from './Sheet'
 import Toast from './Toast'
 import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
-import { POSITIONS } from '../lib/constants'
+import { MIN_PASSWORD, POSITIONS } from '../lib/constants'
 import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
 
 // Admin add/edit of a squad member. Add creates the login via a throwaway
@@ -116,7 +116,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
       if (!lastName.trim()) bad.add('last')
       if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) bad.add('email')
       if (!phone.trim()) bad.add('phone')
-      if (adding && (!password || password.length < 6)) bad.add('password')
+      if (adding && (!password || password.length < MIN_PASSWORD)) bad.add('password')
       setInvalid(bad)
       setError(v)
       return
@@ -218,7 +218,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
         {adding && (
           <div className="field"><label className="label">Starter password (hand this over)</label>
             <input className="input" value={password} aria-invalid={invalid.has('password') || undefined}
-              onChange={(e) => { setPassword(e.target.value); clearInvalid('password') }} placeholder="min 6 characters" /></div>
+              onChange={(e) => { setPassword(e.target.value); clearInvalid('password') }} placeholder={`min ${MIN_PASSWORD} characters`} /></div>
         )}
 
         <div className="row gap-2">

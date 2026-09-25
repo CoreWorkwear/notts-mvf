@@ -36,11 +36,17 @@
 --   • profile_private.email is not self-editable (admin can still correct it)   [T23]
 --   • profiles.photo_url only accepts this project's public media bucket        [T24]
 --   • anonymise_and_delete_profile: service-role only, club-checked, ATOMIC      [T25]
+-- 0037 (security audit / pen-test remediation):
+--   • the TRIGGER functions are not callable as RPC by anon or authenticated   [T27]
+--   • reminders_sent is closed by privilege as well as by RLS                  [T28]
+--   • all five remaining image URL columns are pinned to the media bucket      [T29]
+--   • profiles_update is club-scoped; nobody moves their own account clubs     [T30]
+--   • availability_delete cannot cross a club boundary                         [T31]
 --
 -- Impersonates each user by setting the JWT claim + `authenticated` role, exactly
 -- as PostgREST does. Runs in a transaction that ROLLS BACK — repeatable, leaves
 -- nothing behind. Every check RAISEs on failure; reaching "ALL RLS TESTS PASSED"
--- means green. Run AFTER 0001…0035 + seed.
+-- means green. Run AFTER 0001…0037 + seed.
 -- ============================================================================
 
 begin;
@@ -712,6 +718,151 @@ do $$ declare blocked boolean; begin
   values ('a0000002-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'fetch', 'genuine');
   raise notice 'T26 PASS: anon cannot list media; client_errors is own-club and size-capped';
 end $$;
+
+-- ============================================================================
+-- 0037 (security audit / pen-test remediation) — T27…T31
+-- ============================================================================
+
+-- T27 — the TRIGGER functions are out of the exposed API surface (0037 B).
+-- 0035 F2 did this for the policy helpers but left the trigger functions on
+-- their default PUBLIC grant, so the Supabase linter listed them at
+-- /rest/v1/rpc/<name>. A trigger-returning function refuses a direct call, but
+-- two of these are SECURITY DEFINER and none of them belong in the API.
+-- Revoking EXECUTE does NOT stop a trigger firing: a trigger runs with the
+-- privileges of the statement that fired it, which T5 / T8 / T23 re-prove.
+reset role;
+do $$ declare fn text; begin
+  foreach fn in array array[
+    'public.handle_new_user()', 'public.protect_profile_columns()',
+    'public.protect_private_email()', 'public.rearm_fixture_reminders()',
+    'public.competition_squad_guard()', 'public.touch_updated_at()'
+  ] loop
+    if has_function_privilege('anon', fn, 'EXECUTE') then
+      raise exception 'T27 FAIL: anon can execute the trigger function %', fn; end if;
+    if has_function_privilege('authenticated', fn, 'EXECUTE') then
+      raise exception 'T27 FAIL: authenticated can execute the trigger function %', fn; end if;
+  end loop;
+  raise notice 'T27 PASS: trigger functions are not callable as RPC by anon or authenticated';
+end $$;
+
+-- T28 — reminders_sent is shut TWICE: RLS on with no policies (0008) AND no
+-- table grant to the API roles (0037 C). It held Supabase's default grants, so
+-- it was one accidental `disable row level security` away from world-writable.
+reset role;
+do $$ declare n int; begin
+  select count(*) into n from information_schema.role_table_grants
+   where table_schema = 'public' and table_name = 'reminders_sent' and grantee in ('anon','authenticated');
+  if n > 0 then raise exception 'T28 FAIL: % grant(s) on reminders_sent still held by anon/authenticated', n; end if;
+  if not exists (select 1 from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+                  where ns.nspname = 'public' and c.relname = 'reminders_sent' and c.relrowsecurity)
+    then raise exception 'T28 FAIL: RLS is off on reminders_sent'; end if;
+end $$;
+select pg_temp.act_as('a0000001-0000-0000-0000-000000000001'); set local role authenticated;
+do $$ declare blocked boolean := false; begin
+  begin perform 1 from reminders_sent;
+  exception when insufficient_privilege then blocked := true; end;
+  if not blocked then raise exception 'T28 FAIL: an admin read the reminder ledger'; end if;
+  raise notice 'T28 PASS: reminders_sent is closed by privilege AND by RLS';
+end $$;
+
+-- T29 — every rendered image URL is pinned to this project's media bucket
+-- (0037 D; 0035 F6 did profiles.photo_url alone). An arbitrary string in any of
+-- these is an <img src> for the whole club: an external tracker, a beacon that
+-- logs every member's IP, a data: URL. CHECK constraints are not role-scoped,
+-- so this runs as postgres — if the constraint holds here it holds for admins.
+reset role;
+do $$
+declare
+  hostile text := 'https://evil.example/beacon.png';
+  good    text := 'https://vgeosccpwsdosbcnpcve.supabase.co/storage/v1/object/public/media/photos/ok.jpg';
+  blocked boolean;
+begin
+  blocked := false;
+  begin update sponsors set logo_url = hostile where club_id = '11111111-1111-1111-1111-111111111111';
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T29 FAIL: sponsors.logo_url accepted an off-bucket URL'; end if;
+
+  blocked := false;
+  begin update opponents set badge_url = hostile where club_id = '11111111-1111-1111-1111-111111111111';
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T29 FAIL: opponents.badge_url accepted an off-bucket URL'; end if;
+
+  blocked := false;
+  begin update clubs set crest_url = hostile where id = '11111111-1111-1111-1111-111111111111';
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T29 FAIL: clubs.crest_url accepted an off-bucket URL'; end if;
+
+  blocked := false;
+  begin insert into media_assets (club_id, type, url)
+        values ('11111111-1111-1111-1111-111111111111', 'photo', hostile);
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T29 FAIL: media_assets.url accepted an off-bucket URL'; end if;
+
+  -- An UPDATE that matches no row is a vacuous pass, so make sure a result exists.
+  if not exists (select 1 from results where fixture_id = 'd0000001-0000-0000-0000-000000000001') then
+    insert into results (fixture_id, us, them) values ('d0000001-0000-0000-0000-000000000001', 1, 0);
+  end if;
+  blocked := false;
+  begin update results set motm_photo_url = hostile where fixture_id = 'd0000001-0000-0000-0000-000000000001';
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T29 FAIL: results.motm_photo_url accepted an off-bucket URL'; end if;
+
+  -- …and a genuine bucket URL still saves, or the constraint is just a wall.
+  update clubs set crest_url = good where id = '11111111-1111-1111-1111-111111111111';
+  raise notice 'T29 PASS: all five image URL columns are pinned to the media bucket';
+end $$;
+
+-- T30 — the admin branch of profiles_update is club-scoped (0037 E), and
+-- nobody can walk their OWN account into another club (0037 F). is_admin() is
+-- global, so without the club term our manager could have rewritten Other FC's
+-- squad — and, since an admin skips the not-is_admin column freeze, carried
+-- their own admin role across by editing club_id.
+reset role; select pg_temp.act_as('a0000001-0000-0000-0000-000000000001'); set local role authenticated;
+do $$ declare n int; blocked boolean := false; begin
+  -- (a) another club's profile is untouchable
+  update profiles set first_name = 'Hijacked' where id = 'a0000005-0000-0000-0000-000000000005';
+  get diagnostics n = row_count;
+  if n > 0 then raise exception 'T30 FAIL: our admin updated another club profile'; end if;
+
+  -- (b) an admin cannot move their own account (and its role) to another club
+  begin
+    update profiles set club_id = 'b1111111-1111-1111-1111-111111111111'
+     where id = 'a0000001-0000-0000-0000-000000000001';
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T30 FAIL: the admin moved their own account to another club'; end if;
+
+  -- (c) the ordinary admin edit inside their own club still works
+  update profiles set first_name = 'Jordan' where id = 'a0000002-0000-0000-0000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'T30 FAIL: a same-club admin edit was blocked (% rows). The club term is too tight', n; end if;
+  raise notice 'T30 PASS: profiles_update is club-scoped and self-club is locked';
+end $$;
+
+-- T31 — availability_delete is club-scoped too (0037 E). It stays deliberately
+-- open on own-row and on kickoff (0034 §3: withdrawing an answer must always
+-- work); this only stops a DELETE crossing a club boundary.
+reset role;
+insert into availability (fixture_id, profile_id, status)
+values ('d0000003-0000-0000-0000-000000000003','a0000005-0000-0000-0000-000000000005','in')
+on conflict (fixture_id, profile_id) do nothing;
+select pg_temp.act_as('a0000001-0000-0000-0000-000000000001'); set local role authenticated;
+do $$ declare n int; begin
+  delete from availability
+   where fixture_id = 'd0000003-0000-0000-0000-000000000003'
+     and profile_id = 'a0000005-0000-0000-0000-000000000005';
+  get diagnostics n = row_count;
+  if n > 0 then raise exception 'T31 FAIL: our admin deleted another club availability row'; end if;
+end $$;
+reset role;
+do $$ begin
+  -- The delete above returning 0 rows is only meaningful if the row was there.
+  if not exists (select 1 from availability
+                  where fixture_id = 'd0000003-0000-0000-0000-000000000003'
+                    and profile_id = 'a0000005-0000-0000-0000-000000000005')
+    then raise exception 'T31 FAIL: the other club row is gone — the check above was vacuous'; end if;
+  raise notice 'T31 PASS: availability_delete cannot cross a club boundary';
+end $$;
+
 
 reset role;
 do $$ begin raise notice '================  ALL RLS TESTS PASSED  ================'; end $$;

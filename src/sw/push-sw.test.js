@@ -28,6 +28,14 @@ async function fire(type, props) {
   return e
 }
 
+// Built from code points, not escape sequences: a literal backslash or tab
+// in a test file is exactly the sort of character a shell, an editor or a
+// patch tool quietly eats, and the test would then silently assert that a
+// harmless string is rejected. BS is the character the URL parser rewrites
+// to '/'; TAB is one it strips.
+const BS = String.fromCharCode(92)
+const TAB = String.fromCharCode(9)
+
 const windowClient = () => ({ focus: vi.fn(() => Promise.resolve()), postMessage: vi.fn() })
 
 describe('push → notification', () => {
@@ -88,5 +96,44 @@ describe('pushsubscriptionchange', () => {
     await expect(fire('pushsubscriptionchange', { oldSubscription: null, newSubscription: { endpoint: 'x' } })).resolves.toBeTruthy()
     expect(registration.pushManager.subscribe).not.toHaveBeenCalled()
     await expect(fire('pushsubscriptionchange', { oldSubscription: null, newSubscription: null })).resolves.toBeTruthy()
+  })
+})
+
+// A push payload's `url` is attacker-shaped data as far as the SW is
+// concerned: clients.openWindow() opens ANY absolute URL, so an off-origin
+// value would turn a club notification into a tap-to-visit link for somewhere
+// else. These pin the same rules safeAppPath() enforces in the app
+// (src/lib/navigation.js) — the SW restates them because it can't import.
+describe('notificationclick — the deep link is not trusted', () => {
+  test('an absolute off-origin url falls back to the app root, open window or not', async () => {
+    const c = windowClient()
+    clients.matchAll.mockResolvedValue([c])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data: { url: 'https://evil.example/steal' } } })
+    expect(c.postMessage).toHaveBeenCalledWith({ type: 'mvf-navigate', url: '/' })
+
+    clients.matchAll.mockResolvedValue([])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data: { url: 'https://evil.example/steal' } } })
+    expect(clients.openWindow).toHaveBeenCalledWith('/')
+  })
+
+  test('the backslash escape out of the app is refused (CVE-2025-68470 shape)', async () => {
+    clients.matchAll.mockResolvedValue([])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data: { url: '/' + BS + 'evil.example' } } })
+    expect(clients.openWindow).toHaveBeenCalledWith('/')
+  })
+
+  test('protocol-relative, javascript: and control-character urls are all refused', async () => {
+    clients.matchAll.mockResolvedValue([])
+    for (const url of ['//evil.example', 'javascript:alert(1)', '/' + TAB + 'javascript:alert(1)', 'data:text/html,<script>alert(1)</script>']) {
+      vi.clearAllMocks()
+      await fire('notificationclick', { action: '', notification: { close: vi.fn(), data: { url } } })
+      expect(clients.openWindow).toHaveBeenCalledWith('/')
+    }
+  })
+
+  test('a genuine in-app deep link still works, query and all', async () => {
+    clients.matchAll.mockResolvedValue([])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data: { url: '/news?id=7' } } })
+    expect(clients.openWindow).toHaveBeenCalledWith('/news?id=7')
   })
 })

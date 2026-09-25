@@ -1,6 +1,7 @@
 // Pure helpers for the Players admin — kept out of the component so they're
 // easy to unit-test.
 import { hasKickedOff } from './format'
+import { MIN_PASSWORD } from './constants'
 
 // Required fields enforced in the UI (the DB enforces NOT NULL too).
 export function validatePlayer({ first_name, last_name, email, phone }, { needPassword, password } = {}) {
@@ -9,7 +10,7 @@ export function validatePlayer({ first_name, last_name, email, phone }, { needPa
   if (!email?.trim()) return 'Email is required.'
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) return "That email doesn't look right."
   if (!phone?.trim()) return 'Phone is required.'
-  if (needPassword && (!password || password.length < 6)) return 'Starter password must be at least 6 characters.'
+  if (needPassword && (!password || password.length < MIN_PASSWORD)) return `Starter password must be at least ${MIN_PASSWORD} characters.`
   return null
 }
 

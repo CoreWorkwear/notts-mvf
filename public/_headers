@@ -7,7 +7,42 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# The app is HTTPS-only and never framed.
 /*
+  # The app is HTTPS-only and never framed.
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Frame-Options: DENY
+  # Pages sets these two itself today; stating them here means they survive a
+  # change of host and are asserted by src/security.test.js rather than assumed.
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Nothing in the app uses these, so deny them outright rather than leave the
+  # decision to whatever a future embedded page asks for.
+  Permissions-Policy: accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+  # Content Security Policy — the backstop under everything else. Several URL
+  # columns are admin-typed and rendered as <img src>/<a href>, and the repo is
+  # public, so a rogue or compromised manager account is the threat this closes:
+  # even with a hostile value in the database, nothing loads from an origin not
+  # named here and no injected script can run.
+  #
+  #   script-src   self + ONE sha256 for the inline theme script in index.html
+  #                (set before paint to avoid a light/dark flash). No
+  #                'unsafe-inline'. src/security.test.js recomputes the hash
+  #                from index.html and fails if the two drift apart, so editing
+  #                that script can't silently break the theme.
+  #   style-src    'unsafe-inline' is unavoidable: Auth.jsx renders a <style>
+  #                element and a static host can't mint a per-response nonce.
+  #                React's style={{…}} props set CSSOM properties and are not
+  #                covered by CSP at all.
+  #   img-src      self + the Supabase storage origin. Every image column
+  #                (profiles.photo_url, sponsors.logo_url, opponents.badge_url,
+  #                clubs.crest_url, media_assets.url, results.motm_photo_url)
+  #                is constrained to that bucket at the DB by migrations 0035
+  #                and 0037 — this is the same rule enforced a second time in
+  #                the browser. data:/blob: are for the client-side resize in
+  #                src/lib/storage.js, which reads a picked file as a data URL.
+  #   connect-src  Supabase (REST/auth/storage/functions, wss for realtime) plus
+  #                the three keyless APIs in src/lib/{weather,geocode}.js.
+  #   frame-src    the OpenStreetMap venue embed in FixtureDetail.jsx.
+  #   frame-ancestors/base-uri/object-src/form-action are shut: the app is never
+  #     framed, never rebases its URLs, embeds no plugins and posts no forms.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-K9CaAD00KstkwsCoGBO88CG/xBnpVCZbHxwlmcG32Nk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.postcodes.io; frame-src https://www.openstreetmap.org; worker-src 'self'; manifest-src 'self'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests

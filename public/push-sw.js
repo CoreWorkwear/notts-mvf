@@ -57,13 +57,47 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   )
 })
 
+// Is this deep link one of OUR paths? A push payload's `url` is data, not a
+// destination we trust: clients.openWindow() will happily open any absolute URL,
+// so an off-origin value here turns a club notification into a tap-to-visit link
+// for somewhere else. `startsWith('/')` is not enough — browsers normalise a
+// backslash to '/', so `/\evil.com` parses as `//evil.com` and leaves the app.
+//
+// Same rules as safeAppPath() in src/lib/navigation.js, restated because a
+// service worker is a plain script and cannot import the module.
+// src/sw/push-sw.test.js pins the two to the same behaviour.
+function safePath(url) {
+  if (typeof url !== 'string' || url === '') return null
+  // Both hazards are code points, checked here rather than with a regex so
+  // neither has to appear literally in this file:
+  //   92         backslash - the URL parser turns it into "/", so a path like
+  //              "/\\evil.com" becomes "//evil.com" and leaves the app.
+  //              That is CVE-2025-68470's bypass of the startsWith check.
+  //   <0x20 0x7f control characters - the parser STRIPS these, letting what
+  //              is left reassemble into a different URL entirely.
+  for (var i = 0; i < url.length; i++) {
+    var code = url.charCodeAt(i)
+    if (code === 92 || code < 0x20 || code === 0x7f) return null
+  }
+  if (url.charAt(0) !== '/' || url.slice(0, 2) === '//') return null
+  try {
+    var resolved = new URL(url, self.location.origin)
+    if (resolved.origin !== self.location.origin) return null
+    return resolved.pathname + resolved.search + resolved.hash
+  } catch (e) {
+    return null
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const d = event.notification.data || {}
   const action = event.action // '', 'in', 'maybe', 'out'
   const avail = ['in', 'maybe', 'out'].includes(action) ? action : null
-  let url = d.url || '/'
-  if (avail && d.fixtureId) url = `/fixtures?mvf_fixture=${d.fixtureId}&mvf_avail=${avail}`
+  // Anything we can't vouch for falls back to the app root, so a tap still
+  // opens the club rather than doing nothing (or going somewhere else).
+  let url = safePath(d.url) || '/'
+  if (avail && d.fixtureId) url = `/fixtures?mvf_fixture=${encodeURIComponent(d.fixtureId)}&mvf_avail=${avail}`
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {

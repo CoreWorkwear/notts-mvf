@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import PlayerForm from './PlayerForm'
+import { MIN_PASSWORD } from '../lib/constants'
 
 const h = vi.hoisted(() => ({ calls: [] }))
 vi.mock('../lib/supabase', () => {
@@ -130,7 +131,7 @@ describe('PlayerForm — add: a half-done create is reported', () => {
     await userEvent.type(inputs[1], 'Rob')           // surname
     await userEvent.type(inputs[2], 'rob@notts.test') // email
     await userEvent.type(inputs[3], '07700900123')   // phone
-    await userEvent.type(screen.getByPlaceholderText(/min 6 characters/i), 'secret1')
+    await userEvent.type(screen.getByPlaceholderText(new RegExp(`min ${MIN_PASSWORD} characters`, 'i')), 'a-good-long-one')
     await userEvent.click(screen.getByRole('button', { name: /create player/i }))
 
     await waitFor(() => expect(screen.getByText(/team\(s\) didn't save/i)).toBeInTheDocument())

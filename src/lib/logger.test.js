@@ -218,3 +218,26 @@ describe('logError — offline queue', () => {
     expect(_queuedRows()).toHaveLength(2)
   })
 })
+
+// client_errors is admin-readable, and `url` is location.pathname + search.
+// A query string is the one route-shaped place a stray email or token can
+// appear (the admin duplicate-email lookup; a pasted recovery link), so it
+// gets the same scrub the message does — it used to go in raw.
+describe('buildErrorRow — the url is scrubbed too', () => {
+  test('masks an email in the query string', () => {
+    const row = buildErrorRow({ message: 'boom', url: '/players?email=alan%40example.com&q=1' })
+    expect(row.url).not.toContain('alan')
+    expect(row.url).toContain('[email]')
+  })
+
+  test('masks a JWT in the query string', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+    const row = buildErrorRow({ message: 'boom', url: '/fixtures?token=' + jwt })
+    expect(row.url).toBe('/fixtures?token=[jwt]')
+  })
+
+  test('an ordinary route is unchanged', () => {
+    expect(buildErrorRow({ message: 'boom', url: '/fixtures?mvf_fixture=abc' }).url)
+      .toBe('/fixtures?mvf_fixture=abc')
+  })
+})

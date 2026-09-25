@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { validatePlayer, diffMemberships, isSelf, isSquadMember, squadIds, squadIdsByTeam, canSetAvailability, accountStatus, respondBlock, respondBlockCopy } from './players'
+import { MIN_PASSWORD } from './constants'
 
 const ok = { first_name: 'Joe', last_name: 'Morris', email: 'joe@notts.test', phone: '07700900000' }
 
@@ -15,9 +16,9 @@ describe('validatePlayer', () => {
   test('rejects a malformed email', () => {
     expect(validatePlayer({ ...ok, email: 'not-an-email' })).toMatch(/email/i)
   })
-  test('requires a 6+ char starter password only when adding', () => {
+  test('requires a MIN_PASSWORD-length starter password only when adding', () => {
     expect(validatePlayer(ok, { needPassword: true, password: '123' })).toMatch(/password/i)
-    expect(validatePlayer(ok, { needPassword: true, password: 'goodpass' })).toBeNull()
+    expect(validatePlayer(ok, { needPassword: true, password: 'a-good-long-one' })).toBeNull()
     expect(validatePlayer(ok, { needPassword: false })).toBeNull()
   })
 })
@@ -187,5 +188,27 @@ describe('respondBlockCopy', () => {
     for (const r of ['supporter', 'pending', 'inactive', 'other-team', 'kicked-off', 'unknown']) {
       expect(respondBlockCopy(r, null).length).toBeGreaterThan(0)
     }
+  })
+})
+
+// The password floor moved from 6 to 10 (src/lib/constants.js MIN_PASSWORD).
+// This is a UX check, not a control — the control is Supabase Auth's own
+// "Minimum password length" setting — but the two must not drift apart.
+describe('validatePlayer — starter password length', () => {
+  const ok = { first_name: 'Alan', last_name: 'Lenihan', email: 'a@b.co', phone: '07000 000000' }
+
+  test('rejects anything under MIN_PASSWORD, naming the real number', () => {
+    const msg = validatePlayer(ok, { needPassword: true, password: 'x'.repeat(MIN_PASSWORD - 1) })
+    expect(msg).toBe(`Starter password must be at least ${MIN_PASSWORD} characters.`)
+    // The old six-character password the check used to accept.
+    expect(validatePlayer(ok, { needPassword: true, password: 'secret' })).toBe(msg)
+  })
+
+  test('accepts one exactly at the floor', () => {
+    expect(validatePlayer(ok, { needPassword: true, password: 'x'.repeat(MIN_PASSWORD) })).toBeNull()
+  })
+
+  test('an edit (no new password) is unaffected', () => {
+    expect(validatePlayer(ok, { needPassword: false, password: '' })).toBeNull()
   })
 })

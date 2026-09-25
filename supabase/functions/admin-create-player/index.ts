@@ -65,7 +65,10 @@ Deno.serve(async (req) => {
       log.warn('bad_request', { caller, error: 'missing required field', ms: log.elapsed() })
       return json({ error: 'first name, surname, email, phone and password are required', requestId: log.id }, 400)
     }
-    if (String(b.password).length < 6) return json({ error: 'password must be at least 6 characters', requestId: log.id }, 400)
+    // Keep in step with MIN_PASSWORD in src/lib/constants.js and with the
+    // "Minimum password length" setting in Supabase Auth — that dashboard
+    // setting is the actual control; this and the client check are UX.
+    if (String(b.password).length < 10) return json({ error: 'password must be at least 10 characters', requestId: log.id }, 400)
     const teamKeys = validateTeamKeys(b.teams)
     if (!teamKeys.ok) {
       log.warn('bad_request', { caller, error: teamKeys.error, ms: log.elapsed() })

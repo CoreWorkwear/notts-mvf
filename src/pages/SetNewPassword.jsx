@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { MIN_PASSWORD } from '../lib/constants'
 import Crest from '../components/Crest'
 import Toast from '../components/Toast'
 
@@ -16,7 +17,7 @@ export default function SetNewPassword() {
 
   async function onSubmit(e) {
     e.preventDefault()
-    if (password.length < 6) { setError('Pick a password of at least 6 characters.'); return }
+    if (password.length < MIN_PASSWORD) { setError(`Pick a password of at least ${MIN_PASSWORD} characters.`); return }
     if (password !== confirm) { setError("Those passwords don't match."); return }
     setError(null); setBusy(true)
     const { error } = await updatePassword(password)
