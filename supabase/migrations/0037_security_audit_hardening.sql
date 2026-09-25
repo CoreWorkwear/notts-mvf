@@ -183,7 +183,12 @@ as $fn$
 begin
   if current_user in ('postgres','supabase_admin','service_role','supabase_auth_admin') then return new; end if;
   if not is_admin(auth.uid()) then
-    new.role := old.role; new.xl_eligible := old.xl_eligible; new.active := old.active;
+    -- NB: no xl_eligible here. 0009's version guarded it, but 0025 dropped the
+    -- column; a plpgsql body is not checked for field references at CREATE
+    -- time, only when it runs, so re-adding that line would have compiled
+    -- cleanly and then thrown 'record "new" has no field "xl_eligible"' on
+    -- EVERY profile update — approvals, avatars, positions, self-edits.
+    new.role := old.role; new.active := old.active;
     new.club_id := old.club_id; new.approved := old.approved; new.is_player := old.is_player;
   end if;
   if new.id = auth.uid() then
