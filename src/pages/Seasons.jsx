@@ -1,10 +1,10 @@
 import SeasonsPanel from '../components/SeasonsPanel'
+import PageHead from '../components/PageHead'
 
 export default function Seasons() {
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">SEASONS</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Seasons</h1>
+      <PageHead kicker="SEASONS" title="Seasons" />
       <SeasonsPanel />
     </div>
   )

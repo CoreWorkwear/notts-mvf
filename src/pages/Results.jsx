@@ -11,6 +11,7 @@ import MatchCentre from '../components/MatchCentre'
 import ResultForm from '../components/ResultForm'
 import Loader from '../components/Loader'
 import { Stagger, StaggerItem } from '../components/Stagger'
+import PageHead from '../components/PageHead'
 
 const OUTCOME_LABEL = { W: 'Won', D: 'Drawn', L: 'Lost' }
 
@@ -22,7 +23,7 @@ export default function Results() {
   const [centre, setCentre] = useState(null)   // fixture for match centre
   const [editing, setEditing] = useState(null) // fixture for result form
 
-  if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader label="Fetching the results…" />
+  if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader label="Loading results…" />
 
   // A failed first load (flaky connection) gets a retry, not "no games played".
   if (error && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return (
@@ -39,8 +40,7 @@ export default function Results() {
 
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">FULL TIME</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Results</h1>
+      <PageHead kicker="FULL TIME" title="Results" />
 
       {/* Admin: games still needing a result */}
       {isAdmin && needsResult.length > 0 && (

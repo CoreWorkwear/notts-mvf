@@ -9,6 +9,7 @@ import { groupErrors, kindsOf, fmtAgo, fmtCrumb, shortUA } from '../lib/diagnost
 import { pushSupported, currentSubscription } from '../lib/push'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
+import PageHead from '../components/PageHead'
 
 // Admin observability: the most recent errors logged from players' devices, so
 // breakage is visible without waiting for someone to complain (RLS: admin read).
@@ -115,8 +116,7 @@ export default function Diagnostics() {
       <Toast message={toast} onDismiss={() => setToast(null)} />
       <div className="row spread" style={{ alignItems: 'flex-end' }}>
         <div>
-          <p className="kicker"><span className="kicker-rule">DIAGNOSTICS</span></p>
-          <h1 className="display mt-2" style={{ fontSize: 28 }}>App errors</h1>
+          <PageHead kicker="DIAGNOSTICS" title="App errors" />
         </div>
         <div className="row gap-2">
           <button className="chip" disabled={busy} onClick={ping} title="Log a test error from this device">Test</button>
@@ -159,7 +159,7 @@ export default function Diagnostics() {
       {rows.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">All quiet 🟢</p>
-          <p>No errors logged from anyone's device. Crashes, failed loads and blocked saves would show here.</p>
+          <p>Nothing logged from any device.</p>
         </div>
       ) : (
         <div className="col gap-2 mt-4">

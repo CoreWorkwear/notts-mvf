@@ -276,9 +276,6 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
             <option value="scheduled">On as scheduled</option>
             <option value="postponed">Postponed (P-P)</option>
           </select>
-          {status === 'postponed' && (
-            <span className="dim" style={{ fontSize: 12 }}>Stays in Fixtures with a P-P tag until kickoff passes, then archives to Results.</span>
-          )}
         </div>
 
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>

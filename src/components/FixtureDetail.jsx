@@ -10,6 +10,7 @@ import { fmtDateLong, fmtKO } from '../lib/format'
 import { heroBackground } from '../lib/media'
 import { setPinnedImage } from '../hooks/useFixtures'
 import WeatherStrip from './WeatherStrip'
+import TabBar from './TabBar'
 import { inForecastWindow } from '../lib/weather'
 import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
 import { teamMatchName } from '../lib/teams'
@@ -125,10 +126,19 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
         </button>
       )}
 
-      <div className="row gap-2 mt-4">
-        <button className={'btn grow det-tab ' + (tab === 'me' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('me')}>Availability</button>
-        <button className={'btn grow det-tab ' + (tab === 'who' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('who')}>Who's in</button>
-        <button className={'btn grow det-tab ' + (tab === 'line' ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab('line')}>Line-up</button>
+      {/* A view switch, so it gets the underline bar — not three brand-red
+          buttons sitting directly under the sheet's actual action. */}
+      <div className="mt-4">
+        <TabBar
+          id="fixture-detail"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { key: 'me', label: 'Availability' },
+            { key: 'who', label: "Who's in" },
+            { key: 'line', label: 'Line-up' },
+          ]}
+        />
       </div>
 
       {tab === 'line' ? (

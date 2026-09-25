@@ -29,7 +29,7 @@ export default function MediaPanel() {
     if (error) setToast(`Couldn't remove that photo. ${friendlyError(error, 'Give it another go.')}`)
   }
 
-  if (loading) return <Loader label="Loading the club media…" />
+  if (loading) return <Loader label="Loading media…" />
 
   return (
     <div className="mt-4 col gap-5">
@@ -45,7 +45,7 @@ export default function MediaPanel() {
 
       <div>
         <p className="kicker"><span className="kicker-rule">CLUB PHOTOS</span></p>
-        <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Used at random behind fixture & result heroes (pin one to a game from its detail). Pick several at once — picture files only.</p>
+        <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Backdrops for fixture and result posters.</p>
         <div className="mt-3">
           <ImageUpload folder="photos" shape="square" multiple label="Add club photos" onUploaded={onPhoto} />
         </div>

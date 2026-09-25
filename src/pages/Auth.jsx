@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { POSITIONS, TEAM_ORDER, TEAMS } from '../lib/constants'
+import { MIN_PASSWORD, POSITIONS, TEAM_ORDER, TEAMS } from '../lib/constants'
 import Crest from '../components/Crest'
 import Toast from '../components/Toast'
+import Segmented from '../components/Segmented'
 
 // Login + Register. Register captures everything the trigger needs; the server
 // forces player / not-eligible regardless of what we send (HANDOVER §3).
@@ -62,7 +63,7 @@ export default function Auth() {
       setError('First name, surname, email, phone and password are all needed.')
       return
     }
-    if (password.length < 6) { setError('Pick a password of at least 6 characters.'); return }
+    if (password.length < MIN_PASSWORD) { setError(`Pick a password of at least ${MIN_PASSWORD} characters.`); return }
     if (isPlayer && teams.length === 0) { setError('Pick at least one team.'); return }
 
     setBusy(true)
@@ -96,9 +97,17 @@ export default function Auth() {
           <p className="kicker mt-2"><span className="kicker-rule">TEAM HUB</span></p>
         </div>
 
-        <div className="row gap-2 mt-5" role="tablist">
-          <button className={'btn grow ' + (tab === 'login' ? 'btn-primary' : 'btn-ghost')} onClick={() => { setTab('login'); setError(null) }}>Sign in</button>
-          <button className={'btn grow ' + (tab === 'register' ? 'btn-primary' : 'btn-ghost')} onClick={() => { setTab('register'); setError(null) }}>Join up</button>
+        {/* A switch between two forms, not two calls to action. It used to be two
+            full-width buttons, one filled brand red — which put the loudest
+            control on the screen next to the actual submit button, also filled
+            brand red, and made you read both to work out which one signs you in. */}
+        <div className="row center mt-5" style={{ justifyContent: 'center' }}>
+          <Segmented
+            id="auth-tab"
+            value={tab}
+            onChange={(k) => { setTab(k); setError(null) }}
+            options={[{ key: 'login', label: 'Sign in' }, { key: 'register', label: 'Join up' }]}
+          />
         </div>
 
         {/* Pop-up Toast (fixed, always in view) — never an inline error that can
@@ -106,7 +115,10 @@ export default function Auth() {
             off-screen-error class, now E2E-guarded). */}
         <Toast message={error} tone="error" onDismiss={() => setError(null)} />
         <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
-        <style>{`.auth-link{ background:none; border:none; color:var(--bone-mute); text-decoration:underline; font-size:13px; cursor:pointer; align-self:center; }`}</style>
+        {/* The underline draws in from the left on hover rather than being
+            permanently on (.ul-draw, styles/motion.css). */}
+        <style>{`.auth-link{ background:none; border:none; color:var(--bone-mute); font-size:13px; cursor:pointer; align-self:center; padding:4px 2px; }
+          .auth-link:hover{ color:var(--bone); }`}</style>
 
         {tab === 'login' ? (
           <form className="col gap-3 mt-4" onSubmit={onLogin}>
@@ -119,7 +131,7 @@ export default function Auth() {
               <input className="input" type="password" aria-label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Hang on…' : 'Sign in'}</button>
-            <button type="button" className="auth-link" onClick={() => { setTab('reset'); setError(null); setNotice(null) }}>Forgot password?</button>
+            <button type="button" className="auth-link ul-draw" onClick={() => { setTab('reset'); setError(null); setNotice(null) }}>Forgot password?</button>
           </form>
         ) : tab === 'reset' ? (
           <form className="col gap-3 mt-4" onSubmit={onReset}>
@@ -128,7 +140,7 @@ export default function Auth() {
               <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
-            <button type="button" className="auth-link" onClick={() => { setTab('login'); setError(null) }}>← Back to sign in</button>
+            <button type="button" className="auth-link ul-draw" onClick={() => { setTab('login'); setError(null) }}>← Back to sign in</button>
           </form>
         ) : (
           <form className="col gap-3 mt-4" onSubmit={onRegister}>
@@ -182,7 +194,7 @@ export default function Auth() {
                       >{TEAMS[k].label}</button>
                     ))}
                   </div>
-                  <span className="dim" style={{ fontSize: 12 }}>Let us know what you're after — the manager sorts the squads out and you'll answer for whichever you're in.</span>
+                  <span className="dim" style={{ fontSize: 12 }}>The manager confirms your squad.</span>
                 </div>
 
                 <div className="field">

@@ -7,6 +7,7 @@ import PlayerForm from '../components/PlayerForm'
 import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
+import PageHead from '../components/PageHead'
 
 export default function Players() {
   const { user } = useAuth()
@@ -62,7 +63,7 @@ export default function Players() {
 
   // Only the FIRST load gets the Loader: a refetch after a save flips loading
   // true too, and swapping the page out would unmount the open PlayerForm sheet.
-  if (loading && players.length === 0) return <Loader label="Pulling the squad…" />
+  if (loading && players.length === 0) return <Loader label="Loading players…" />
 
   // A failed first load is not an empty squad: say so and offer a retry.
   if (error && players.length === 0) return (
@@ -78,8 +79,7 @@ export default function Players() {
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
-      <p className="kicker"><span className="kicker-rule">THE SQUAD</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Players</h1>
+      <PageHead kicker="THE SQUAD" title="Players" />
       {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
 
       <input className="input mt-3" placeholder="Search players…" value={q} onChange={(e) => setQ(e.target.value)} />

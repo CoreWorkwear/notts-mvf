@@ -1,0 +1,284 @@
+/* ============================================================================
+   Notts MvF — motion & depth layer
+   The craft pass: ambient depth, tab/nav indicators, drawn underlines, scroll
+   behaviour. Structural motion (page transitions, list stagger, sheet springs,
+   hero tilt) is Framer's, in lib/motion.js — this file owns everything that is
+   cheaper as CSS: compositor-only drifts, hover affordances, scroll rules.
+   Every block here degrades to nothing under prefers-reduced-motion.
+   ============================================================================ */
+
+/* Ambient field ----------------------------------------------------------- */
+/* Two soft brand pools behind the whole app. Fixed, inert, under everything. */
+.ambient {
+  position: fixed;
+  inset: -20% -20% -20% -20%;   /* overscan, so a drifting pool never shows an edge */
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.amb-pool {
+  position: absolute;
+  width: 78vmax; height: 78vmax;
+  border-radius: 50%;
+  opacity: .055;
+  will-change: transform;
+}
+.amb-red {
+  top: -18%; left: -22%;
+  background: radial-gradient(circle at center, var(--red) 0%, transparent 62%);
+}
+.amb-green {
+  bottom: -24%; right: -20%;
+  background: radial-gradient(circle at center, var(--green) 0%, transparent 62%);
+}
+/* Minute-plus cycles in opposite directions — slow enough that you never catch
+   it moving, only notice the light has changed when you look back. */
+.amb-pool.drifting { animation: ambDrift 68s var(--ease) infinite alternate; }
+.amb-green.drifting { animation-duration: 84s; animation-direction: alternate-reverse; }
+@keyframes ambDrift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(6vmax, 4vmax, 0) scale(1.14); }
+}
+/* The light theme's warm paper needs less help and shows colour more readily. */
+[data-theme="light"] .amb-pool { opacity: .07; }
+
+/* Content sits above the field. #root is the positioning context (tokens.css). */
+main, .app-header, .bottom-nav { position: relative; z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .amb-pool.drifting { animation: none; }
+}
+
+/* Page head --------------------------------------------------------------- */
+/* Replaces the per-page `style={{ fontSize: 28 }}` on every h1. */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.ph-text { min-width: 0; }
+.ph-aside { flex: none; }
+.page-title {
+  font-size: clamp(26px, 7.5vw, 32px);
+  margin-top: 8px;
+  text-wrap: balance;
+}
+
+/* Tab bar ----------------------------------------------------------------- */
+/* Text tabs with one sliding underline (TabBar.jsx). The indicator itself is a
+   Framer layout element; this styles the rail and the labels. */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-snap-type: x proximity;
+}
+.tabbar::-webkit-scrollbar { display: none; }
+.tab {
+  position: relative;
+  flex: 1 0 auto;
+  min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: none; border: none;
+  color: var(--bone-mute);
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  padding: 11px 14px 13px;
+  white-space: nowrap;
+  scroll-snap-align: center;
+  transition: color var(--t-fast);
+}
+.tab:hover { color: var(--bone); }
+.tab.on { color: var(--bone); }
+.tab-count {
+  font-size: 11px; font-weight: 500;
+  color: var(--bone-dim);
+  background: var(--slate);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.tab.on .tab-count { color: var(--bone-mute); }
+/* The sliding rule. -1px so it sits ON the rail, not above it. */
+.tab-rule {
+  position: absolute;
+  left: 10px; right: 10px; bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+}
+
+/* Drawn underlines -------------------------------------------------------- */
+/* A link whose underline draws in from the left on hover/focus instead of
+   snapping on. Pointer-capable devices only — on touch there is no hover state
+   to draw, and the transition would only ever be seen half-fired mid-tap. */
+.ul-draw { position: relative; text-decoration: none; }
+.ul-draw::after {
+  content: "";
+  position: absolute; left: 0; bottom: -2px;
+  width: 100%; height: 1.5px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--t-med);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ul-draw:hover::after,
+  .ul-draw:focus-visible::after { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ul-draw::after { transition: none; }
+}
+
+/* Bottom nav indicator ---------------------------------------------------- */
+/* The active tab keeps its red label; the moving part is a short rule above the
+   icon that slides between tabs (BottomNav.jsx owns the layoutId). */
+.nav-rule {
+  position: absolute;
+  top: 0; left: 50%;
+  width: 22px; height: 2px;
+  margin-left: -11px;
+  border-radius: 0 0 2px 2px;
+  background: var(--red);
+}
+.bottom-nav .nav-item { position: relative; }
+
+/* Scroll behaviour -------------------------------------------------------- */
+html {
+  scroll-behavior: smooth;
+  /* Stop the sticky header covering anything scrolled to. */
+  scroll-padding-top: calc(70px + var(--safe-t));
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+body {
+  /* No page-level rubber-band on the horizontal axis (the tab rails scroll
+     inside themselves); vertical stays `auto` so Android keeps pull-to-refresh. */
+  overscroll-behavior-x: none;
+}
+/* iOS momentum inside anything that scrolls on its own. */
+.sheet, .tabbar, .table-scroll { -webkit-overflow-scrolling: touch; }
+
+/* Focus ------------------------------------------------------------------- */
+/* One visible focus ring for keyboard users, brand-coloured, on everything
+   interactive. There was no consistent rule for this at all. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--red-bright);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ============================================================================
+   Forward layer — platform features that are shipping now and degrade to the
+   current behaviour everywhere else. Each block is inside an @supports, so a
+   browser without the feature simply keeps what it had; nothing here is
+   load-bearing. Ordered so a later block can build on an earlier one.
+   ============================================================================ */
+
+/* 1. Spring easing, in CSS ------------------------------------------------ */
+/* `linear()` lets a stylesheet express a real spring — an overshoot and settle —
+   instead of the single-hump approximation a cubic-bezier is limited to. This is
+   the same shape as the Framer springs used for the sheet and the tab thumb, so
+   a CSS transition and a JS one finally agree on how the app moves. ~6%
+   overshoot: enough to feel sprung, not enough to look bouncy. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(
+      0, 0.0064, 0.0256, 0.0576, 0.1024, 0.16, 0.2304, 0.3136, 0.4096,
+      0.5184, 0.64, 0.7744, 0.9216, 1.0177, 1.0532, 1.0629, 1.0555,
+      1.0393, 1.0212, 1.0057, 0.9985, 0.9961, 0.9969, 0.9989, 1
+    );
+    --t-spring: 420ms var(--ease-spring);
+  }
+  /* Spent only where something should feel physical: a control arriving under a
+     finger. Not on colour, which should never overshoot. */
+  .btn:active, .chip:active, .seg-item:active { transition: transform var(--t-spring); }
+  .manage-card:hover { transition: transform var(--t-spring), border-color var(--t-fast); }
+}
+
+/* 2. A derived palette ---------------------------------------------------- */
+/* The dim/hover tints were hand-mixed rgba() literals — six of them, each a
+   guess, none of them related to the others. color-mix in oklab derives them
+   from the one brand value, so a change to --red carries through and every tint
+   is perceptually even rather than evenly WRONG (sRGB mixing darkens and muddies
+   through the middle; oklab does not). */
+@supports (color: color-mix(in oklab, red, blue)) {
+  :root {
+    --red-dim:      color-mix(in oklab, var(--red) 14%, transparent);
+    --red-dim-2:    color-mix(in oklab, var(--red) 24%, transparent);
+    --green-dim:    color-mix(in oklab, var(--green) 14%, transparent);
+    --green-dim-2:  color-mix(in oklab, var(--green) 24%, transparent);
+    --amber-dim:    color-mix(in oklab, var(--amber) 14%, transparent);
+    /* Hover/pressed surfaces, derived rather than a second hand-picked grey. */
+    --coal-hover:   color-mix(in oklab, var(--coal) 88%, var(--bone));
+    --slate-hover:  color-mix(in oklab, var(--slate) 90%, var(--bone));
+  }
+  [data-theme="light"] {
+    --red-dim:   color-mix(in oklab, var(--red) 12%, transparent);
+    --green-dim: color-mix(in oklab, var(--green) 12%, transparent);
+    --amber-dim: color-mix(in oklab, var(--amber) 16%, transparent);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover { background: var(--slate-hover); }
+  }
+}
+
+/* 3. Scroll-driven reveals, off the main thread --------------------------- */
+/* `animation-timeline: view()` ties an animation to an element's own passage
+   through the viewport, run by the compositor — no IntersectionObserver, no
+   per-frame JS, no jank while the main thread is busy parsing a fixture list.
+   Framer's whileInView (components/Reveal.jsx) stays as the fallback path for
+   browsers without it; this class is for the plain lists that never had a
+   reveal at all, so the two never drive the same element. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal-native {
+      animation: revealIn linear both;
+      animation-timeline: view();
+      /* Runs across the band from just-entering to a third of the way up, then
+         holds — the reveal is finished before you have properly looked at it. */
+      animation-range: entry 8% cover 26%;
+    }
+  }
+}
+@keyframes revealIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 4. Discrete-property transitions --------------------------------------- */
+/* @starting-style + allow-discrete animate an element that is entering from
+   display:none, which CSS could never do — it is why every toast and popover
+   needed a JS presence library to hold the node alive through its own exit. */
+@supports (transition-behavior: allow-discrete) {
+  .toast, .banner, .needs {
+    transition: opacity var(--t-med), transform var(--t-med), display var(--t-med) allow-discrete;
+  }
+  @starting-style {
+    .toast, .banner, .needs { opacity: 0; transform: translateY(-8px); }
+  }
+}
+
+/* 5. Container queries ---------------------------------------------------- */
+/* The manage grid was breaking on viewport width, which is the wrong question —
+   it cares how much room IT has, not how wide the phone is. Inside a sheet or a
+   split view the viewport lies. */
+@supports (container-type: inline-size) {
+  main { container-type: inline-size; container-name: app; }
+  @container app (max-width: 340px) {
+    .manage-grid { grid-template-columns: 1fr; }
+  }
+}
+
+/* 6. Typography ----------------------------------------------------------- */
+/* `pretty` costs a little more layout work than `balance` but fixes the thing
+   that actually looks amateur in body copy: a one-word last line. */
+p, .empty p, .mc-blurb, .label { text-wrap: pretty; }
+
+/* 7. Shared-element view transitions -------------------------------------- */
+/* Names the poster so a browser with the View Transitions API can morph it
+   between states rather than crossfading the whole screen. Only the name is
+   declared here — it costs nothing until a transition is actually started, and
+   the app's Framer route crossfade is untouched. */
+@supports (view-transition-name: none) {
+  @media (prefers-reduced-motion: no-preference) {
+    .hero { view-transition-name: next-fixture; }
+  }
+}

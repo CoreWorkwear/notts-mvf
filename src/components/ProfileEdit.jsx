@@ -124,7 +124,7 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
             <input className="input" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
         </div>
 
-        <p className="dim" style={{ fontSize: 12 }}>Your email is your login — ask the manager if it needs changing.</p>
+        <p className="dim" style={{ fontSize: 12 }}>Your login. The manager can change it.</p>
 
         <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
       </form>

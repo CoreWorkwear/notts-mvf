@@ -6,6 +6,7 @@ import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
 import { fmtDate } from '../lib/format'
+import PageHead from '../components/PageHead'
 
 // Club news / notifications — everyone reads; admins post (and optionally push).
 export default function News() {
@@ -22,7 +23,7 @@ export default function News() {
 
   // Only the first load gets the Loader: a refetch after a post flips loading
   // too, and swapping the page out would unmount the open compose sheet.
-  if (loading && items.length === 0) return <Loader label="Catching up on the news…" />
+  if (loading && items.length === 0) return <Loader label="Loading news…" />
 
   // A failed first load is not an empty diary: say so and offer a retry.
   if (error && items.length === 0) return (
@@ -38,8 +39,7 @@ export default function News() {
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
-      <p className="kicker"><span className="kicker-rule">CLUB NEWS</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>What's on</h1>
+      <PageHead kicker="CLUB NEWS" title="What's on" />
       {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
 
       {isAdmin && (

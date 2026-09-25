@@ -1,4 +1,5 @@
-import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'framer-motion'
+import { useRef } from 'react'
+import { motion, useMotionValue, useScroll, useSpring, useTransform, useReducedMotion } from 'framer-motion'
 import AvailControl from './AvailControl'
 import Crest from './Crest'
 import WeatherStrip from './WeatherStrip'
@@ -37,16 +38,29 @@ export default function FixtureHero({ fixture, isAdmin, blockReason = null, pool
   }
   function onLeave() { px.set(0.5); py.set(0.5) }
 
+  // Scroll parallax: the poster's image sits on its own overscanned layer and
+  // travels against the scroll, so the card has a front and a back rather than
+  // being one flat sticker. Transform-only, and the layer is inset far enough
+  // that the travel never exposes an edge.
+  const ref = useRef(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
+  const bgY = useTransform(scrollYProgress, [0, 1], ['-7%', '7%'])
+
   return (
     <motion.div
+      ref={ref}
       className={'hero' + (hasPhoto ? ' has-photo' : '')}
-      style={{ backgroundImage: bg, rotateX, rotateY, transformPerspective: 1100 }}
+      style={{ rotateX, rotateY, transformPerspective: 1100 }}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
       initial={reduce ? false : { opacity: 0, scale: 0.985, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 26 }}
     >
+      <motion.div
+        className="hero-bg"
+        style={{ backgroundImage: bg, y: reduce ? 0 : bgY }}
+      />
       <div className="hero-top">
         <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>NEXT UP · {relativeWhen(f.match_date)}</span>
         {isAdmin && (
@@ -109,10 +123,19 @@ export default function FixtureHero({ fixture, isAdmin, blockReason = null, pool
           position: relative; overflow: hidden;
           border-radius: var(--r-hero);
           padding: 18px;
-          background-size: cover; background-position: center;
           color: #fff;
           box-shadow: 0 18px 40px -20px rgba(0,0,0,.9);
         }
+        /* The parallax layer. Overscanned top and bottom by more than its travel
+           (±7%) so the poster never shows a bare edge at either end of the
+           scroll. Everything else in the card is lifted above it. */
+        .hero-bg {
+          position: absolute; left: 0; right: 0; top: -10%; bottom: -10%;
+          z-index: 0;
+          background-size: cover; background-position: center;
+          will-change: transform;
+        }
+        .hero > *:not(.hero-bg) { position: relative; z-index: 1; }
         /* Over a busy action photo: a soft rounded box behind the detail lines
            (team · home/away · type · date · KO · venue · weather) so they stay
            legible, plus a light shadow on the big name. Photos only — branded

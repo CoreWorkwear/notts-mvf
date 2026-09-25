@@ -3,6 +3,7 @@ import { useReminders } from '../hooks/useReminders'
 import { OFFSET_CHOICES, CUTOFF_HOURS, offsetLabel } from '../lib/reminders'
 import Toast from '../components/Toast'
 import Loader from '../components/Loader'
+import PageHead from '../components/PageHead'
 
 // Admin: auto reminders. Two independent types, each with its OWN periods:
 //   • Availability nudges → not-replied + maybe, "set your availability"
@@ -58,8 +59,7 @@ export default function Reminders() {
     <div className="page">
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
       <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
-      <p className="kicker"><span className="kicker-rule">REMINDERS</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Auto reminders</h1>
+      <PageHead kicker="REMINDERS" title="Auto reminders" />
       <p className="muted mt-2" style={{ fontSize: 14 }}>
         Two kinds of nudge, each with its own timings. Availability usually closes ~3 days out — times after that ( <b>*</b> ) are your call.
       </p>

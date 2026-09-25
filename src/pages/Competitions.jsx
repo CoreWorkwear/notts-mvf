@@ -6,6 +6,7 @@ import Sheet from '../components/Sheet'
 import Toast from '../components/Toast'
 import Loader from '../components/Loader'
 import SquadPicker from '../components/SquadPicker'
+import PageHead from '../components/PageHead'
 
 // Admin: the competitions a club runs this season (league / cup / friendlies),
 // each carrying its squad-registration rule (§2). Fixtures attach to these.
@@ -35,8 +36,7 @@ export default function Competitions() {
 
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">COMPETITIONS</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Competitions</h1>
+      <PageHead kicker="COMPETITIONS" title="Competitions" />
       {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
       <p className="muted mt-2" style={{ fontSize: 13 }}>{seasonLabel ? `Season ${seasonLabel}.` : ''} Leagues, cups and friendly series. Each can cap a registered squad (§2).</p>
 
@@ -44,7 +44,7 @@ export default function Competitions() {
 
       {competitions.length === 0 ? (
         <div className="empty mt-5"><p className="empty-title">No competitions yet</p>
-          <p>Add the league or cup you're playing in — then attach fixtures to it.</p></div>
+          <p>Add the leagues and cups you play in.</p></div>
       ) : (
         <div className="col gap-2 mt-4">
           {competitions.map((c) => (

@@ -72,14 +72,12 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
               placeholder="NG18 4YD" style={{ textTransform: 'uppercase', maxWidth: 130 }} />
           </div>
         </div>
-        <span className="dim" style={{ fontSize: 12, marginTop: -6 }}>Saved here, this fills in the venue automatically when you add a game against them.</span>
 
         <div className="field">
           <label className="label">Type</label>
           <button type="button" className={'chip' + (isLeague ? ' paid-on' : '')} aria-pressed={isLeague} onClick={() => setIsLeague((v) => !v)}>
             {isLeague ? 'League team ✓' : 'One-off / friendly'}
           </button>
-          <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>League teams you'll meet again — worth a badge. One-offs can stay name-only.</p>
         </div>
 
         <div className="field">

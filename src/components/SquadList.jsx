@@ -15,7 +15,7 @@ export default function SquadList() {
   const { players, loading } = useSquad()
   const [view, setView] = useState('list') // 'list' | 'depth'
   const [team, setTeam] = useState('all')  // 'all' | 'xl' | 'community'
-  if (loading) return <Loader label="Naming the squad…" />
+  if (loading) return <Loader label="Loading the squad…" />
 
   const filtered = team === 'all' ? players : players.filter((p) => p.teamKeys?.includes(team))
   const groups = squadByPosition(filtered)
@@ -38,7 +38,7 @@ export default function SquadList() {
       {total === 0 ? (
         <div className="empty mt-4">
           <p className="empty-title">No squad yet</p>
-          <p>Once the manager signs players off, they'll line up here by position.</p>
+          <p>Signed-off players line up here by position.</p>
         </div>
       ) : view === 'depth' ? <SquadDepth players={filtered} /> : (
         <SquadByPosition groups={groups} total={total} />

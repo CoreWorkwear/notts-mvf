@@ -1,44 +1,59 @@
 import { Link } from 'react-router-dom'
+import PageHead from '../components/PageHead'
+import { Stagger, StaggerItem } from '../components/Stagger'
 import { IconWhosIn, IconPlayers, IconOpponents, IconSeasons, IconMedia, IconReminders, IconSponsors, IconDiagnostics, IconCompetitions } from '../components/Icons'
 
 // Admin hub — keeps the bottom nav uncluttered by gathering the management /
 // config screens in one place (rather than as extra tabs + buried toggles).
+//
+// Label and icon only. Every card used to carry a line of explanation, which
+// across nine cards was a wall of grey text the manager read once and then had
+// to look past every time. The destinations are named things in the club's own
+// vocabulary — they don't need a caption.
 const TOOLS = [
-  { to: '/whos-in',   label: "Who's In",  blurb: 'Availability across games + chase the no-shows', Icon: IconWhosIn },
-  { to: '/players',   label: 'Players',   blurb: 'Squad records, roles, positions, approvals', Icon: IconPlayers },
-  { to: '/opponents', label: 'Opponents', blurb: 'The teams you play + their badges',              Icon: IconOpponents },
-  { to: '/competitions', label: 'Competitions', blurb: 'Leagues & cups + registered-squad limits', Icon: IconCompetitions },
-  { to: '/seasons',   label: 'Seasons',   blurb: 'Create a season, set current, roll over',        Icon: IconSeasons },
-  { to: '/media',     label: 'Media',     blurb: 'Club crest + photo pool for posters',            Icon: IconMedia },
-  { to: '/reminders', label: 'Reminders', blurb: 'Auto-nudge the squad before kickoff',            Icon: IconReminders },
-  { to: '/sponsors',  label: 'Sponsors',  blurb: 'Main, kit + MOTM sponsor logos',                 Icon: IconSponsors },
-  { to: '/diagnostics', label: 'Diagnostics', blurb: 'Recent app errors logged from devices',     Icon: IconDiagnostics },
+  { to: '/whos-in',      label: "Who's In",     Icon: IconWhosIn },
+  { to: '/players',      label: 'Players',      Icon: IconPlayers },
+  { to: '/opponents',    label: 'Opponents',    Icon: IconOpponents },
+  { to: '/competitions', label: 'Competitions', Icon: IconCompetitions },
+  { to: '/seasons',      label: 'Seasons',      Icon: IconSeasons },
+  { to: '/media',        label: 'Media',        Icon: IconMedia },
+  { to: '/reminders',    label: 'Reminders',    Icon: IconReminders },
+  { to: '/sponsors',     label: 'Sponsors',     Icon: IconSponsors },
+  { to: '/diagnostics',  label: 'Diagnostics',  Icon: IconDiagnostics },
 ]
 
 export default function Manage() {
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">MANAGE</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Club admin</h1>
+      <PageHead kicker="MANAGE" title="Club admin" />
 
-      <div className="manage-grid mt-4">
-        {TOOLS.map(({ to, label, blurb, Icon }) => (
-          <Link key={to} to={to} className="card manage-card">
-            <Icon width={24} height={24} />
-            <span className="mc-title">{label}</span>
-            <span className="mc-blurb">{blurb}</span>
-          </Link>
+      <Stagger className="manage-grid mt-4">
+        {TOOLS.map(({ to, label, Icon }) => (
+          <StaggerItem key={to}>
+            <Link to={to} className="card manage-card">
+              <Icon width={22} height={22} />
+              <span className="mc-title">{label}</span>
+            </Link>
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
 
       <style>{`
         .manage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .manage-card { display: flex; flex-direction: column; gap: 6px; padding: 16px;
-          background: var(--coal); border: 1px solid var(--line); color: var(--bone); }
-        .manage-card svg { color: var(--red); }
-        .mc-title { font-family: var(--font-display); font-weight: 600; font-size: 17px; line-height: 1; margin-top: 2px; }
-        .mc-blurb { font-size: 12px; color: var(--bone-mute); line-height: 1.35; }
-        @media (max-width: 380px) { .manage-grid { grid-template-columns: 1fr; } }
+        .manage-card {
+          display: flex; align-items: center; gap: 11px;
+          padding: 16px 15px; height: 100%;
+          background: var(--coal); border: 1px solid var(--line); color: var(--bone);
+          text-decoration: none;
+          transition: border-color var(--t-fast), transform var(--t-fast);
+        }
+        .manage-card svg { color: var(--red); flex: none; }
+        .mc-title { font-family: var(--font-display); font-weight: 600; font-size: 16px; line-height: 1.05; }
+        @media (hover: hover) and (pointer: fine) {
+          .manage-card:hover { border-color: var(--line-2); transform: translateY(-2px); }
+        }
+        .manage-card:active { transform: scale(.985); }
+        @media (max-width: 340px) { .manage-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
   )

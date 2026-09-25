@@ -117,7 +117,7 @@ describe("FixtureDetail — Who's in tab", () => {
   test('a failed fetch says so — not "Available · 0"', async () => {
     store.errors.availability = { message: 'boom', code: 'XX000' }
     render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: /who's in/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /who's in/i }))
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.queryByText(/available · 0/i)).not.toBeInTheDocument()
@@ -141,7 +141,7 @@ describe("FixtureDetail — Who's in tab", () => {
       { team_id: 't-other', profiles: { id: 'p-moved', active: true, approved: true, is_player: true } },
     ]
     render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: /who's in/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /who's in/i }))
 
     expect(await screen.findByText('Joe M')).toBeInTheDocument()
     expect(screen.getByText(/Available · 1/)).toBeInTheDocument()
@@ -160,12 +160,12 @@ describe("FixtureDetail — Who's in tab", () => {
     store.defer['availability:f2'] = new Promise((r) => { releaseB = r })
 
     const { rerender } = render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: /who's in/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /who's in/i }))
     expect(await screen.findByText('Joe M')).toBeInTheDocument()
 
     // Open game B while its answer is still on the wire.
     rerender(<FixtureDetail open fixture={{ ...fx, id: 'f2' }} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: /who's in/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /who's in/i }))
     expect(screen.queryByText('Joe M')).not.toBeInTheDocument()
 
     await act(async () => { releaseB(); await new Promise((r) => setTimeout(r, 0)) })
@@ -184,7 +184,7 @@ describe("FixtureDetail — Who's in tab", () => {
 
     const { rerender } = render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
     rerender(<FixtureDetail open fixture={{ ...fx, id: 'f2' }} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
-    await userEvent.click(screen.getByRole('button', { name: /who's in/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /who's in/i }))
     expect(await screen.findByText('Sam L')).toBeInTheDocument()
 
     await act(async () => { releaseA(); await new Promise((r) => setTimeout(r, 0)) })

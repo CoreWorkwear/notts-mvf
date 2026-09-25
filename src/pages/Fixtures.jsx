@@ -15,6 +15,10 @@ import FixtureForm from '../components/FixtureForm'
 import ResultForm from '../components/ResultForm'
 import CalendarView from '../components/CalendarView'
 import { Stagger, StaggerItem } from '../components/Stagger'
+import PageHead from '../components/PageHead'
+import Magnetic from '../components/Magnetic'
+import Segmented from '../components/Segmented'
+import { Reveal } from '../components/Reveal'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
 import { fixtureMatchup } from '../lib/teams'
@@ -58,7 +62,7 @@ export default function Fixtures() {
 
   async function openResultForm(fixture) {
     if (!everyone && !(await loadEveryone())) {
-      setToast("Squad list didn't load, so scorers wouldn't link to players — check your signal and try again.")
+      setToast("Squad list didn't load. Check your signal and try again.")
       return
     }
     setResultFor(fixture)
@@ -115,7 +119,7 @@ export default function Fixtures() {
   const needsResult = past.filter((f) => !f.hasResult).length
   const lowNumbers = upcoming.filter((f) => !f.postponed && f.match_date <= addDays(todayISO(), 7) && f.counts.in < 8).length
 
-  if (loading && fixtures.length === 0) return <Loader label="Pulling the fixtures…" />
+  if (loading && fixtures.length === 0) return <Loader label="Loading fixtures…" />
 
   // A first load that failed on the network: don't pretend the diary is empty,
   // and don't hang. Say what happened and let them have another go. A failed
@@ -134,26 +138,31 @@ export default function Fixtures() {
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
-      <div className="row spread" style={{ alignItems: 'flex-end' }}>
-        <div>
-          <p className="kicker"><span className="kicker-rule">{isAdmin ? 'THE MANAGER' : 'NEXT UP'}</span></p>
-          <h1 className="display mt-2" style={{ fontSize: 28 }}>
-            {isAdmin ? 'Run the day' : `Alright${profile?.first_name ? ', ' + profile.first_name : ''}`}
-          </h1>
-        </div>
-        <div className="row gap-2">
-          <button className={'chip' + (view === 'list' ? '' : '')} aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
-          <button className="chip" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>Calendar</button>
-        </div>
-      </div>
+      <PageHead
+        kicker="NEXT UP"
+        title="Fixtures"
+        aside={
+          <Segmented
+            id="fixtures-view"
+            size="sm"
+            value={view}
+            onChange={setView}
+            options={[{ key: 'list', label: 'List' }, { key: 'calendar', label: 'Calendar' }]}
+          />
+        }
+      />
 
       {showFilter && (
-        <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
-          <button className="chip" aria-pressed={teamFilter === 'all'} onClick={() => setTeamFilter('all')}>All</button>
-          {teams.map((t) => (
-            <button key={t.id} className={'chip' + (t.key === 'community' ? ' community' : '')}
-              aria-pressed={teamFilter === t.key} onClick={() => setTeamFilter(t.key)}>{t.label}</button>
-          ))}
+        <div className="mt-3">
+          <Segmented
+            id="fixtures-team"
+            value={teamFilter}
+            onChange={setTeamFilter}
+            options={[
+              { key: 'all', label: 'All' },
+              ...teams.map((t) => ({ key: t.key, label: t.label, accent: t.key === 'community' ? 'community' : 'xl' })),
+            ]}
+          />
         </div>
       )}
 
@@ -162,15 +171,17 @@ export default function Fixtures() {
       {profile && !isAdmin && !canRespond && (
         <div className="banner mt-3">
           {accountStatus === 'supporter'
-            ? "You're set up as a supporter — you can follow the fixtures and results, but you won't be picked for the squad."
+            ? "Supporter account — follow the games, but you're not in the squad."
             : accountStatus === 'inactive'
-            ? 'Your account is inactive. Have a word with the manager to get back in the squad.'
-            : "You're in — the manager just needs to sign you off before you can mark yourself available. Hang tight."}
+            ? 'Account inactive. Have a word with the manager.'
+            : 'Waiting on the manager to sign you off.'}
         </div>
       )}
 
       {isAdmin && (
-        <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a fixture</button>
+        <Magnetic className="mt-3">
+          <button className="btn btn-primary btn-block" onClick={openAdd}>Add a fixture</button>
+        </Magnetic>
       )}
 
       {view === 'calendar' ? (
@@ -180,7 +191,7 @@ export default function Fixtures() {
       ) : filtered.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">Nothing in the diary yet</p>
-          <p>Season's coming. {isAdmin ? 'Add the first fixture and the players can mark themselves in.' : 'First fixture lands here when the manager sets it.'}</p>
+          <p>{isAdmin ? 'Add the first fixture.' : "First one lands here when the manager sets it."}</p>
         </div>
       ) : (
         <>
@@ -233,7 +244,7 @@ export default function Fixtures() {
           )}
 
           {postponedList.length > 0 && (
-            <div className="mt-5">
+            <Reveal className="mt-5">
               <p className="kicker" style={{ color: 'var(--bone-mute)' }}>POSTPONED</p>
               <div className="col gap-2 mt-2">
                 {postponedList.map((f) => (
@@ -245,7 +256,7 @@ export default function Fixtures() {
                   </button>
                 ))}
               </div>
-            </div>
+            </Reveal>
           )}
         </>
       )}

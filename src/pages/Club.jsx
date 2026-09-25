@@ -8,6 +8,15 @@ import StatsPanel from '../components/StatsPanel'
 import SquadList from '../components/SquadList'
 import SponsorsList from '../components/SponsorsList'
 import Loader from '../components/Loader'
+import PageHead from '../components/PageHead'
+import TabBar from '../components/TabBar'
+
+const CLUB_TABS = [
+  { key: 'table', label: 'Table' },
+  { key: 'squad', label: 'Squad' },
+  { key: 'stats', label: 'Stats' },
+  { key: 'sponsors', label: 'Sponsors' },
+]
 
 // Player-facing: League Table / Club Stats. Admin/config (Seasons, Media) now
 // live in the Manage hub, not here.
@@ -23,7 +32,7 @@ export default function Club() {
   // Only the first load gets the Loader: a refetch (e.g. after the league table
   // is edited) flips loading too, and swapping the page out unmounted the panel
   // and any sheet it had open.
-  if (loading && empty) return <Loader label="Totting up the club…" />
+  if (loading && empty) return <Loader label="Loading the club…" />
 
   // A failed first load (flaky connection) gets a retry, not a blank club.
   if (error && empty) return (
@@ -38,22 +47,18 @@ export default function Club() {
 
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">THE CLUB</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>{club?.name ?? 'The Club'}</h1>
+      <PageHead kicker="THE CLUB" title={club?.name ?? 'The Club'} />
       {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
-      <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
-        <button className={'btn grow club-tab ' + (view === 'table' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('table')}>Table</button>
-        <button className={'btn grow club-tab ' + (view === 'squad' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('squad')}>Squad</button>
-        <button className={'btn grow club-tab ' + (view === 'stats' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('stats')}>Stats</button>
-        <button className={'btn grow club-tab ' + (view === 'sponsors' ? 'btn-primary' : 'btn-ghost')} onClick={() => setView('sponsors')}>Sponsors</button>
+      <div className="mt-3">
+        <TabBar id="club" tabs={CLUB_TABS} value={view} onChange={setView} />
       </div>
 
-      {view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
-        : view === 'squad' ? <SquadList />
-        : view === 'stats' ? <StatsPanel stats={stats} />
-        : <SponsorsList />}
-
-      <style>{`.club-tab { padding-left: 8px; padding-right: 8px; }`}</style>
+      <div className="mt-4">
+        {view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
+          : view === 'squad' ? <SquadList />
+          : view === 'stats' ? <StatsPanel stats={stats} />
+          : <SponsorsList />}
+      </div>
     </div>
   )
 }

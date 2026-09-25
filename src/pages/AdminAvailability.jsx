@@ -6,6 +6,7 @@ import { fixtureMatchup } from '../lib/teams'
 import WhosInSheet from '../components/WhosInSheet'
 import { Stagger, StaggerItem } from '../components/Stagger'
 import Loader from '../components/Loader'
+import PageHead from '../components/PageHead'
 
 // Who's In (admin): every upcoming game at a glance with in/maybe/no-reply
 // counts; tap one for the full team-sheet + chase (UX-AND-IA §3).
@@ -17,7 +18,7 @@ export default function AdminAvailability() {
   // A P-P game has nothing to chase — it sits in Results as postponed, not here.
   const toChase = upcoming.filter((f) => !f.postponed)
 
-  if (loading && fixtures.length === 0) return <Loader label="Counting heads…" />
+  if (loading && fixtures.length === 0) return <Loader label="Loading availability…" />
 
   // A failed first load is not "no games to chase" — say so and offer a retry
   // (same shape as Fixtures). With fixtures already on screen, keep them.
@@ -33,14 +34,13 @@ export default function AdminAvailability() {
 
   return (
     <div className="page">
-      <p className="kicker"><span className="kicker-rule">WHO'S IN</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Who's about</h1>
+      <PageHead kicker="WHO'S IN" title="Who's about" />
       {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
 
       {toChase.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">No games to chase</p>
-          <p>Set a fixture and you'll see who's in, who's maybe, and who's gone quiet.</p>
+          <p>Add a fixture and the replies land here.</p>
         </div>
       ) : (
         <Stagger className="col gap-2 mt-4">

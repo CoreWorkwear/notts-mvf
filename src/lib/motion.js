@@ -35,3 +35,38 @@ export const sheetPanel = {
 
 // Press feedback for primary controls — a small, springy squeeze.
 export const tap = { scale: 0.97 }
+
+// ---------------------------------------------------------------------------
+// Scroll + pointer craft. Everything below is pointer/scroll-linked rather than
+// mount-linked: the app keeps responding after the first frame instead of
+// animating once and going dead.
+// ---------------------------------------------------------------------------
+
+// Page furniture arriving in sequence rather than as one block — kicker, then
+// heading, then the controls. `at(i)` is the delay for the i-th element.
+export const SEQUENCE_STEP = 0.055
+export const at = (i) => ({
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.34, ease: EASE, delay: i * SEQUENCE_STEP },
+})
+
+// Section reveal on scroll-in. `once` so a list doesn't re-animate every time
+// it passes the fold, and a generous margin so it has finished by the time the
+// section is properly in view (a reveal you can *see* running reads as jank).
+export const revealOnScroll = {
+  initial: { opacity: 0, y: 22 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, margin: '0px 0px -12% 0px' },
+  transition: { duration: 0.44, ease: EASE },
+}
+
+// Springs. `snappy` for anything under a finger, `drift` for depth layers that
+// should lag behind the content they sit under.
+export const SPRING_SNAPPY = { type: 'spring', stiffness: 420, damping: 32, mass: 0.6 }
+export const SPRING_DRIFT = { type: 'spring', stiffness: 90, damping: 20, mass: 0.9 }
+
+// The sliding tab/nav indicator shares one layoutId per bar, so Framer tweens
+// the old position to the new one — the underline draws across rather than
+// blinking out and in somewhere else.
+export const indicatorTransition = { type: 'spring', stiffness: 480, damping: 38, mass: 0.5 }

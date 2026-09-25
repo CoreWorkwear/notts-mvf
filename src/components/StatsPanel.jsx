@@ -86,7 +86,6 @@ export default function StatsPanel({ stats }) {
 
           {/* Full squad table */}
           <p className="kicker mt-5"><span className="kicker-rule" style={{ borderColor: accent }}>THE SQUAD</span></p>
-          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>Tap a heading to sort. Each figure: total, with league · friendly beneath.</p>
           <table className="st mt-2">
             <thead>
               <tr>

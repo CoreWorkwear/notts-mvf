@@ -44,7 +44,7 @@ export default function SquadDepth({ players = [] }) {
       {/* The depth list sits ABOVE the pitch so both stay on screen. */}
       <div className="depth-panel">
         {!sel ? (
-          <p className="dim" style={{ fontSize: 13, margin: 0 }}>Tap a position on the pitch to see who can play there — first choice first.</p>
+          <p className="dim" style={{ fontSize: 13, margin: 0 }}>Tap a position to see who can play there.</p>
         ) : (
           <>
             <p className="kicker"><span className="kicker-rule">{sel.pos}</span> <span className="dp-count mono">{depth.length}</span></p>

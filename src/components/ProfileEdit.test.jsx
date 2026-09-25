@@ -29,7 +29,7 @@ describe('ProfileEdit (player self-edit)', () => {
     expect(screen.getByDisplayValue('07700900000')).toBeInTheDocument()
     // no editable email input
     expect(screen.queryByDisplayValue('joe@x.com')).toBeNull()
-    expect(screen.getByText(/email is your login/i)).toBeInTheDocument()
+    expect(screen.getByText(/your login/i)).toBeInTheDocument()
   })
 
   test('saving splits the write: squad fields → profiles, PII → profile_private (never email/role/approval)', async () => {

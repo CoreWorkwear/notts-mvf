@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
+import { indicatorTransition } from '../lib/motion'
 import {
   IconFixtures, IconResults, IconClub, IconManage, IconYou,
 } from './Icons'
@@ -8,6 +10,10 @@ import {
 // "Manage" hub rather than crowding the bar with extra tabs.
 // Player: Fixtures · Results · Club · You
 // Admin:  Fixtures · Results · Club · Manage · You
+//
+// The active tab is marked by a short rule that SLIDES between tabs (one shared
+// layoutId) rather than a colour that blinks from one label to another. It is
+// the only thing on screen that tells you where you are, so it earns the motion.
 const PLAYER_TABS = [
   { to: '/fixtures', label: 'Fixtures', Icon: IconFixtures },
   { to: '/results',  label: 'Results',  Icon: IconResults },
@@ -30,8 +36,15 @@ export default function BottomNav() {
           to={to}
           className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
         >
-          <Icon width={21} height={21} />
-          <span className="nav-label">{label}</span>
+          {({ isActive }) => (
+            <>
+              {isActive && (
+                <motion.span className="nav-rule" layoutId="nav-rule" transition={indicatorTransition} />
+              )}
+              <Icon width={21} height={21} />
+              <span className="nav-label">{label}</span>
+            </>
+          )}
         </NavLink>
       ))}
     </nav>

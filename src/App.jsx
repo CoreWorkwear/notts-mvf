@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { MotionConfig, AnimatePresence, motion } from 'framer-motion'
 import { pageTransition } from './lib/motion'
 import { breadcrumb } from './lib/breadcrumbs'
+import { safeAppPath } from './lib/navigation'
 import { useAuth } from './context/AuthContext'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
@@ -34,7 +35,7 @@ const Competitions = lazy(() => import('./pages/Competitions'))
 export default function App() {
   const { loading, isAuthed, isAdmin, profile, passwordRecovery } = useAuth()
 
-  if (loading) return <Loader label="Warming up…" />
+  if (loading) return <Loader label="Loading…" />
   if (passwordRecovery) return <SetNewPassword />
   if (!isAuthed) return <Auth />
 
@@ -42,12 +43,13 @@ export default function App() {
   // not "not an admin": while the profile is still loading (a slow signal
   // after the safety timer lifted the splash) hold the screen rather than
   // <Navigate replace> a manager off /players on every cold start.
-  const adminOnly = (el) => (isAdmin ? el : profile ? <Navigate to="/fixtures" replace /> : <Loader label="Warming up…" />)
+  const adminOnly = (el) => (isAdmin ? el : profile ? <Navigate to="/fixtures" replace /> : <Loader label="Loading…" />)
 
   return (
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <RouteBreadcrumbs />
+        <ScrollToTop />
         <PushNavigate />
         <Header />
         <AnimatedRoutes adminOnly={adminOnly} />
@@ -65,6 +67,18 @@ function RouteBreadcrumbs() {
   return null
 }
 
+// Land at the top of a new screen. Scrolled halfway down Fixtures and tapping
+// Results used to drop you into the middle of the results list. Instant, not
+// smooth: the content has already been replaced, so animating the scroll would
+// just be a slide through someone else's page.
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [pathname])
+  return null
+}
+
 // A tapped news / line-up notification with the app already open: the service
 // worker posts the deep link, PushActions re-broadcasts it as a window event,
 // and this moves the router there. Only same-app paths are honoured.
@@ -72,8 +86,11 @@ function PushNavigate() {
   const navigate = useNavigate()
   useEffect(() => {
     const onNav = (e) => {
-      const url = e.detail?.url
-      if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')) navigate(url)
+      // safeAppPath, not a startsWith check: `/\evil.com` passes "starts with /
+      // and not //" and then leaves the app entirely once the browser
+      // normalises the backslash (CVE-2025-68470's bypass).
+      const path = safeAppPath(e.detail?.url)
+      if (path) navigate(path)
     }
     window.addEventListener('mvf-navigate', onNav)
     return () => window.removeEventListener('mvf-navigate', onNav)
@@ -90,7 +107,7 @@ function AnimatedRoutes({ adminOnly }) {
     <main>
       <AnimatePresence mode="wait">
         <motion.div key={location.pathname} {...pageTransition}>
-          <Suspense fallback={<Loader label="Opening…" />}>
+          <Suspense fallback={<Loader label="Loading…" />}>
           <Routes location={location}>
             <Route path="/fixtures" element={<Fixtures />} />
             <Route path="/results" element={<Results />} />

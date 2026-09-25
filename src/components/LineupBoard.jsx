@@ -167,7 +167,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
               style={{ color: 'var(--red-bright)' }}>Clear this slot</button>
           )}
           {remaining.length === 0 ? (
-            <p className="dim mt-2" style={{ fontSize: 13 }}>Everyone available is already on the sheet. More players appear here when they mark themselves in.</p>
+            <p className="dim mt-2" style={{ fontSize: 13 }}>Everyone available is on the sheet.</p>
           ) : (
             <div className="col gap-2 mt-2">
               {remaining.map((p) => (

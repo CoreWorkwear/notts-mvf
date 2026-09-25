@@ -159,7 +159,14 @@ input, select, textarea { font-family: inherit; }
   transition: transform var(--t-fast), background var(--t-fast), border-color var(--t-fast);
 }
 .btn:active { transform: scale(.97); }
-.btn-primary { background: var(--red); color: #fff; box-shadow: 0 6px 20px -8px var(--red); }
+/* No coloured halo under the button. A red glow bleeding out of a red button
+   reads as a neon sticker, and at this size it was the brightest thing on the
+   screen after the button itself. Depth comes from a neutral shadow and a hint
+   of a top highlight, the way a real raised surface behaves. */
+.btn-primary {
+  background: var(--red); color: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.12);
+}
 .btn-primary:hover { background: var(--red-bright); }
 .btn-ghost { background: var(--slate); color: var(--bone-mute); border: 1px solid var(--line); }
 .btn-ghost:hover { border-color: var(--line-2); color: var(--bone); }
@@ -188,17 +195,66 @@ input, select, textarea { font-family: inherit; }
 .field-error { color: var(--amber); font-size: 13px; }
 
 /* Chips ------------------------------------------------------------------- */
+/* Linear register, not pill-shaped badges. A 999px radius filled with saturated
+   brand colour is the loudest thing we can draw, and it was being spent on
+   filters, multi-selects and secondary buttons — so everything shouted equally
+   and nothing led. Now: small radius, a raised neutral surface when on, brand
+   colour kept for the one primary action on the screen and for the two places
+   where the colour IS the information (team red / Community green). */
 .chip {
   border: 1px solid var(--line); background: transparent; color: var(--bone-mute);
-  border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 500;
-  transition: all var(--t-fast);
+  border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 500;
+  letter-spacing: -.005em;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover { background: var(--slate); border-color: var(--line-2); color: var(--bone); }
 }
 .chip[aria-pressed="true"] {
-  background: var(--red-dim); color: var(--red-bright); border-color: var(--red);
+  background: var(--slate); color: var(--bone); border-color: var(--line-2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
 }
-.chip.community[aria-pressed="true"] {
-  background: var(--green-dim); color: var(--green-bright); border-color: var(--green);
+/* Team colour is information, so it survives the restyle — as a coloured label
+   on the raised surface rather than a saturated fill. */
+.chip.xl[aria-pressed="true"] { color: var(--red-bright); border-color: var(--red); }
+.chip.community[aria-pressed="true"] { color: var(--green-bright); border-color: var(--green); }
+
+/* Segmented control (Segmented.jsx) -------------------------------------- */
+.seg {
+  display: inline-flex; align-items: stretch;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
 }
+.seg-item {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none;
+  border-radius: 7px;
+  color: var(--bone-mute);
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 6px 13px;
+  white-space: nowrap;
+  transition: color var(--t-fast);
+}
+.seg-sm .seg-item { font-size: 12px; padding: 5px 10px; }
+.seg-item:hover { color: var(--bone); }
+.seg-item.on { color: var(--bone); }
+.seg-item.on.accent-xl { color: var(--red-bright); }
+.seg-item.on.accent-community { color: var(--green-bright); }
+/* The raised thumb. Sits under the label, travels between segments. */
+.seg-thumb {
+  position: absolute; inset: 0;
+  z-index: 0;
+  border-radius: 7px;
+  background: var(--coal);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+.seg-label { position: relative; z-index: 1; }
+[data-theme="light"] .seg-thumb { box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 
 /* Card + the team-colour spine ------------------------------------------- */
 .card {

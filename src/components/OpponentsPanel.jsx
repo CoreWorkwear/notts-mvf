@@ -30,7 +30,7 @@ export default function OpponentsPanel() {
       {filtered.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">No opponents yet</p>
-          <p>Add the teams in your league (with badges), or a quick name for a one-off friendly.</p>
+          <p>Add the teams you play.</p>
         </div>
       ) : (
         <Stagger className="col gap-2 mt-4">

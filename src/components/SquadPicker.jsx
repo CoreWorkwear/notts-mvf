@@ -38,7 +38,7 @@ export default function SquadPicker({ open, onClose, competition }) {
       <p className="kicker"><span className="kicker-rule">REGISTERED SQUAD</span></p>
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{competition.name}</h2>
       <p className={'sq-count mono mt-1' + (full ? ' full' : '')}>{squadCountLabel({ count, enabled, limit })}{full ? ' · full' : ''}</p>
-      <p className="dim" style={{ fontSize: 12 }}>Registration only — it doesn't change who sees fixtures or sets availability.</p>
+      <p className="dim" style={{ fontSize: 12 }}>Registration only — not availability.</p>
 
       <input className="input mt-3" placeholder="Search players…" value={q} onChange={(e) => setQ(e.target.value)} />
 

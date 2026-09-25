@@ -3,6 +3,7 @@ import { useSponsors } from '../hooks/useSponsors'
 import SponsorForm, { SPONSOR_TIERS } from '../components/SponsorForm'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
+import PageHead from '../components/PageHead'
 
 export default function Sponsors() {
   const { sponsors, loading, error, save, remove, refetch } = useSponsors()
@@ -36,17 +37,15 @@ export default function Sponsors() {
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
-      <p className="kicker"><span className="kicker-rule">SPONSORS</span></p>
-      <h1 className="display mt-2" style={{ fontSize: 28 }}>Club sponsors</h1>
-      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
-      <p className="muted mt-2" style={{ fontSize: 14 }}>Logos carry through the app — the main sponsor leads, the kit sponsor sits beneath, and the Man-of-the-Match sponsor gets a line on results.</p>
+      <PageHead kicker="SPONSORS" title="Club sponsors" />
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
 
       <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>+ Add a sponsor</button>
 
       {SPONSOR_TIERS.map((t) => {
         const list = sponsors.filter((s) => s.tier === t.key)
         return (
-          <div key={t.key} className="mt-5">
+          <div key={t.key} className="mt-5 reveal-native">
             <p className="kicker" style={{ color: 'var(--bone-mute)' }}>{t.label} · {list.length}</p>
             {list.length === 0 ? (
               <p className="dim mt-2" style={{ fontSize: 14 }}>None yet.</p>
