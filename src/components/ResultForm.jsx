@@ -4,6 +4,7 @@ import Toast from './Toast'
 import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
+import { haptic } from '../lib/haptics'
 
 // Admin: log or edit a result. FT + HT scores, goals added one at a time
 // (scorer + optional minute + optional assist, squad-pick-or-free-type), MOTM.
@@ -109,8 +110,12 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
         if (gErr) throw gErr
       }
 
+      // Full time confirmed — one of the three moments DESIGN-SYSTEM §5 names as
+      // worth a haptic. Fires after every write landed, never on submit.
+      haptic('success')
       onSaved(); onClose()
     } catch (err) {
+      haptic('warn')
       setError(friendlyError(err, "Couldn't save the result — give it another go."))
     } finally {
       setBusy(false)

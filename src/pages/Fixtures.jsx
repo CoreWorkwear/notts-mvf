@@ -17,6 +17,7 @@ import CalendarView from '../components/CalendarView'
 import { Stagger, StaggerItem } from '../components/Stagger'
 import PageHead from '../components/PageHead'
 import Magnetic from '../components/Magnetic'
+import Pressable from '../components/Pressable'
 import Segmented from '../components/Segmented'
 import { Reveal } from '../components/Reveal'
 import Loader from '../components/Loader'
@@ -178,9 +179,15 @@ export default function Fixtures() {
         </div>
       )}
 
+      {/* Both inputs on the one control: Magnetic leans it toward a cursor,
+          Pressable gives it under a thumb. Nested rather than merged because
+          they animate different transforms on different elements, and only one
+          of the two is ever live on a given device. */}
       {isAdmin && (
         <Magnetic className="mt-3">
-          <button className="btn btn-primary btn-block" onClick={openAdd}>Add a fixture</button>
+          <Pressable>
+            <button className="btn btn-primary btn-block" onClick={openAdd}>Add a fixture</button>
+          </Pressable>
         </Magnetic>
       )}
 
