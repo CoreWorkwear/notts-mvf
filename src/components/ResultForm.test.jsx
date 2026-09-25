@@ -70,10 +70,12 @@ describe('ResultForm — log a result', () => {
     expect(submit).toBeInTheDocument()
 
     // Fill the score.
-    await userEvent.clear(screen.getByLabelText('Our score'))
-    await userEvent.type(screen.getByLabelText('Our score'), '3')
-    await userEvent.clear(screen.getByLabelText('Their score'))
-    await userEvent.type(screen.getByLabelText('Their score'), '1')
+    // Each box is labelled with the team it belongs to, so a test (like a
+    // manager) can't mix up which score is which.
+    await userEvent.clear(screen.getByLabelText('XL 11s score'))
+    await userEvent.type(screen.getByLabelText('XL 11s score'), '3')
+    await userEvent.clear(screen.getByLabelText('Carlton Town score'))
+    await userEvent.type(screen.getByLabelText('Carlton Town score'), '1')
 
     // Add a goal: scorer from the squad.
     await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
@@ -193,5 +195,74 @@ describe('ResultForm — a failed goals delete stops the save', () => {
     expect(calls.find((c) => c[0] === 'delete' && c[1] === 'goals')).toBeTruthy()
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'goals')).toBeFalsy()
     expect(onSaved).not.toHaveBeenCalled()
+  })
+})
+
+// Scorers are what the club's stats are built from — they key by profile_id and
+// feed the golden boot. Nothing used to tie them to the score typed directly
+// above, so "3–1" with one scorer named saved happily and left the top-scorer
+// table quietly wrong for the rest of the season, with nothing on screen to say
+// so. This is a visible nudge, deliberately NOT a gate: an own goal, or a name
+// nobody can remember, must still be savable.
+describe('ResultForm — scorers are reconciled against the score', () => {
+  const openForm = async () => {
+    render(<StrictMode><Harness onSaved={vi.fn()} /></StrictMode>)
+    await userEvent.click(screen.getByText('Log the result'))
+    await flush()
+  }
+  const setOurScore = async (n) => {
+    await userEvent.clear(screen.getByLabelText('XL 11s score'))
+    await userEvent.type(screen.getByLabelText('XL 11s score'), n)
+  }
+
+  test('says how many goals still need a scorer', async () => {
+    await openForm()
+    await setOurScore('3')
+    expect(screen.getByRole('status')).toHaveTextContent(/3 of 3 goals still needs a scorer/i)
+
+    await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
+    await userEvent.type(screen.getByPlaceholderText('Scorer'), 'Joe Morris')
+    expect(screen.getByRole('status')).toHaveTextContent(/2 of 3 goals still needs a scorer/i)
+  })
+
+  test('an opened but empty scorer row does not count as accounted for', async () => {
+    await openForm()
+    await setOurScore('1')
+    // A row exists, but the manager hasn't typed a name into it yet.
+    await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
+    expect(screen.getByRole('status')).toHaveTextContent(/1 of 1 goal still needs a scorer/i)
+  })
+
+  test('the nudge clears once every goal has a scorer', async () => {
+    await openForm()
+    await setOurScore('1')
+    await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
+    await userEvent.type(screen.getByPlaceholderText('Scorer'), 'Rich King')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  test('naming more scorers than the score allows is flagged the other way', async () => {
+    await openForm()
+    await setOurScore('1')
+    await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
+    const scorers = screen.getAllByPlaceholderText('Scorer')
+    await userEvent.type(scorers[0], 'Joe Morris')
+    await userEvent.type(scorers[1], 'Rich King')
+    expect(screen.getByRole('status')).toHaveTextContent(/2 scorers named but the score says 1/i)
+  })
+
+  test('the nudge never blocks the save — a nil-nil or an own goal still logs', async () => {
+    const onSaved = vi.fn()
+    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
+    await userEvent.click(screen.getByText('Log the result'))
+    await flush()
+    await userEvent.clear(screen.getByLabelText('XL 11s score'))
+    await userEvent.type(screen.getByLabelText('XL 11s score'), '2')
+    // Deliberately name nobody — the nudge is showing.
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')[2]).toMatchObject({ us: 2 })
   })
 })

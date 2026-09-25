@@ -15,15 +15,22 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
 
   return (
     <div className={'card spine strip' + (community ? ' community' : '')}>
+      {/* When and who lead; home/away and competition are qualifiers and read as
+          qualifiers. They used to be four identical grey boxes, so the kickoff
+          time — the thing you actually scan a fixture list for — carried the
+          same weight as the word "league". */}
       <button className="strip-main" onClick={onOpen}>
+        <div className="strip-when mono">
+          <span className="sw-date">{fmtDate(f.match_date)}</span>
+          <span className="sw-ko">{fmtKO(f.kickoff)}</span>
+        </div>
         <div className="strip-line">
           {matchup}
           {f.team?.is_first_team && <span className="pill-first">First Team</span>}
         </div>
-        <div className="strip-tags mono">
-          <span>{fmtDate(f.match_date)}</span>
-          <span>{fmtKO(f.kickoff)}</span>
+        <div className="strip-meta mono">
           <span>{f.home_away}</span>
+          <span className="sm-dot">·</span>
           <span>{f.fixture_type}</span>
         </div>
         <div className="strip-venue">{f.venue} <WeatherStrip fixture={f} /></div>
@@ -36,7 +43,7 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
               <span className="sc in">{f.counts.in}</span>
               <span className="sc maybe">{f.counts.maybe}</span>
               <span className="sc no">{f.noReply}</span>
-              <span className="sc-label">in · maybe · left</span>
+              <span className="sc-label">in · maybe · no reply</span>
             </button>
             {!blockReason && (
               <div className="strip-you">
@@ -53,16 +60,30 @@ export default function FixtureStrip({ fixture, isAdmin, blockReason = null, onS
       </div>
 
       <style>{`
-        .strip { display: flex; align-items: stretch; padding: 0; overflow: hidden; }
+        /* A whole card that is tappable should say so on a pointer, and give
+           under a finger. It did neither. */
+        .strip { display: flex; align-items: stretch; padding: 0; overflow: hidden;
+          transition: border-color var(--t-fast), transform var(--t-fast); }
+        @media (hover: hover) and (pointer: fine) {
+          .strip:hover { border-color: var(--line-2); }
+        }
+        .strip:active { transform: scale(.995); }
         .strip-main { flex: 1; text-align: left; background: none; border: none; color: var(--bone);
-          padding: 14px 14px 14px 18px; display: flex; flex-direction: column; gap: 6px; }
+          padding: 13px 14px 14px 18px; display: flex; flex-direction: column; gap: 5px; }
+        /* The scan line: date bright, kickoff beside it, both mono so a column of
+           rows aligns. */
+        .strip-when { display: flex; align-items: baseline; gap: 8px; font-size: 12px; letter-spacing: .04em; }
+        .sw-date { color: var(--bone); font-weight: 500; text-transform: uppercase; }
+        .sw-ko { color: var(--bone-mute); }
         .strip-line { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.05;
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .pill-first { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .05em;
+        /* Linear register: a squared outline tag, not a 999px badge. */
+        .pill-first { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .06em;
           text-transform: uppercase; color: var(--red-bright); background: transparent;
-          border: 1px solid var(--red); border-radius: 999px; padding: 2px 8px; }
-        .strip-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--bone-mute); }
-        .strip-tags span { background: var(--slate); border-radius: 6px; padding: 2px 7px; letter-spacing: .03em; }
+          border: 1px solid var(--red); border-radius: 5px; padding: 2px 6px; }
+        .strip-meta { display: flex; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--bone-mute);
+          letter-spacing: .04em; text-transform: uppercase; }
+        .sm-dot { color: var(--bone-dim); }
         .strip-venue { font-size: 12px; color: var(--bone-mute); }
         .strip-side { display: flex; align-items: center; padding: 12px 14px; border-left: 1px solid var(--line); }
         .strip-locked { font-size: 11px; color: var(--bone-mute); max-width: 90px; line-height: 1.2; }

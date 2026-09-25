@@ -120,6 +120,12 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
   if (!fixture) return null
   const them = fixture.opponent?.name
 
+  // Scorers named vs goals claimed. A blank scorer row doesn't count — it's a
+  // row the manager has opened but not filled, not a goal accounted for.
+  const scoredFor = Number(usScore) || 0
+  const named = goals.filter((g) => g.scorer.trim()).length
+  const unaccounted = scoredFor - named
+
   return (
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} onDismiss={() => setError(null)} />
@@ -131,41 +137,72 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
       <h2 className="display mt-2" style={{ fontSize: 24 }}>{fixture.team?.label} v {them}</h2>
 
       <form className="col gap-4 mt-4" onSubmit={onSubmit}>
+        {/* Each box is named above it. It used to be two unlabelled boxes with a
+            trailing "XL 11s / Wollaton" caption, so the only way to know which
+            score was yours was to read past both and map left-to-right. On the
+            one screen where getting it backwards silently inverts a W into an L. */}
         <div>
           <p className="label">Full time</p>
-          <div className="row gap-2 mt-1" style={{ alignItems: 'center' }}>
-            <input className="input score-in" type="number" min="0" value={usScore} onChange={(e) => setUsScore(e.target.value)} aria-label="Our score" />
-            <span className="mono dim">–</span>
-            <input className="input score-in" type="number" min="0" value={themScore} onChange={(e) => setThemScore(e.target.value)} aria-label="Their score" />
-            <span className="muted" style={{ fontSize: 13 }}>{fixture.team?.label} / {them}</span>
+          <div className="score-row mt-2">
+            <div className="score-cell">
+              <span className="score-team mono">{fixture.team?.label}</span>
+              <input className="input score-in" type="number" min="0" value={usScore} onChange={(e) => setUsScore(e.target.value)} aria-label={`${fixture.team?.label} score`} />
+            </div>
+            <span className="score-sep mono">–</span>
+            <div className="score-cell">
+              <span className="score-team mono">{them}</span>
+              <input className="input score-in" type="number" min="0" value={themScore} onChange={(e) => setThemScore(e.target.value)} aria-label={`${them} score`} />
+            </div>
           </div>
         </div>
 
         <div>
-          <p className="label">Half time</p>
-          <div className="row gap-2 mt-1" style={{ alignItems: 'center' }}>
-            <input className="input score-in" type="number" min="0" value={htUs} onChange={(e) => setHtUs(e.target.value)} aria-label="Our HT score" />
-            <span className="mono dim">–</span>
-            <input className="input score-in" type="number" min="0" value={htThem} onChange={(e) => setHtThem(e.target.value)} aria-label="Their HT score" />
+          <p className="label">Half time <span className="dim">· optional</span></p>
+          <div className="score-row mt-2">
+            <div className="score-cell">
+              <input className="input score-in sm" type="number" min="0" value={htUs} onChange={(e) => setHtUs(e.target.value)} aria-label={`${fixture.team?.label} half-time score`} />
+            </div>
+            <span className="score-sep mono">–</span>
+            <div className="score-cell">
+              <input className="input score-in sm" type="number" min="0" value={htThem} onChange={(e) => setHtThem(e.target.value)} aria-label={`${them} half-time score`} />
+            </div>
           </div>
         </div>
 
         <div>
           <div className="row spread">
             <p className="label">Our goals</p>
-            <button type="button" className="chip" onClick={addGoal}>+ Add goal</button>
+            <button type="button" className="chip" onClick={addGoal}>Add goal</button>
           </div>
+
+          {/* Scorers are what the stats are built from (they key by profile_id),
+              and nothing previously connected them to the score just typed above.
+              Log 3–1 and name one scorer and the golden boot is quietly wrong for
+              the rest of the season, with nothing on screen to say so. This is a
+              nudge, not a gate — a scrappy own goal or a forgotten name should
+              still be savable. */}
+          {unaccounted > 0 && (
+            <p className="goal-check mono mt-2" role="status">
+              {unaccounted} of {scoredFor} {scoredFor === 1 ? 'goal' : 'goals'} still needs a scorer
+            </p>
+          )}
+          {unaccounted < 0 && (
+            <p className="goal-check over mono mt-2" role="status">
+              {goals.length} scorers named but the score says {scoredFor}
+            </p>
+          )}
+
           <div className="col gap-2 mt-2">
-            {goals.length === 0 && <p className="dim" style={{ fontSize: 13 }}>No goals added.</p>}
+            {goals.length === 0 && <p className="dim" style={{ fontSize: 13 }}>No scorers yet.</p>}
             {goals.map((g, i) => (
-              <div key={i} className="goal-row card" style={{ padding: 10 }}>
+              <div key={i} className="goal-row card">
                 <div className="row gap-2">
                   <input className="input grow" list="squad-names" placeholder="Scorer" value={g.scorer} onChange={(e) => setGoal(i, 'scorer', e.target.value)} />
                   <input className="input min-in" type="number" min="0" max="120" placeholder="min" value={g.minute} onChange={(e) => setGoal(i, 'minute', e.target.value)} />
+                  <button type="button" className="goal-rm" onClick={() => rmGoal(i)} aria-label={`Remove goal ${i + 1}`}>✕</button>
                 </div>
                 <div className="row gap-2 mt-2">
                   <input className="input grow" list="squad-names" placeholder="Assist (optional)" value={g.assist} onChange={(e) => setGoal(i, 'assist', e.target.value)} />
-                  <button type="button" className="btn btn-ghost" onClick={() => rmGoal(i)} aria-label="Remove goal">✕</button>
                 </div>
               </div>
             ))}
@@ -179,7 +216,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
             <ImageUpload
               folder="motm" shape="square" maxDim={1000} current={motmPhoto}
               label={motmPhoto ? 'Change MOTM photo' : 'Add a MOTM photo'}
-              hint="Landscape works best — around 16:9 (e.g. 1200×675). It's shown full-width, ~1000px, and we compress it, so a phone snap is fine."
+              hint="Landscape works best. A phone snap is fine."
               onUploaded={(url) => setMotmPhoto(url)}
             />
             {motmPhoto && (
@@ -194,8 +231,28 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
       </form>
 
       <style>{`
-        .score-in { width: 72px; text-align: center; font-family: var(--font-mono); font-size: 22px; }
-        .min-in { width: 70px; text-align: center; font-family: var(--font-mono); }
+        .score-row { display: flex; align-items: flex-end; gap: 10px; }
+        .score-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+        /* The team name sits over its own box and is allowed to be narrow —
+           truncated beats pushing the boxes off a phone screen. */
+        .score-team { font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+          color: var(--bone-mute); max-width: 96px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .score-in { width: 84px; text-align: center; font-family: var(--font-mono); font-size: 26px;
+          padding-inline: 6px; }
+        .score-in.sm { width: 64px; font-size: 18px; }
+        .score-sep { color: var(--bone-dim); font-size: 20px; padding-bottom: 12px; }
+        .min-in { width: 68px; text-align: center; font-family: var(--font-mono); }
+        .goal-row { padding: 10px; }
+        /* A quiet icon target, not a full ghost button — removing one goal row is
+           not a peer of the form's actual actions. 40px keeps it tappable. */
+        .goal-rm { width: 40px; height: 40px; flex: none; align-self: center;
+          background: none; border: 1px solid var(--line); border-radius: var(--r-input);
+          color: var(--bone-mute); font-size: 13px; line-height: 1;
+          transition: color var(--t-fast), border-color var(--t-fast); }
+        .goal-rm:hover { color: var(--red-bright); border-color: var(--red); }
+        .goal-check { font-size: 12px; color: var(--amber); letter-spacing: .02em; }
+        .goal-check.over { color: var(--bone-mute); }
       `}</style>
     </Sheet>
   )
