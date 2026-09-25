@@ -1,5 +1,6 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion, useMotionValue, useScroll, useSpring, useTransform, useReducedMotion } from 'framer-motion'
+import { useDeviceTilt } from '../hooks/useDeviceTilt'
 import AvailControl from './AvailControl'
 import Crest from './Crest'
 import WeatherStrip from './WeatherStrip'
@@ -37,6 +38,20 @@ export default function FixtureHero({ fixture, isAdmin, blockReason = null, pool
     py.set((e.clientY - r.top) / r.height)
   }
   function onLeave() { px.set(0.5); py.set(0.5) }
+
+  // The same tilt, driven by the handset instead of a mouse. Pointer tilt never
+  // fires on a phone (no hover), so without this the poster is flat on the
+  // device the app actually lives on. Feeds the SAME springs, so there is one
+  // tilt with two inputs rather than two competing effects.
+  // Only the reading is wanted here. The iOS permission prompt is asked for by
+  // the toggle in Profile (FeelSettings), because it has to come from a user
+  // gesture and the hero is not the place to beg for one.
+  const { tilt } = useDeviceTilt({ enabled: !reduce })
+  useEffect(() => {
+    if (!tilt) return
+    px.set(0.5 + tilt.x / 2)
+    py.set(0.5 + tilt.y / 2)
+  }, [tilt, px, py])
 
   // Scroll parallax: the poster's image sits on its own overscanned layer and
   // travels against the scroll, so the card has a front and a back rather than

@@ -1,8 +1,17 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
+import { SPRING_SNAPPY } from '../lib/motion'
+import { haptic } from '../lib/haptics'
 
 // In / Maybe / Can't make it. One tap, optimistic, inline "saved" tick.
 // in = green, maybe = amber, out = red (red for "out" is sanctioned in
 // DESIGN-SYSTEM §1: red means XL / win / out).
+//
+// This is THE control of the app — for most of the squad it is the only thing
+// they ever touch — so it gets the press physics and the haptic. The buzz fires
+// on the WRITE LANDING, not on the tap: the tap is optimistic and can roll back,
+// and a phone that buzzed "done" for something that then failed would be lying
+// with the one signal the player can feel without looking.
 const OPTIONS = [
   { key: 'in',    label: "I'm in",        short: 'In',    css: 'av-in' },
   { key: 'maybe', label: 'Maybe',         short: 'Maybe', css: 'av-maybe' },
@@ -20,9 +29,11 @@ export default function AvailControl({ value, onChange, compact = false, unanswe
       // onChange resolves `false` (by design, not a throw) when the write
       // failed after retrying — only announce a write that actually landed.
       const ok = await onChange(key)
-      if (ok === false) return
+      if (ok === false) { haptic('warn'); return }
       setJustSaved(true)
-      if (navigator.vibrate && key === 'in') navigator.vibrate(8) // haptic tick, Android
+      // Marking yourself in is the good news and gets the fuller pattern; maybe
+      // and out are acknowledgements, not celebrations.
+      haptic(key === 'in' ? 'confirm' : 'tap')
       setTimeout(() => setJustSaved(false), 1600)
     } finally {
       setSaving(null)
@@ -32,15 +43,17 @@ export default function AvailControl({ value, onChange, compact = false, unanswe
   return (
     <div className={'avail' + (compact ? ' compact' : '') + (unanswered && !value ? ' pulse' : '')}>
       {OPTIONS.map((o) => (
-        <button
+        <motion.button
           key={o.key}
           className={'av-btn ' + o.css + (value === o.key ? ' on' : '')}
           aria-pressed={value === o.key}
           disabled={!!saving}
           onClick={() => pick(o.key)}
+          whileTap={{ scale: 0.95 }}
+          transition={SPRING_SNAPPY}
         >
           {saving === o.key ? '…' : compact ? o.short : o.label}
-        </button>
+        </motion.button>
       ))}
       {!compact && (
         <span className={'av-saved' + (justSaved ? ' show' : '')}>
@@ -59,22 +72,29 @@ export default function AvailControl({ value, onChange, compact = false, unanswe
           border-radius: 10px; padding: 8px 6px; font-size: 14px; font-weight: 600;
           min-height: 48px; line-height: 1.15;
           display: flex; align-items: center; justify-content: center; text-align: center;
-          transition: transform var(--t-fast), background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+          /* No transform here: the press is a Framer spring (whileTap) and a CSS
+             transition on the same property fights it. Colour still transitions. */
+          transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+          touch-action: manipulation; /* no double-tap zoom delay on the core action */
         }
         /* Inline row control (list rows / manager "You"): a compact flex row of short
            In/Maybe/Out buttons, kept at a comfortable 44px touch target. */
         .avail.compact { display: flex; flex-wrap: wrap; gap: 6px; }
         .avail.compact .av-btn { padding: 8px 14px; font-size: 14px; min-width: 46px; min-height: 44px; }
-        .av-btn:active { transform: scale(.96); }
         .av-in.on    { background: var(--green-dim-2); border-color: var(--green); color: var(--green-bright); }
         .av-maybe.on { background: var(--amber-dim);   border-color: var(--amber); color: var(--amber); }
         .av-out.on   { background: var(--red-dim-2);   border-color: var(--red);   color: var(--red-bright); }
         .av-saved { grid-column: 1 / -1; font-size: 13px; color: var(--bone-mute); transition: color var(--t-fast); }
         .av-saved.show { color: var(--green-bright); }
         .avail.compact .av-saved { display: none; }
+        /* The unanswered nudge rides on the CONTAINER, not each button. A CSS
+           animation on transform sits above inline styles in the cascade, so on
+           the buttons it silently beat the press spring — the control went dead
+           under a thumb at exactly the moment it was asking to be pressed. */
         @keyframes nudge { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
-        .avail.pulse .av-btn { animation: nudge 1.6s var(--ease) infinite; border-color: var(--line-2); }
-        @media (prefers-reduced-motion: reduce){ .avail.pulse .av-btn{ animation: none } }
+        .avail.pulse { animation: nudge 1.6s var(--ease) infinite; }
+        .avail.pulse .av-btn { border-color: var(--line-2); }
+        @media (prefers-reduced-motion: reduce){ .avail.pulse{ animation: none } }
       `}</style>
     </div>
   )

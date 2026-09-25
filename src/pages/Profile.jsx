@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { logError } from '../lib/logger'
 import { TEAMS } from '../lib/constants'
 import NotificationToggle from '../components/NotificationToggle'
+import FeelSettings from '../components/FeelSettings'
 import ImageUpload from '../components/ImageUpload'
 import ProfileEdit from '../components/ProfileEdit'
 import Toast from '../components/Toast'
@@ -67,7 +68,7 @@ export default function Profile() {
           folder="players" shape="round" maxDim={512}
           current={profile.photo_url}
           label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
-          hint="A square head-and-shoulders shot works best (e.g. 512×512) — it's cropped to a circle."
+          hint="A square head-and-shoulders shot works best."
           onUploaded={async (url) => {
             const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
             if (error) { setError(error.message); logError('write', error, { op: 'avatar' }) }
@@ -98,12 +99,14 @@ export default function Profile() {
         <Row label="Emergency phone" value={full.ec_phone || '—'} last />
       </div>
       <button className="btn btn-ghost btn-block mt-3" onClick={openEdit}>Edit your details</button>
-      <p className="dim mt-2" style={{ fontSize: 12 }}>Email is your login — the manager changes that.</p>
+      <p className="dim mt-2" style={{ fontSize: 12 }}>Your login. The manager can change it.</p>
 
       <ProfileEdit open={editing} onClose={() => setEditing(false)} profile={full} onSaved={refreshProfile} />
 
       <p className="kicker mt-5"><span className="kicker-rule">NOTIFICATIONS</span></p>
       <div className="mt-3"><NotificationToggle /></div>
+
+      <FeelSettings />
     </div>
   )
 }

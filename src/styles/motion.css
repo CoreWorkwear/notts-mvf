@@ -288,3 +288,25 @@ p, .empty p, .mc-blurb, .label { text-wrap: pretty; }
     .hero { view-transition-name: next-fixture; }
   }
 }
+
+/* 8. A header that reacts to the scroll ----------------------------------- */
+/* At rest the header has no rule under it — it is part of the page. The moment
+   content starts sliding beneath it, the rule and a whisper of shadow fade in,
+   so the bar reads as lifted off the content rather than drawn on top of it.
+   Driven by the scroll position itself via `animation-timeline: scroll()`: the
+   compositor runs it, there is no scroll listener, and it tracks the finger
+   exactly — including the rubber-band at the top of an Android overscroll,
+   which a JS threshold always gets wrong. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .app-header {
+      animation: headerSettle linear both;
+      animation-timeline: scroll();
+      animation-range: 0 72px;
+    }
+    @keyframes headerSettle {
+      from { border-bottom-color: transparent; box-shadow: 0 8px 24px -24px rgba(0,0,0,0); }
+      to   { border-bottom-color: var(--line); box-shadow: 0 8px 24px -20px rgba(0,0,0,.85); }
+    }
+  }
+}
