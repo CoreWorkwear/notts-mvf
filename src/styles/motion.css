@@ -42,8 +42,14 @@
 /* The light theme's warm paper needs less help and shows colour more readily. */
 [data-theme="light"] .amb-pool { opacity: .07; }
 
-/* Content sits above the field. #root is the positioning context (tokens.css). */
-main, .app-header, .bottom-nav { position: relative; z-index: 1; }
+/* Content sits above the field. #root is the positioning context (tokens.css).
+   ONLY `main` is given a position here. The header is `position: sticky` and the
+   bottom nav `position: fixed`, both set in tokens.css, which this file loads
+   after — listing them here too set them back to `relative`, which dropped the
+   nav out of the viewport and into the end of the document flow, i.e. off the
+   bottom of the page. They already carry z-index 50 and sit above the ambient
+   field (z-index 0) without any help from this file. */
+main { position: relative; z-index: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   .amb-pool.drifting { animation: none; }

@@ -14,6 +14,30 @@ test.describe('admin', () => {
     await expect(page.getByRole('button', { name: /add a fixture/i })).toBeVisible()
   })
 
+  // Regression: styles/motion.css shipped `main, .app-header, .bottom-nav {
+  // position: relative }` to lift content above the ambient field. It loads
+  // after tokens.css, so it overrode the nav's `position: fixed` and the
+  // header's `sticky` — the nav fell out of the viewport into the end of the
+  // document flow and vanished off the bottom of the page. Every unit test
+  // passed (vitest runs with css:false) and the nav was still in the DOM, so
+  // only a real browser catches this: assert it is PINNED TO THE VIEWPORT after
+  // scrolling, not merely present.
+  test('the bottom nav stays pinned to the viewport after scrolling', async ({ page }) => {
+    await signIn(page, ADMIN.email, ADMIN.password)
+    const nav = page.locator('.bottom-nav')
+    await expect(nav).toBeVisible()
+    await expect(nav).toHaveCSS('position', 'fixed')
+    await expect(page.locator('.app-header')).toHaveCSS('position', 'sticky')
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await expect(nav).toBeInViewport()
+
+    // And it still sits above the page content, not behind it.
+    const box = await nav.boundingBox()
+    const vh = page.viewportSize().height
+    expect(box.y + box.height).toBeLessThanOrEqual(vh + 1)
+  })
+
   test('adds a fixture and it appears in the list (the 3×-broken bug)', async ({ page }) => {
     await signIn(page, ADMIN.email, ADMIN.password)
     await page.getByRole('button', { name: /add a fixture/i }).click()
