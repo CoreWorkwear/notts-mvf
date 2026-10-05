@@ -48,8 +48,20 @@
    after — listing them here too set them back to `relative`, which dropped the
    nav out of the viewport and into the end of the document flow, i.e. off the
    bottom of the page. They already carry z-index 50 and sit above the ambient
-   field (z-index 0) without any help from this file. */
-main { position: relative; z-index: 1; }
+   field (z-index 0) without any help from this file.
+
+   And `main` gets NO z-index. `position: relative` on its own is enough to
+   clear the field: positioned boxes at z-index auto/0 paint in document order,
+   and main comes after the field. A z-index makes main a stacking context, and
+   every sheet, toast and overlay is rendered inside main, so their z-index
+   (sheet 100, toast 200) then only counts INSIDE it while main as a whole sits
+   at 1, under the header and nav at 50. That shipped: the nav sat on top of
+   every sheet's save button and the header on top of every error toast, on
+   both phone engines. The same goes for anything else that makes a stacking
+   context or a containing block for position: fixed (transform, filter,
+   opacity, will-change, contain, container-type...). styles/stacking.test.js
+   fails the suite if one lands on main, #root, body or html. */
+main { position: relative; }
 
 @media (prefers-reduced-motion: reduce) {
   .amb-pool.drifting { animation: none; }
@@ -263,15 +275,16 @@ body {
 }
 
 /* 5. Container queries ---------------------------------------------------- */
-/* The manage grid was breaking on viewport width, which is the wrong question —
-   it cares how much room IT has, not how wide the phone is. Inside a sheet or a
-   split view the viewport lies. */
-@supports (container-type: inline-size) {
-  main { container-type: inline-size; container-name: app; }
-  @container app (max-width: 340px) {
-    .manage-grid { grid-template-columns: 1fr; }
-  }
-}
+/* Deliberately none on `main`. container-type applies containment, and the
+   first container-queries spec made that layout containment, which turns the
+   element into a stacking context AND the containing block for position:
+   fixed. Current Chromium does neither, but a phone stuck on an older engine
+   may do both, and every sheet and toast is a fixed descendant of main: not a
+   bet worth placing for one breakpoint. The
+   manage grid's single-column fallback lives in Manage.jsx as
+   @media (max-width: 340px), which is the same test: main is always as wide as
+   the viewport. If a container query earns its place, put container-type on the
+   component's own wrapper, never on an ancestor of the pages. */
 
 /* 6. Typography ----------------------------------------------------------- */
 /* `pretty` costs a little more layout work than `balance` but fixes the thing
