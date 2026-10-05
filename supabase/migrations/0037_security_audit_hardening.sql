@@ -3,7 +3,16 @@
 -- ----------------------------------------------------------------------------
 -- Idempotent: every statement is drop-if-exists / if-not-exists / a plain
 -- revoke, so it can be re-run. New policies keep the 0031 initplan convention.
--- Verify with supabase/tests/rls_test.sql — T26-T30 cover this file.
+--
+-- VERIFY WITH supabase/tests/rls_test.sql — T27-T31 cover this file, and T5 /
+-- T8 / T23 cover the trigger section F re-creates. Run the harness; do not
+-- substitute a bespoke rolled-back dry run for it. A plpgsql body is compiled
+-- lazily: `create or replace function` accepts a reference to a column that no
+-- longer exists, and the error only surfaces the first time the trigger fires.
+-- An earlier draft of section F carried 0009's `new.xl_eligible := old.xl_eligible`
+-- (0025 dropped that column); it applied cleanly and every assertion about the
+-- objects passed, and it would have thrown on EVERY profile update in the app.
+-- T5 fires exactly that UPDATE and would have caught it in a second.
 --
 -- Nothing here fixes an exploited hole: the RLS surface came through the audit
 -- clean (every policy is scoped `to authenticated`, no table has RLS off, and
