@@ -23,7 +23,11 @@ export default defineConfig({
   expect: { timeout: 8_000 },
   use: {
     baseURL: 'http://localhost:4173',
-    reducedMotion: 'reduce', // stop infinite UI animations making elements "unstable"
+    // Stop infinite UI animations making elements "unstable". This must live in
+    // contextOptions: Playwright Test has no reducedMotion option of its own, and
+    // a bare `reducedMotion` here is ignored without a warning (it was, from June
+    // until October). smoke.spec.js fails if it lapses.
+    contextOptions: { reducedMotion: 'reduce' },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
