@@ -10,7 +10,7 @@ import Toast from './Toast'
 // tap a slot to assign an available player (those who marked in / maybe), choose
 // a formation, and name the subs. Saved to the lineups table (admin-write RLS).
 export default function LineupBoard({ fixture, isAdmin, open }) {
-  const { saved, pool, names, photos = {}, hasLineup, loading, save } = useLineup(fixture, open)
+  const { saved, pool, names, photos = {}, hasLineup, loading, error: loadError, refetch, save } = useLineup(fixture, open)
   const [formation, setFormation] = useState(saved.formation)
   const [starters, setStarters] = useState(saved.starters)
   const [subs, setSubs] = useState(saved.subs)
@@ -84,7 +84,22 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     setActive(null); setEditing(false)
   }
 
-  if (loading) return <p className="muted center mt-4">Loading the line-up…</p>
+  // First load only: once a line-up is on screen a reload (after a save) must
+  // not blank the board.
+  if (loading && !hasLineup) return <p className="muted center mt-4">Loading the line-up…</p>
+
+  // A failed load leaves the hook with an EMPTY line-up, which is exactly what
+  // "not picked yet" looks like. Say it failed instead: the squad was being told
+  // no side had been named, and Pick → Save from the empty editor deleted the
+  // real one (save() replaces the whole set, so an empty set is a delete).
+  if (loadError && !hasLineup) {
+    return (
+      <div className="mt-4">
+        <p className="field-error" role="alert">Couldn't load the line-up. Check your signal and have another go.</p>
+        <button className="btn btn-ghost btn-block mt-3" onClick={() => refetch()}>Try again</button>
+      </div>
+    )
+  }
 
   // ---- read-only (players, or admin not editing) ----
   if (!isAdmin || !editing) {
@@ -184,8 +199,16 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
       <div className="row gap-2 mt-5">
         <button className="btn btn-ghost grow" disabled={busy} onClick={onDone}>Done</button>
-        <button className="btn btn-primary grow" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save line-up'}</button>
+        {/* Held back while the last load failed: what's on the board may not be
+            what the database holds, and Save replaces the whole line-up. */}
+        <button className="btn btn-primary grow" disabled={busy || !!loadError} onClick={onSave}>{busy ? 'Saving…' : 'Save line-up'}</button>
       </div>
+      {loadError && (
+        <div className="row spread gap-2 mt-2" style={{ alignItems: 'center' }}>
+          <p className="field-error" role="alert">Couldn't refresh the line-up, so Save is off for now.</p>
+          <button type="button" className="chip" onClick={() => refetch()}>Try again</button>
+        </div>
+      )}
 
       <style>{`
         .picker { border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; background: var(--coal); }
