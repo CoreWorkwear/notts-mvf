@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Not found — Notts MvF</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #0c0f0d; color: #F2F0EC; font-family: system-ui, sans-serif; }
+      p { color: #9aa39c; }
+      a { color: #FF3340; }
+    </style>
+  </head>
+  <body>
+    <!-- Served, with a real 404 status, for requests under /assets/ that don't
+         exist. It lives HERE and not at the top level on purpose. Cloudflare
+         Pages answers a missing path with the nearest 404.html up the tree, and
+         only falls back to index.html (single-page mode) when it finds none:
+           - under assets/  → a missing hashed chunk is a real 404, instead of
+             index.html cached under that URL by the one-year immutable
+             Cache-Control that public/_headers gives /assets/*
+           - at the top     → EVERY deep link (/fixtures, /results, /you) is a
+             404. That happened from 24 Sep to 7 Oct 2026.
+         src/hosting.test.js fails if this file moves back up. -->
+    <main style="text-align: center;">
+      <h1>Nothing at this address</h1>
+      <p>That file isn't here any more. <a href="/">Back to the app</a>.</p>
+    </main>
+  </body>
+</html>

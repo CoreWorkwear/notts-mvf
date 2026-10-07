@@ -26,8 +26,14 @@ Environment variables (Settings → Environment variables, Production + Preview)
 - `VITE_SUPABASE_ANON_KEY` = (the anon key from `.env`)
 - `VITE_VAPID_PUBLIC_KEY` = (the VAPID public key from `.env`)
 
-SPA routing is handled by `public/_redirects` (`/* /index.html 200`), so deep
-links and PWA navigation work.
+SPA routing needs no config: with **no top-level `404.html`** in the build,
+Cloudflare Pages serves `index.html` for any path that has no file, so deep
+links work. Do not add `public/404.html` — that switches the fallback off and
+every deep link becomes a 404 (it did, 24 Sep to 7 Oct 2026). A `_redirects`
+rule of `/* /index.html 200` does not help either: Pages rejects it as a loop.
+The not-found page for missing hashed assets lives at `public/assets/404.html`.
+`src/hosting.test.js` guards all of this, and `scripts/check-live.mjs` checks
+the deployed site after every push to `master`.
 
 ## 3. Supabase Auth URLs
 Dashboard → Authentication → URL Configuration:
@@ -44,5 +50,5 @@ Dashboard → Authentication → URL Configuration:
 
 ## Notes
 - First admin is bootstrapped by hand once (Table editor → profiles.role='admin').
-- Migrations 0001–0005 must be run on the project (they are, on the live DB).
+- Migrations: the run order and what is applied are in `supabase/README.md` (0001–0037 are on the live DB).
 - Rotate the VAPID/PAT keys that were shared during development if desired.
