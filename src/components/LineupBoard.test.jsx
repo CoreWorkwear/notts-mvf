@@ -20,6 +20,43 @@ beforeEach(() => {
   }
 })
 
+// A failed load leaves the hook with an empty line-up and hasLineup=false —
+// exactly what "nothing picked yet" looks like. The board used to ignore
+// `error`, so on a dodgy connection the squad was told no side had been named,
+// and a manager who tapped Pick → Save from that empty editor deleted the real
+// one (save() replaces the whole set; an empty set is a delete).
+describe('LineupBoard — a failed load is not "no line-up"', () => {
+  const failed = () => ({ ...mock, pool: [], names: {}, hasLineup: false, error: new Error('Load failed'), refetch: vi.fn() })
+
+  test('a player is told it did not load and can retry — not that the side has not been named', async () => {
+    mock = failed()
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin={false} open />)
+    expect(screen.queryByText(/line-up not picked yet/i)).toBeNull()
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn't load the line-up/i)
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }))
+    expect(mock.refetch).toHaveBeenCalled()
+  })
+
+  test('a manager is not offered "Pick the line-up" on top of a load that failed', () => {
+    mock = failed()
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    expect(screen.queryByRole('button', { name: /pick the line-up/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /save line-up/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+  })
+
+  test('if a reload fails while a saved line-up is being edited, Save is held back', async () => {
+    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] } }
+    const { rerender } = render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await userEvent.click(screen.getByRole('button', { name: /edit the line-up/i }))
+    expect(screen.getByRole('button', { name: /save line-up/i })).toBeEnabled()
+    // Same saved object, so the editor is not reset — only the error arrives.
+    mock = { ...mock, error: new Error('Load failed'), refetch: vi.fn() }
+    rerender(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    expect(screen.getByRole('button', { name: /save line-up/i })).toBeDisabled()
+  })
+})
+
 describe('LineupBoard', () => {
   test('a player sees an empty-state until the manager picks the side', () => {
     render(<LineupBoard fixture={{ id: 'f1' }} isAdmin={false} open />)
