@@ -51,6 +51,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // The not-found page for missing /assets/* files (public/assets/404.html)
+        // must never be precached, or the SW would serve it as a 200.
+        globIgnores: ['**/assets/404.html'],
         navigateFallback: '/index.html',
         // Supabase API/auth is always network — never serve it from the SW cache.
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
