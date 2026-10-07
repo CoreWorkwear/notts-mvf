@@ -88,8 +88,9 @@ describe('ResultForm — log a result', () => {
     await userEvent.click(submit)
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
 
-    // The result row was saved with the score we typed…
-    const upsert = calls.find((c) => c[0] === 'upsert' && c[1] === 'results')
+    // The result row was saved with the score we typed… (a NEW result is an
+    // insert, never an upsert — see "never overwrites one that already exists").
+    const upsert = calls.find((c) => c[0] === 'insert' && c[1] === 'results')
     expect(upsert).toBeTruthy()
     expect(upsert[2]).toMatchObject({ fixture_id: 'fix-1', us: 3, them: 1 })
 
@@ -263,6 +264,73 @@ describe('ResultForm — scorers are reconciled against the score', () => {
     expect(screen.getByRole('status')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /log result/i }))
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
-    expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')[2]).toMatchObject({ us: 2 })
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'results')[2]).toMatchObject({ us: 2 })
+  })
+})
+
+// A fixture row with no `result` on it is not proof that none is stored: the
+// Fixtures calendar hands over played games without one, and a second manager
+// can be looking at a stale needs-a-result list. An upsert from there overwrote
+// the stored score, half-time and MOTM and then deleted every goal. A new
+// result is therefore an INSERT, so the database refuses it when one exists.
+describe('ResultForm — a new result never overwrites one that already exists', () => {
+  async function openBlank(onSaved = () => {}) {
+    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
+    await userEvent.click(screen.getByText('Log the result'))
+    await flush()
+  }
+
+  test('logging a new result inserts — it does not upsert over whatever is there', async () => {
+    const onSaved = vi.fn()
+    await openBlank(onSaved)
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'results')).toBeTruthy()
+    expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')).toBeFalsy()
+  })
+
+  test('when a result is already stored the save is refused: nothing is deleted and the manager is sent to Results', async () => {
+    fail['results.insert'] = { code: '23505', message: 'duplicate key value violates unique constraint "results_pkey"' }
+    const onSaved = vi.fn()
+    await openBlank(onSaved)
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/already has a result/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/results/i)
+    expect(calls.find((c) => c[0] === 'delete' && c[1] === 'goals')).toBeFalsy()
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'goals')).toBeFalsy()
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
+  test("a retry after the goals step failed is not mistaken for someone else's result", async () => {
+    fail['goals.delete'] = { message: 'boom', code: 'XX000' }
+    const onSaved = vi.fn()
+    await openBlank(onSaved)
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(onSaved).not.toHaveBeenCalled()
+
+    // Our own results row landed on the first go. From here a second insert
+    // would be refused as a duplicate — the retry has to be allowed to finish.
+    delete fail['goals.delete']
+    fail['results.insert'] = { code: '23505', message: 'duplicate key' }
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(calls.filter((c) => c[0] === 'insert' && c[1] === 'results')).toHaveLength(1)
+    expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')).toBeTruthy()
+  })
+
+  test('editing a result that was loaded with the fixture still replaces it', async () => {
+    const onSaved = vi.fn()
+    const played = {
+      ...FIX,
+      result: { us: 1, them: 0, ht_us: 0, ht_them: 0, motm_profile_id: null, motm_name: null, motm_photo_url: null },
+      goals: [],
+    }
+    render(<ResultForm open fixture={played} squad={SQUAD} onClose={() => {}} onSaved={onSaved} />)
+    await userEvent.click(screen.getByRole('button', { name: /save result/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')).toBeTruthy()
+    expect(calls.find((c) => c[0] === 'insert' && c[1] === 'results')).toBeFalsy()
   })
 })
