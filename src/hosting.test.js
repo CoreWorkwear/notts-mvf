@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 // Cloudflare Pages decides how to route by which files exist under public/,
 // not by anything in src/ — so nothing else in the suite can see it break.
 // It did: a top-level public/404.html was added on 24 Sep 2026 and every deep
-// link (/fixtures, /results, /you…) returned a 404 on live for eleven days,
+// link (/fixtures, /results, /you…) returned a 404 on live for thirteen days,
 // invisible to anyone whose phone already ran the service worker (which
 // serves the cached shell for every navigation).
 //

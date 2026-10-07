@@ -309,6 +309,7 @@ export default function Fixtures() {
           everyone={everyone ?? undefined}
           onClose={() => setResultFor(null)}
           onSaved={refetch}
+          onStale={refetch}
         />
       )}
 

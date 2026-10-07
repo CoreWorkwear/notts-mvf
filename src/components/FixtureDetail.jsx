@@ -142,7 +142,9 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
       </div>
 
       {tab === 'line' ? (
-        <LineupBoard fixture={f} isAdmin={isAdmin} open={open} />
+        // Keyed by fixture: the board's editor state and the hook's loaded
+        // line-up must never carry over from one game to the next.
+        <LineupBoard key={f.id} fixture={f} isAdmin={isAdmin} open={open} />
       ) : tab === 'me' ? (
         <div className="mt-4">
           {!blockReason

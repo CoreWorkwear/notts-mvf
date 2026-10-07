@@ -45,15 +45,45 @@ describe('LineupBoard — a failed load is not "no line-up"', () => {
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
   })
 
-  test('if a reload fails while a saved line-up is being edited, Save is held back', async () => {
-    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] } }
+  // The other side of the same coin. The editor can only be reached after a
+  // load that worked, so an error arriving while it is open is the reload after
+  // a SAVE failing — the delete may have landed and the insert not, and then
+  // the picks on screen are the only copy. They must stay, and Save must work.
+  async function pickThenLoseTheReload(start) {
+    mock = { ...mock, ...start }
     const { rerender } = render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
-    await userEvent.click(screen.getByRole('button', { name: /edit the line-up/i }))
-    expect(screen.getByRole('button', { name: /save line-up/i })).toBeEnabled()
-    // Same saved object, so the editor is not reset — only the error arrives.
+    await userEvent.click(screen.getByRole('button', { name: start.hasLineup ? /edit the line-up/i : /pick the line-up/i }))
+    await userEvent.click(screen.getByText('GK').closest('button'))
+    await userEvent.click(screen.getByText('Joe Bloggs').closest('button'))
+    save.mockResolvedValueOnce({ error: new Error('insert failed') })
+    await userEvent.click(screen.getByRole('button', { name: /save line-up/i }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    // The hook's reload failed too: same `saved` object, error now set.
     mock = { ...mock, error: new Error('Load failed'), refetch: vi.fn() }
     rerender(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
-    expect(screen.getByRole('button', { name: /save line-up/i })).toBeDisabled()
+  }
+
+  test('a first pick whose save and reload both failed keeps the editor, the pick and a working Save', async () => {
+    await pickThenLoseTheReload({ hasLineup: false })
+    expect(screen.queryByText(/couldn't load the line-up/i)).toBeNull()
+    // The pick is still in the editor: the second Save sends it again (below).
+    const saveBtn = screen.getByRole('button', { name: /save line-up/i })
+    expect(saveBtn).toBeEnabled()
+    await userEvent.click(saveBtn)
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(save.mock.calls[1][0]).toContainEqual(expect.objectContaining({ profile_id: 'p1', position: 'GK' }))
+  })
+
+  test('the same while editing an existing line-up: Save is not switched off', async () => {
+    await pickThenLoseTheReload({ hasLineup: true, saved: { formation: '4-4-2', starters: {}, subs: ['p2'] } })
+    expect(screen.getByRole('button', { name: /save line-up/i })).toBeEnabled()
+  })
+
+  test('read-only, after a reload that failed: the board says it may be stale and will not push it', () => {
+    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] }, error: new Error('Load failed'), refetch: vi.fn() }
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    expect(screen.getByRole('alert')).toHaveTextContent(/may not be the latest/i)
+    expect(screen.getByRole('button', { name: /push the line-up/i })).toBeDisabled()
   })
 })
 

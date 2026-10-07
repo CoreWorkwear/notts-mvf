@@ -7,7 +7,8 @@ import { adminClient, configured, deleteTestData, deleteTestUsers, targetAllowed
 export default async function globalTeardown() {
   if (!configured() || !targetAllowed()) return
   const admin = adminClient()
-  const swept = await deleteTestData(admin)
-  await deleteTestUsers(admin)
+  let swept = 0
+  // The users go whatever happens to the sweep: one of them is an admin login.
+  try { swept = await deleteTestData(admin) } finally { await deleteTestUsers(admin) }
   console.log(`[e2e] test users removed; ${swept} E2E opponent(s) and their fixtures removed`)
 }

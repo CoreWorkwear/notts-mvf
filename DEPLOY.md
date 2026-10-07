@@ -50,5 +50,6 @@ Dashboard → Authentication → URL Configuration:
 
 ## Notes
 - First admin is bootstrapped by hand once (Table editor → profiles.role='admin').
-- Migrations: the run order and what is applied are in `supabase/README.md` (0001–0037 are on the live DB).
+- Migrations: the run order is in `supabase/README.md`. Nothing records which are applied; `supabase/tests/rls_test.sql` names anything that is missing.
+- Preview deployments (`<hash>.notts-mvf.pages.dev`) sit behind Cloudflare Access, so they cannot be checked with `scripts/check-live.mjs` or curl. To test routing before a merge, run the build through Cloudflare's own asset server: `npx wrangler pages dev dist`.
 - Rotate the VAPID/PAT keys that were shared during development if desired.
