@@ -4,6 +4,7 @@ import { render, screen, act, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Sheet from './Sheet'
 import FixtureForm from './FixtureForm'
+import { FIXTURE_COLUMNS } from '../hooks/useFixtures'
 
 const { calls } = vi.hoisted(() => ({ calls: [] }))
 vi.mock('../lib/supabase', () => {
@@ -227,5 +228,77 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     // must NOT fire an insert with a null season_id, and must tell the user why
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')).toBeFalsy()
     expect(screen.getByRole('alert')).toHaveTextContent(/season/i)
+  })
+})
+
+// The form writes a WHOLE row back. Any column it writes that useFixtures does
+// not select arrives here undefined and is saved as null — silently, on every
+// edit. competition_id was exactly that until Oct 2026: 4 of that season's 11
+// League fixtures had lost their competition to a routine kickoff or venue edit.
+describe('FixtureForm — an edit must not wipe what the hook loaded', () => {
+  const VALUES = {
+    id: 'fix-9', match_date: '2026-03-08', kickoff: '13:00:00', home_away: 'Home', fixture_type: 'League',
+    league_name: 'MvF XL National League', competition_id: 'comp-1', venue: 'Forest Rec 3G', address: '1 Rec Road',
+    postcode: 'NG7 6HB', w3w: '///filled.count.soap', venue_lat: 52.96, venue_lng: -1.16, season_id: 'season-1',
+    team_id: 't-xl', opponent_id: 'opp-1', status: 'postponed', pinned_image_id: null,
+  }
+  // The row exactly as the hook hands it over: only the columns it selects.
+  const hookRow = () => Object.fromEntries(FIXTURE_COLUMNS.filter((c) => c in VALUES).map((c) => [c, VALUES[c]]))
+
+  async function saveUntouched() {
+    render(<StrictMode><Harness fixture={hookRow()} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => expect(calls.find((c) => c[0] === 'update' && c[1] === 'fixtures')).toBeTruthy())
+    return calls.find((c) => c[0] === 'update' && c[1] === 'fixtures')[2]
+  }
+
+  test('saving an edit without touching anything keeps the competition and every other column', async () => {
+    const payload = await saveUntouched()
+    expect(payload).toMatchObject({
+      competition_id: 'comp-1', league_name: 'MvF XL National League', status: 'postponed',
+      address: '1 Rec Road', postcode: 'NG7 6HB', w3w: '///filled.count.soap', venue_lat: 52.96, venue_lng: -1.16,
+    })
+  })
+
+  test('every column the form writes back is one the hook selects', async () => {
+    const payload = await saveUntouched()
+    // club_id comes from the manager's profile, not the row.
+    const written = Object.keys(payload).filter((k) => k !== 'club_id')
+    expect(written.filter((k) => !FIXTURE_COLUMNS.includes(k))).toEqual([])
+  })
+})
+
+// Binning a fixture cascades to its result, goals, line-up and subs (0001,
+// 0012). The confirm used to mention only availability.
+describe('FixtureForm — binning a fixture says what goes with it', () => {
+  async function tapBin(fixture, answer) {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer)
+    render(<StrictMode><Harness fixture={fixture} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+    await userEvent.click(screen.getByRole('button', { name: /bin this fixture/i }))
+    await flush()
+    const asked = confirm.mock.calls[0]?.[0] ?? ''
+    confirm.mockRestore()
+    return asked
+  }
+
+  test('a game with a result logged: the confirm names the score, scorers and line-up, and No deletes nothing', async () => {
+    const asked = await tapBin({ ...EXISTING, hasResult: true }, false)
+    expect(asked).toMatch(/result/i)
+    expect(asked).toMatch(/scorers/i)
+    expect(asked).toMatch(/line-up/i)
+    expect(asked).toMatch(/no undo/i)
+    expect(calls.find((c) => c[0] === 'delete')).toBeFalsy()
+  })
+
+  test('a game with no result: says availability and line-up go, and Yes deletes it', async () => {
+    const asked = await tapBin({ ...EXISTING, hasResult: false }, true)
+    expect(asked).toMatch(/availability/i)
+    expect(asked).toMatch(/line-up/i)
+    expect(asked).not.toMatch(/scorers/i)
+    expect(calls.find((c) => c[0] === 'delete' && c[1] === 'fixtures')).toBeTruthy()
   })
 })
