@@ -70,3 +70,44 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 14
+
+  # Cloudflare Pages builds and serves master on its own, so the jobs above
+  # never see what players actually load. This waits for the pushed commit's
+  # build to be the one being served, then asks the live site for the things
+  # that have broken unseen before: a deep link, a missing asset, the headers.
+  live:
+    name: Live site check (after Cloudflare deploys)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/check-live.mjs --sha "$GITHUB_SHA" --wait 900
+
+  # A red master used to go unnoticed (ten days in Sep/Oct 2026, with deploys
+  # still going out). Nothing here blocks a deploy; this makes red loud instead:
+  # one open issue, commented on again for each further red push.
+  alert:
+    name: Raise an issue when master is red
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(needs.*.result, 'failure')
+    needs: [unit, e2e, live]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the "master is red" issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTS: unit=${{ needs.unit.result }} e2e=${{ needs.e2e.result }} live=${{ needs.live.result }}
+        run: |
+          body="Commit ${GITHUB_SHA::7} left master red (${RESULTS}). Run: ${RUN_URL}"
+          existing=$(gh issue list --repo "$REPO" --state open --search "master is red in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "master is red" --body "$body Fix it before anything else lands; close this once a run is green."
+          fi

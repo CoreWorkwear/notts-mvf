@@ -11,7 +11,11 @@ import { createHash } from 'node:crypto'
 // Vitest runs from the project root (vite.config.js lives there).
 const root = process.cwd() + '/'
 const headers = readFileSync(root + 'public/_headers', 'utf8')
-const indexHtml = readFileSync(root + 'index.html', 'utf8')
+// Hash the file as it is DEPLOYED. Cloudflare builds from a Linux checkout
+// (LF); a Windows worktree checked out with autocrlf has CRLF in the inline
+// script, which hashes differently and made this test fail on a correct file —
+// with a message inviting someone to paste the wrong hash into the live CSP.
+const indexHtml = readFileSync(root + 'index.html', 'utf8').replace(/\r\n/g, '\n')
 
 // The single `/*` block, as a "Name: value" map.
 const globalHeaders = Object.fromEntries(
