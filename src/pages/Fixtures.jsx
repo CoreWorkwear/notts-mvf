@@ -274,7 +274,11 @@ export default function Fixtures() {
         isAdmin={isAdmin}
         blockReason={respondBlockFor(detail)}
         pool={pool}
-        canLogResult={!!detail && isAdmin && hasKickedOff(detail.match_date, detail.kickoff)}
+        // Not for a game that already has one. The calendar opens played games
+        // here, and this row carries no result or goals, so the form would open
+        // blank and a save would wipe the stored score and scorers. Editing a
+        // result is done from Results, where the full row is loaded.
+        canLogResult={!!detail && isAdmin && !detail.hasResult && hasKickedOff(detail.match_date, detail.kickoff)}
         onChanged={refetch}
         onClose={() => setDetail(null)}
         onSetAvail={(s) => handleSetAvail(detail.id, s)}

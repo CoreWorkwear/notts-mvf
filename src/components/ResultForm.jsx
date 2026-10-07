@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
 import ImageUpload from './ImageUpload'
@@ -30,6 +30,9 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
   const [goals, setGoals] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  // True once THIS form has put a results row in: a retry after a later step
+  // failed must be allowed to finish, not be refused as somebody else's result.
+  const wroteResult = useRef(false)
 
   const people = everyone ?? squad
 
@@ -43,6 +46,7 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
   useEffect(() => {
     if (!open) return
     setError(null)
+    wroteResult.current = false
     setUsScore(existing?.us ?? 0)
     setThemScore(existing?.them ?? 0)
     setHtUs(existing?.ht_us ?? 0)
@@ -82,13 +86,30 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
     setError(null); setBusy(true)
     try {
       const m = pick(motm, motmId)
-      const { error: rErr } = await supabase.from('results').upsert({
+      const row = {
         fixture_id: fixture.id,
         us: Number(usScore) || 0, them: Number(themScore) || 0,
         ht_us: Number(htUs) || 0, ht_them: Number(htThem) || 0,
         motm_profile_id: m.id, motm_name: m.name, motm_photo_url: motmPhoto,
-      }, { onConflict: 'fixture_id' })
+      }
+      // Replacing a result is only safe when this form was opened WITH it — the
+      // fields above were then prefilled from the stored row. A fixture handed
+      // over without a result is not proof none exists (the Fixtures calendar
+      // lists played games without theirs; another manager's list can be stale),
+      // and an upsert from that blank form overwrote the score and MOTM and went
+      // on to delete every goal. So a new result is an INSERT: results.fixture_id
+      // is the primary key, and the database refuses a second one.
+      const replacing = !!existing || wroteResult.current
+      const { error: rErr } = replacing
+        ? await supabase.from('results').upsert(row, { onConflict: 'fixture_id' })
+        : await supabase.from('results').insert(row)
+      if (rErr?.code === '23505' && !replacing) {
+        haptic('warn')
+        setError('This game already has a result. Open it from Results to change it.')
+        return
+      }
       if (rErr) throw rErr
+      wroteResult.current = true
 
       // Replace the goal set (simplest correct approach for an edit). If the
       // delete fails we MUST stop: inserting on top would double every goal.

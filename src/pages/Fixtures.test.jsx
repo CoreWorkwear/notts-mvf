@@ -28,9 +28,15 @@ vi.mock('../lib/supabase', () => {
 })
 vi.mock('../components/FixtureHero', () => ({ default: ({ fixture, onOpenDetail }) => <div>HERO {fixture.id}<button onClick={onOpenDetail}>OPEN-DETAIL</button></div> }))
 vi.mock('../components/FixtureStrip', () => ({ default: ({ fixture }) => <div>STRIP {fixture.id}</div> }))
-vi.mock('../components/FixtureDetail', () => ({ default: ({ open, onLogResult }) => (open ? <button onClick={onLogResult}>LOG-RESULT</button> : null) }))
+// Honours canLogResult, like the real sheet: the button is the thing under test.
+vi.mock('../components/FixtureDetail', () => ({ default: ({ open, canLogResult, onLogResult }) => (
+  open ? (canLogResult ? <button onClick={onLogResult}>LOG-RESULT</button> : <span>DETAIL-OPEN</span>) : null
+) }))
 vi.mock('../components/FixtureForm', () => ({ default: () => null }))
-vi.mock('../components/CalendarView', () => ({ default: () => null }))
+// The calendar is the one view that lists EVERY game of the season, played ones included.
+vi.mock('../components/CalendarView', () => ({ default: ({ fixtures, onOpen }) => (
+  <div>{fixtures.map((f) => <button key={f.id} onClick={() => onOpen(f)}>CAL {f.id}</button>)}</div>
+) }))
 vi.mock('../components/ResultForm', () => ({ default: (props) => { resultForm.props = props; return props.open ? <div>RESULT-FORM-OPEN</div> : null } }))
 
 import Fixtures from './Fixtures'
@@ -91,7 +97,7 @@ describe('Fixtures — logging a result needs the squad list (stats key by profi
   const adminAuth = { ...playerAuth, isAdmin: true, profile: { id: 'u1', role: 'admin', approved: true, active: true, is_player: true } }
 
   test('a failed squad fetch blocks the result form with a visible reason, and a retry that succeeds opens it', async () => {
-    const f = fixture('f1', 'xl', { concluded: false })
+    const f = fixture('f1', 'xl', { match_date: '2020-01-05' }) // kicked off, so the button is offered
     fx.state = { ...fx.state, upcoming: [f], fixtures: [f] }
     auth.state = adminAuth
     db.error = { message: 'Load failed' }
@@ -121,5 +127,31 @@ describe('Fixtures — logging a result needs the squad list (stats key by profi
     await waitFor(() => expect(resultForm.props?.everyone?.length).toBe(2))
     expect(resultForm.props.squad.map((p) => p.id)).toEqual(['p1'])
     expect(resultForm.props.everyone.map((p) => p.id).sort()).toEqual(['p-old', 'p1'])
+  })
+})
+
+// The calendar lists already-played games. "Log the result" there used to open
+// a BLANK form (the fixtures row carries no result or goals), and saving it
+// overwrote the score, half-time and MOTM and deleted every goal.
+describe('Fixtures — a game that already has a result cannot be logged again from here', () => {
+  const adminAuth = { ...playerAuth, isAdmin: true, profile: { id: 'u1', role: 'admin', approved: true, active: true, is_player: true } }
+
+  async function openFromCalendar(f) {
+    fx.state = { ...fx.state, fixtures: [f] }
+    auth.state = adminAuth
+    renderPage()
+    await userEvent.click(screen.getByRole('tab', { name: 'Calendar' }))
+    await userEvent.click(screen.getByText('CAL ' + f.id))
+  }
+
+  test('played and logged: the sheet opens but offers no "Log the result"', async () => {
+    await openFromCalendar(fixture('done', 'xl', { match_date: '2020-01-05', hasResult: true, concluded: true }))
+    expect(screen.getByText('DETAIL-OPEN')).toBeInTheDocument()
+    expect(screen.queryByText('LOG-RESULT')).toBeNull()
+  })
+
+  test('played and NOT logged: the button is still there', async () => {
+    await openFromCalendar(fixture('todo', 'xl', { match_date: '2020-01-05', hasResult: false, concluded: true }))
+    expect(screen.getByText('LOG-RESULT')).toBeInTheDocument()
   })
 })
