@@ -10,6 +10,17 @@ import { logError } from '../lib/logger'
 // (foregrounding fires both events together). Exported for the test.
 export const FOCUS_REFETCH_MIN_MS = 5000
 
+// Every scalar `fixtures` column the season load selects. Exported because the
+// edit form (FixtureForm) writes a WHOLE row back: a column it writes that is
+// missing here arrives undefined and is saved as null, silently, on every edit.
+// competition_id was missing until Oct 2026, so every kickoff or venue edit
+// unlinked the game from its league. FixtureForm.test.jsx holds the two in step.
+export const FIXTURE_COLUMNS = [
+  'id', 'match_date', 'kickoff', 'home_away', 'fixture_type', 'league_name', 'competition_id',
+  'venue', 'address', 'postcode', 'w3w', 'venue_lat', 'venue_lng',
+  'season_id', 'team_id', 'opponent_id', 'status', 'pinned_image_id',
+]
+
 // One shared empty set for fixtures whose team has no squad loaded — avoids
 // allocating per fixture and keeps referential equality stable.
 const EMPTY_SQUAD = new Set()
@@ -49,9 +60,7 @@ export function useFixtures(seasonId) {
         supabase
           .from('fixtures')
           .select(`
-            id, match_date, kickoff, home_away, fixture_type, league_name,
-            venue, address, postcode, w3w, venue_lat, venue_lng,
-            season_id, team_id, opponent_id, status, pinned_image_id,
+            ${FIXTURE_COLUMNS.join(', ')},
             team:teams(id, key, label, match_name, colour, is_first_team),
             opponent:opponents(id, name, badge_url),
             pinned:media_assets(url),

@@ -80,8 +80,14 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   // pre-filled value (which reads as stale). The default is applied on save.
   const competition = competitions.find((c) => c.id === competitionId) || null
 
+  // The delete cascades (0001, 0012): availability and the line-up always go,
+  // and a played game takes its result, scorers and subs with it. Say so — the
+  // old wording mentioned only availability, and there is no undo.
   async function onDelete() {
-    if (!confirm('Bin this fixture off? This removes it and any availability for it.')) return
+    const ask = fixture.hasResult
+      ? 'Bin this fixture off? It has a result logged: the score, scorers, line-up and subs all go with it, and there is no undo.'
+      : 'Bin this fixture off? Any availability and line-up for it go too.'
+    if (!confirm(ask)) return
     setBusy(true)
     const { error } = await supabase.from('fixtures').delete().eq('id', fixture.id)
     setBusy(false)
