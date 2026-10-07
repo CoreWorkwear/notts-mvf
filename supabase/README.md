@@ -3,7 +3,7 @@
 Run order (SQL editor, top to bottom), each as its own run:
 
 1. `migrations/0001_init_schema_and_rls.sql` — tables, helpers, triggers, RLS, grants.
-2. every later numbered migration in order, `0002_*` … `0037_*`, each as its own
+2. every later numbered migration in order, `0002_*` … `0038_*`, each as its own
    run. They are cumulative and the order matters. **Never re-run a migration
    older than the newest one already applied.** Several of them `alter policy`
    in place (0031 above all), so replaying one silently puts back policy bodies
@@ -15,10 +15,15 @@ Run order (SQL editor, top to bottom), each as its own run:
    output (Messages/Notices tab). If any test fails it raises and names the rule
    that broke — fix the policy, re-run.
 
-`0037_security_audit_hardening.sql` is the newest; run it and then re-run step 4,
-where T27–T31 check it landed. It only tightens (revokes, club scoping, CHECK
-constraints on URL columns) — no new columns, so the app never needs it to be in
-place before a deploy.
+`0037_security_audit_hardening.sql` is the newest schema change; run it and then
+re-run step 4, where T27–T31 check it landed. It only tightens (revokes, club
+scoping, CHECK constraints on URL columns) — no new columns, so the app never
+needs it to be in place before a deploy.
+
+`0038_relink_league_fixtures.sql` is data only: it repairs four live fixtures by
+id and does nothing on any other database. A data fix on live goes in as a
+numbered file like this one, with the before-image and the undo in its header,
+rather than as an ad-hoc statement nobody can find afterwards.
 
 ## Two settings that live in the Dashboard, not in SQL
 The database cannot enforce these, so they are easy to lose and worth checking
