@@ -46,15 +46,21 @@ test.describe('an open sheet sits above the app chrome', () => {
     await expect(page.getByRole('dialog')).toHaveCSS('transform', 'none')
   })
 
+  // Each check polls for the settled state. For ~160ms after a route loads the
+  // page is still fading in, and an element at opacity < 1 is a stacking
+  // context, so a sheet opened that fast really is under the nav until the fade
+  // ends. No thumb is that quick; a test against a stubbed backend is. (A
+  // transient can only make a correct build look broken here, never the
+  // reverse: the sheet's own transient is handled by the transform wait above.)
   test('it covers the header and the bottom nav', async ({ page }) => {
-    expect(await topmostAt(page.locator('.app-header'))).toBe('the sheet')
-    expect(await topmostAt(page.locator('.bottom-nav'))).toBe('the sheet')
+    await expect.poll(() => topmostAt(page.locator('.app-header'))).toBe('the sheet')
+    await expect.poll(() => topmostAt(page.locator('.bottom-nav'))).toBe('the sheet')
   })
 
   test('its save button takes the tap, not the nav', async ({ page }) => {
     const save = page.getByRole('button', { name: 'Save changes' })
     await save.scrollIntoViewIfNeeded()
-    expect(await topmostAt(save)).toBe('itself')
+    await expect.poll(() => topmostAt(save)).toBe('itself')
     await save.tap() // refused outright if another element would receive it
     await expect(page.getByRole('dialog')).toBeHidden() // saved, so the sheet closes
   })
@@ -66,6 +72,7 @@ test.describe('an open sheet sits above the app chrome', () => {
     await firstName.press('Enter')
     const toast = page.getByRole('alert').filter({ hasText: 'First name is required.' })
     await expect(toast).toBeVisible()
-    expect(await topmostAt(toast)).toBe('itself')
+    // Inside the 4s the toast stays up, so a failure reports what covers it.
+    await expect.poll(() => topmostAt(toast), { timeout: 3000 }).toBe('itself')
   })
 })

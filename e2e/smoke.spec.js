@@ -52,3 +52,12 @@ test('a player can switch to "supporter" and the team picker disappears', async 
   await page.getByRole('button', { name: /a supporter/i }).click()
   await expect(page.getByText(/which team\(s\)/i)).toBeHidden() // supporters pick no team
 })
+
+// playwright.config.js asks for reduced motion so springs and drifts can't leave
+// an element "unstable" mid-test. From June it sat in `use` as a bare
+// `reducedMotion`, which Playwright Test doesn't recognise and ignored without a
+// word, so every run went at full motion. This fails loudly if it lapses again.
+test('the suite runs with reduced motion, as playwright.config.js asks', async ({ page }) => {
+  await page.goto('/')
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true)
+})
