@@ -18,7 +18,13 @@ import { haptic } from '../lib/haptics'
 // untouched (shown as "Former player") rather than blanked and dropped.
 const FORMER = 'Former player'
 
-export default function ResultForm({ open, onClose, onSaved, fixture, squad, everyone }) {
+// The stored columns a new result is compared against when the database says
+// one already exists (see onSubmit).
+const RESULT_FIELDS = ['us', 'them', 'ht_us', 'ht_them', 'motm_profile_id', 'motm_name', 'motm_photo_url']
+
+// `onStale` (optional) tells the page its list is out of date — a result exists
+// that the row this form was opened from did not know about — so it can refetch.
+export default function ResultForm({ open, onClose, onSaved, onStale, fixture, squad, everyone }) {
   const existing = fixture?.result
   const [usScore, setUsScore] = useState(0)
   const [themScore, setThemScore] = useState(0)
@@ -104,11 +110,29 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
         ? await supabase.from('results').upsert(row, { onConflict: 'fixture_id' })
         : await supabase.from('results').insert(row)
       if (rErr?.code === '23505' && !replacing) {
-        haptic('warn')
-        setError('This game already has a result. Open it from Results to change it.')
-        return
+        // A result is already stored. One case is ours: the first tap's insert
+        // landed but its response was lost (pitch-side signal), so this is the
+        // retry. If what is stored is EXACTLY what we are sending and it has no
+        // goals yet, carrying on changes nothing that exists — it only adds the
+        // scorers that never got saved. Anything else is somebody else's result.
+        const [stored, anyGoal] = await Promise.all([
+          supabase.from('results').select(RESULT_FIELDS.join(', ')).eq('fixture_id', fixture.id).maybeSingle(),
+          supabase.from('goals').select('id').eq('fixture_id', fixture.id).limit(1),
+        ])
+        if (stored.error) throw stored.error
+        if (anyGoal.error) throw anyGoal.error
+        const ours = !!stored.data
+          && RESULT_FIELDS.every((k) => (stored.data[k] ?? null) === (row[k] ?? null))
+          && (anyGoal.data ?? []).length === 0
+        if (!ours) {
+          haptic('warn')
+          setError('This game already has a result. Open it from Results to change it.')
+          onStale?.() // the list behind is stale: refresh it so the game moves to played
+          return
+        }
+      } else if (rErr) {
+        throw rErr
       }
-      if (rErr) throw rErr
       wroteResult.current = true
 
       // Replace the goal set (simplest correct approach for an edit). If the
@@ -138,6 +162,9 @@ export default function ResultForm({ open, onClose, onSaved, fixture, squad, eve
     } catch (err) {
       haptic('warn')
       setError(friendlyError(err, "Couldn't save the result — give it another go."))
+      // The score went in but a later step did not: the game now HAS a result,
+      // so the list behind should stop offering it as "needs a result".
+      if (wroteResult.current) onStale?.()
     } finally {
       setBusy(false)
     }

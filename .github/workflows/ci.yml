@@ -77,6 +77,12 @@ jobs:
   # that have broken unseen before: a deep link, a missing asset, the headers.
   live:
     name: Live site check (after Cloudflare deploys)
+    # A newer push supersedes this one: its build is what ends up live, so an
+    # older run still waiting for its own commit is cancelled rather than left
+    # to time out and raise a false alarm. (cancelled is not failure.)
+    concurrency:
+      group: live-${{ github.ref }}
+      cancel-in-progress: true
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
@@ -105,7 +111,8 @@ jobs:
           RESULTS: unit=${{ needs.unit.result }} e2e=${{ needs.e2e.result }} live=${{ needs.live.result }}
         run: |
           body="Commit ${GITHUB_SHA::7} left master red (${RESULTS}). Run: ${RUN_URL}"
-          existing=$(gh issue list --repo "$REPO" --state open --search "master is red in:title" --json number --jq '.[0].number // empty')
+          # Listed, not searched: search matches loosely and its index lags, and this must find the one issue.
+          existing=$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title --jq 'map(select(.title == "master is red"))[0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$REPO" --body "$body"
           else

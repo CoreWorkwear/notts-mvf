@@ -134,7 +134,7 @@ export default function Results() {
       {isAdmin && (
         <ResultForm
           open={!!editing} fixture={editing} squad={squad} everyone={everyone}
-          onClose={() => setEditing(null)} onSaved={refetch}
+          onClose={() => setEditing(null)} onSaved={refetch} onStale={refetch}
         />
       )}
 

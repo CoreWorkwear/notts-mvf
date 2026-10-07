@@ -3,7 +3,7 @@
 //
 // Cloudflare Pages builds and serves `master` on its own, so nothing in the
 // test suite ever sees the thing players actually load. Twice that hid a live
-// fault: every deep link returned a 404 for eleven days (a top-level 404.html
+// fault: every deep link returned a 404 for thirteen days (a top-level 404.html
 // had switched off the single-page fallback), and CI sat red for ten with
 // deploys still going out. This asks the live site directly:
 //
@@ -27,19 +27,27 @@ const waitSeconds = Number(arg('wait') || 0)
 
 async function get(path) {
   const res = await fetch(base + path, { redirect: 'follow', headers: { 'cache-control': 'no-cache' } })
+  // Preview deployments (<hash>.notts-mvf.pages.dev) sit behind Cloudflare
+  // Access: every path redirects to a login page that answers 200. Reading that
+  // as "the site" produces nonsense, so stop and say what it is.
+  if (new URL(res.url).hostname.endsWith('cloudflareaccess.com')) {
+    console.log(`\n${base} is behind Cloudflare Access (it redirected to a login page), so it cannot be checked from here.`)
+    process.exit(2)
+  }
   return { status: res.status, headers: res.headers, body: await res.text() }
 }
 
 const isShell = (r) => r.status === 200 && /<div id="root">/.test(r.body)
 
 // The build stamp is "<version>+<short sha>", baked into the entry chunk
-// (vite.config.js → __APP_VERSION__).
-async function servedSha() {
+// (vite.config.js → __APP_VERSION__). Returns the chunk's path too: the
+// service-worker check below uses it.
+async function served() {
   const home = await get('/')
-  const entry = home.body.match(/assets\/index-[\w-]+\.js/)?.[0]
-  if (!entry) return null
+  const entry = home.body.match(/assets\/index-[\w-]+\.js/)?.[0] ?? null
+  if (!entry) return { sha: null, entry: null }
   const js = await get('/' + entry)
-  return js.body.match(/\d+\.\d+\.\d+\+([0-9a-f]{7})\b/)?.[1] ?? null
+  return { sha: js.body.match(/\d+\.\d+\.\d+\+([0-9a-f]{7})\b/)?.[1] ?? null, entry }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -52,9 +60,10 @@ console.log(`Checking ${base}${wantSha ? ` for build ${wantSha}` : ''}`)
 
 // 1. The right build is being served.
 let sha = null
+let entry = null
 const deadline = Date.now() + waitSeconds * 1000
 for (;;) {
-  try { sha = await servedSha() } catch (e) { sha = null; console.log('  …     ' + (e?.message ?? e)) }
+  try { ({ sha, entry } = await served()) } catch (e) { sha = null; console.log('  …     ' + (e?.message ?? e)) }
   if (!wantSha || sha === wantSha || Date.now() >= deadline) break
   console.log(`  …     serving ${sha ?? 'nothing readable'}, waiting for ${wantSha}`)
   await sleep(15_000)
@@ -80,11 +89,23 @@ for (const path of ['/', '/fixtures', '/results', '/you']) {
   else pass('/assets/<missing> → 404, not immutable')
 }
 
-// 4. The pieces an installed app needs, and the headers that guard it.
-for (const path of ['/sw.js', '/manifest.webmanifest']) {
-  const r = await get(path)
-  if (r.status === 200) pass(`${path} → 200`)
-  else fail(`${path} → ${r.status}`)
+// 4. The pieces an installed app needs. A 200 proves nothing here: with the
+//    single-page fallback on, a file that stopped being built is answered with
+//    index.html and a 200. So check what came back. The service worker must be
+//    script and must precache THIS build's entry chunk; the manifest must parse.
+{
+  const r = await get('/sw.js')
+  const type = r.headers.get('content-type') || ''
+  if (r.status !== 200 || isShell(r) || !/javascript/i.test(type)) fail(`/sw.js → ${r.status} ${type || 'no content-type'}, not a service worker`)
+  else if (entry && !r.body.includes(entry)) fail(`/sw.js does not precache ${entry}: it belongs to a different build`)
+  else pass('/sw.js is a service worker for this build')
+}
+{
+  const r = await get('/manifest.webmanifest')
+  let manifest = null
+  try { manifest = JSON.parse(r.body) } catch { /* not JSON: reported below */ }
+  if (r.status === 200 && manifest?.start_url) pass('/manifest.webmanifest parses, start_url ' + manifest.start_url)
+  else fail(`/manifest.webmanifest → ${r.status}, not a web manifest`)
 }
 {
   const r = await get('/')

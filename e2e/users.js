@@ -1,16 +1,25 @@
 import { createClient } from '@supabase/supabase-js'
+import { loadEnv } from 'vite'
 
 // E2E test users are EPHEMERAL: created fresh at the start of a test cycle
 // (global-setup) and deleted at the end (global-teardown), so they never linger
-// in the live DB polluting the squad/roster. Creating/deleting auth users needs
+// in the database polluting the squad/roster. Creating/deleting auth users needs
 // the service-role key — set these in the env alongside the E2E_* creds:
-//   SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY,
-//   E2E_ADMIN_EMAIL/PASSWORD, E2E_PLAYER_EMAIL/PASSWORD
-// Without them, setup/teardown no-op and the authed specs skip (no-auth smoke
-// still runs).
-
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY, E2E_ADMIN_EMAIL/PASSWORD, E2E_PLAYER_EMAIL/PASSWORD
+// Without the E2E_* emails, setup/teardown no-op and the authed specs skip (the
+// no-auth and stubbed layers still run).
+//
+// ONE project, decided by the build. The browser under test talks to whatever
+// VITE_SUPABASE_URL the app was built with (.env, or the shell, which wins), so
+// the admin client here uses that same URL. Taking it from a separate
+// SUPABASE_URL let the two disagree: users created on one project while the
+// browser signed in to, and wrote fixtures on, the other.
+const SUPABASE_URL = loadEnv('production', process.cwd(), 'VITE_').VITE_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+// True when the run has been asked to do the authenticated layer at all — the
+// same gate authed.spec.js skips on.
+export const authedRequested = () => !!(process.env.E2E_ADMIN_EMAIL || process.env.E2E_PLAYER_EMAIL)
 
 export const TEST_USERS = [
   {
@@ -33,19 +42,30 @@ export function configured() {
   return !!(adminClient() && TEST_USERS.every((u) => u.email && u.password))
 }
 
-// The live project. The authed layer WRITES to whatever it is pointed at —
+// The live project. The authed layer WRITES to whatever the build points at —
 // test users, fixtures, a logged result — and the only local .env is live's.
 // So running it there has to be said out loud rather than happen by default.
 const LIVE_REF = 'vgeosccpwsdosbcnpcve'
+const host = (u) => { try { return new URL(u).hostname } catch { return '' } }
 export function targetAllowed() {
-  return !SUPABASE_URL?.includes(LIVE_REF) || process.env.E2E_ALLOW_LIVE === '1'
+  return !host(SUPABASE_URL).includes(LIVE_REF) || process.env.E2E_ALLOW_LIVE === '1'
 }
 export function assertTargetAllowed() {
+  // A stray SUPABASE_URL in the shell used to steer the admin client only.
+  const shell = process.env.SUPABASE_URL
+  if (shell && host(shell) !== host(SUPABASE_URL)) {
+    throw new Error(
+      `[e2e] SUPABASE_URL in the shell (${host(shell)}) is not the project the app is built against ` +
+      `(${host(SUPABASE_URL) || 'VITE_SUPABASE_URL is not set'}). The browser follows the build. ` +
+      'Unset SUPABASE_URL, and set VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY to choose the project.'
+    )
+  }
   if (targetAllowed()) return
   throw new Error(
-    '[e2e] The authenticated layer is pointed at the LIVE Supabase project and it writes real rows ' +
-    '(test users, fixtures, a result). Set E2E_ALLOW_LIVE=1 to run it there on purpose, or point ' +
-    'SUPABASE_URL at staging. Without the E2E_* creds this layer is skipped and nothing is written.'
+    '[e2e] The authenticated layer would run against the LIVE Supabase project, and it writes real rows ' +
+    '(test users, fixtures, a result). To run it there on purpose set E2E_ALLOW_LIVE=1. To run it on ' +
+    'staging, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to staging in the shell (they override ' +
+    '.env) with staging\'s SUPABASE_SERVICE_ROLE_KEY. With no E2E_* emails set, this layer is skipped.'
   )
 }
 

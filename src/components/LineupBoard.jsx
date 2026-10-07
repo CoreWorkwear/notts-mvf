@@ -92,7 +92,10 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   // "not picked yet" looks like. Say it failed instead: the squad was being told
   // no side had been named, and Pick → Save from the empty editor deleted the
   // real one (save() replaces the whole set, so an empty set is a delete).
-  if (loadError && !hasLineup) {
+  // Not while the editor is open, though: the editor can only be reached after
+  // a load that worked, so an error here means the reload AFTER a save failed —
+  // and then the picks on screen may be the only copy. Save is the way out.
+  if (loadError && !hasLineup && !editing) {
     return (
       <div className="mt-4">
         <p className="field-error" role="alert">Couldn't load the line-up. Check your signal and have another go.</p>
@@ -126,10 +129,18 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
             )}
           </>
         )}
+        {/* A reload that failed (after a save) leaves the board showing what was
+            loaded before. Say so, and don't push a line-up we can't vouch for. */}
+        {loadError && hasLineup && (
+          <div className="row spread gap-2 mt-3" style={{ alignItems: 'center' }}>
+            <p className="field-error" role="alert">Couldn't refresh the line-up. This may not be the latest.</p>
+            <button type="button" className="chip" onClick={() => refetch()}>Try again</button>
+          </div>
+        )}
         {isAdmin && (
           hasLineup ? (
             <div className="col gap-2 mt-4">
-              <button className="btn btn-primary btn-block" disabled={pushing} onClick={notifySquad}>
+              <button className="btn btn-primary btn-block" disabled={pushing || !!loadError} onClick={notifySquad}>
                 {pushing ? 'Sending…' : pushMsg || 'Push the line-up to the squad'}
               </button>
               <button className="btn btn-ghost btn-block" onClick={() => setEditing(true)}>Edit the line-up</button>
@@ -199,16 +210,8 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
       <div className="row gap-2 mt-5">
         <button className="btn btn-ghost grow" disabled={busy} onClick={onDone}>Done</button>
-        {/* Held back while the last load failed: what's on the board may not be
-            what the database holds, and Save replaces the whole line-up. */}
-        <button className="btn btn-primary grow" disabled={busy || !!loadError} onClick={onSave}>{busy ? 'Saving…' : 'Save line-up'}</button>
+        <button className="btn btn-primary grow" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save line-up'}</button>
       </div>
-      {loadError && (
-        <div className="row spread gap-2 mt-2" style={{ alignItems: 'center' }}>
-          <p className="field-error" role="alert">Couldn't refresh the line-up, so Save is off for now.</p>
-          <button type="button" className="chip" onClick={() => refetch()}>Try again</button>
-        </div>
-      )}
 
       <style>{`
         .picker { border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; background: var(--coal); }
