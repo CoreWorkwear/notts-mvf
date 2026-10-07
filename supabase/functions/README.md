@@ -64,6 +64,22 @@ auth *inside* (verify the caller's JWT → `is_admin`), and `run-reminders`
 checks `x-cron-secret`, so this is not a hole. If you deploy before that
 config is picked up, pass `--no-verify-jwt` explicitly.
 
+**Only the CLI reads `config.toml`.** A deploy from the dashboard's Functions UI
+or through the Supabase MCP `deploy_edge_function` tool defaults platform JWT
+verification to ON. With it on, the browser's CORS preflight (which carries no
+token) is rejected, so adding a player, deleting a player and every push fail
+for every manager, and the token-less hourly cron call is refused at the gateway
+with nothing in the function's own log. On any non-CLI deploy:
+
+1. set verify JWT **off** explicitly (`verify_jwt: false`);
+2. upload the function's `index.ts` **and** every `_shared/*.js` file it imports
+   (a missing one is a boot error);
+3. check it afterwards, for each function:
+   - `OPTIONS` with no token → `200`;
+   - `POST` with no credentials → the function's **own** refusal: JSON carrying
+     a `requestId`. A body of `{"code":401,"message":"Missing authorization
+     header"}` instead is the gateway talking: verification is still on.
+
 `admin-delete-player` needs **migration 0035** applied first (it calls the
 `anonymise_and_delete_profile` RPC).
 

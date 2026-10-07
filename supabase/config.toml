@@ -1,6 +1,6 @@
 project_id = "vgeosccpwsdosbcnpcve"
 
-# Both functions do their OWN admin check (verify the caller's JWT → is_admin).
+# The three admin functions do their OWN admin check (verify the caller's JWT → is_admin).
 # Platform-level verify_jwt is disabled so the browser CORS preflight (which
 # carries no token) reaches the function's own OPTIONS/CORS handler. An
 # unauthenticated call still gets 401 from inside the function.

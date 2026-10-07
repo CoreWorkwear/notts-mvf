@@ -33,6 +33,39 @@ export function configured() {
   return !!(adminClient() && TEST_USERS.every((u) => u.email && u.password))
 }
 
+// The live project. The authed layer WRITES to whatever it is pointed at —
+// test users, fixtures, a logged result — and the only local .env is live's.
+// So running it there has to be said out loud rather than happen by default.
+const LIVE_REF = 'vgeosccpwsdosbcnpcve'
+export function targetAllowed() {
+  return !SUPABASE_URL?.includes(LIVE_REF) || process.env.E2E_ALLOW_LIVE === '1'
+}
+export function assertTargetAllowed() {
+  if (targetAllowed()) return
+  throw new Error(
+    '[e2e] The authenticated layer is pointed at the LIVE Supabase project and it writes real rows ' +
+    '(test users, fixtures, a result). Set E2E_ALLOW_LIVE=1 to run it there on purpose, or point ' +
+    'SUPABASE_URL at staging. Without the E2E_* creds this layer is skipped and nothing is written.'
+  )
+}
+
+// Everything the write tests create hangs off an opponent named "E2E-…"
+// (authed.spec.js). Deleting the test users removes none of it — fixtures and
+// opponents reference no profile — so it used to stay in the real season until
+// a manager binned it by hand. Deleting the fixtures cascades to their results,
+// goals, line-ups and availability.
+export async function deleteTestData(admin) {
+  const { data: opps, error } = await admin.from('opponents').select('id').like('name', 'E2E-%')
+  if (error) throw new Error(`find E2E opponents: ${error.message}`)
+  const ids = (opps ?? []).map((o) => o.id)
+  if (!ids.length) return 0
+  const fx = await admin.from('fixtures').delete().in('opponent_id', ids)
+  if (fx.error) throw new Error(`delete E2E fixtures: ${fx.error.message}`)
+  const op = await admin.from('opponents').delete().in('id', ids)
+  if (op.error) throw new Error(`delete E2E opponents: ${op.error.message}`)
+  return ids.length
+}
+
 // admin.listUsers is paginated and has no email filter — scan a few pages.
 async function findUserId(admin, email) {
   for (let page = 1; page <= 5; page++) {

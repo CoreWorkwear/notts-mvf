@@ -1,11 +1,12 @@
 # Secrets — never commit. RLS is the security; the anon key is safe to ship,
 # but the service_role key and the db password must never leave your machine.
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
+!.env.*.example
 
 # Holds a Supabase personal access token (write-scoped) — must never commit.
-.mcp.json
+.mcp*.json
+!.mcp*.example.json
 
 # Node / Vite
 node_modules/

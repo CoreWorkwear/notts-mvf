@@ -1,9 +1,13 @@
-import { adminClient, configured, deleteTestUsers } from './users.js'
+import { adminClient, configured, deleteTestData, deleteTestUsers, targetAllowed } from './users.js'
 
-// Runs once after the whole E2E cycle: remove the test users so they never
-// linger in the live DB.
+// Runs once after the whole E2E cycle: remove the test users AND the fixtures,
+// results and opponents the write tests created, so nothing lingers in the
+// database they ran against. If setup refused the target (live, without
+// E2E_ALLOW_LIVE=1) nothing was created, so nothing is touched here either.
 export default async function globalTeardown() {
-  if (!configured()) return
-  await deleteTestUsers(adminClient())
-  console.log('[e2e] test users removed')
+  if (!configured() || !targetAllowed()) return
+  const admin = adminClient()
+  const swept = await deleteTestData(admin)
+  await deleteTestUsers(admin)
+  console.log(`[e2e] test users removed; ${swept} E2E opponent(s) and their fixtures removed`)
 }
