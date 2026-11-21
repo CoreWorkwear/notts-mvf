@@ -29,12 +29,20 @@ vi.mock('../context/AuthContext', () => ({
   }),
 }))
 vi.mock('../components/NotificationToggle', () => ({ default: () => null }))
-vi.mock('../components/ImageUpload', () => ({ default: () => null }))
+const upload = vi.hoisted(() => ({ props: null }))
+vi.mock('../components/ImageUpload', () => ({ default: (props) => { upload.props = props; return null } }))
 vi.mock('../components/ProfileEdit', () => ({ default: ({ open }) => (open ? <div data-testid="edit-sheet" /> : null) }))
 
 import Profile from './Profile'
 
 beforeEach(() => { store.privErr = null })
+
+describe('Profile — avatar uploads go to the per-user folder (media policy: players/<uid>/…)', () => {
+  test('ImageUpload is given players/<profile id>, not the shared players folder', async () => {
+    render(<Profile />)
+    expect(upload.props.folder).toBe('players/me')
+  })
+})
 
 describe('Profile — the edit sheet is gated on the private row (data-loss guard)', () => {
   test('when the private-row fetch failed, Edit pops a toast and does NOT open the sheet', async () => {

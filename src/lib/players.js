@@ -120,15 +120,28 @@ export function respondBlockCopy(reason, fixture, { compact = false } = {}) {
   }
 }
 
-// Plain-English account state for banners + Players tags.
-//   supporter — an app user who isn't a player (view-only)
-//   pending   — a player awaiting the manager's sign-off (view, can't act)
-//   inactive  — a removed player (soft delete)
+// Plain-English account state for banners, Players tags and the holding screen.
+// Order matters: a switched-off account is inactive whatever else it is; an
+// account the manager hasn't signed off is pending, player OR supporter (the
+// database now shows a pending account nothing club-wide); only then does a
+// supporter differ from a player.
+//   inactive  — a removed account (soft delete)
+//   pending   — awaiting the manager's sign-off (player or supporter)
+//   supporter — a signed-off app user who isn't a player (view-only)
 //   active    — a signed-off, active squad player
 export function accountStatus(p) {
   if (!p) return 'active'
-  if (!p.is_player) return 'supporter'
   if (!p.active) return 'inactive'
   if (!p.approved) return 'pending'
+  if (!p.is_player) return 'supporter'
   return 'active'
+}
+
+// The state that puts an account on the holding screen instead of the app:
+// 'pending' | 'inactive', or null. Admins are never held (the database never
+// blocks them either), and neither is a profile we haven't loaded yet.
+export function holdingStatus(p) {
+  if (!p || p.role === 'admin') return null
+  const s = accountStatus(p)
+  return s === 'pending' || s === 'inactive' ? s : null
 }

@@ -10,7 +10,9 @@ const registration = {
   pushManager: { subscribe: vi.fn(() => Promise.resolve({})), getSubscription: vi.fn(() => Promise.resolve(null)) },
 }
 
+const cacheStore = new Map()
 beforeAll(async () => {
+  self.caches = { open: async () => ({ put: async (k, res) => { cacheStore.set(k, await res.text()) } }) }
   self.clients = clients
   self.registration = registration
   await import('../../public/push-sw.js')
@@ -81,7 +83,16 @@ describe('notificationclick', () => {
   test('with no open window, opens one at the deep link', async () => {
     clients.matchAll.mockResolvedValue([])
     await fire('notificationclick', { action: 'out', notification: { close: vi.fn(), data: { url: '/fixtures', fixtureId: 'f1' } } })
-    expect(clients.openWindow).toHaveBeenCalledWith('/fixtures?mvf_fixture=f1&mvf_avail=out')
+    // The URL carries a random nonce, never the fixture/status themselves.
+    const opened = clients.openWindow.mock.calls[0][0]
+    const m = /^\/fixtures\?mvf_action=([0-9a-f]{32})$/.exec(opened)
+    expect(m).not.toBeNull()
+    expect(opened).not.toMatch(/mvf_fixture|mvf_avail/)
+    const stored = JSON.parse(cacheStore.get('/__mvf_action/' + m[1]))
+    expect(stored.fixtureId).toBe('f1')
+    expect(stored.status).toBe('out')
+    expect(stored.expiresAt - Date.now()).toBeGreaterThan(5 * 60 * 1000)
+    expect(stored.expiresAt - Date.now()).toBeLessThanOrEqual(10 * 60 * 1000)
   })
 })
 

@@ -7,13 +7,13 @@ import Toast from './Toast'
 // still 'default' — never once granted or denied — so it re-asks on each app
 // open. Not a blocking modal; "Not now" hides it for the rest of this session.
 export default function NotificationPrompt() {
-  const { user } = useAuth()
+  const { user, holding } = useAuth()
   const [dismissed, setDismissed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   const canAsk = pushSupported && typeof Notification !== 'undefined' && Notification.permission === 'default'
-  if (!user || !canAsk || dismissed) return null
+  if (!user || holding || !canAsk || dismissed) return null
 
   async function enable() {
     setBusy(true); setError(null)

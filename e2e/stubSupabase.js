@@ -73,7 +73,7 @@ function cors(req) {
   }
 }
 
-async function answer(route) {
+async function answer(route, rowsFor = ROWS, seen = []) {
   const req = route.request()
   const headers = cors(req)
   const method = req.method()
@@ -83,11 +83,12 @@ async function answer(route) {
   if (pathname.startsWith('/auth/v1/')) return route.fulfill({ headers, json: session() })
 
   const table = pathname.match(/^\/rest\/v1\/([^/]+)/)?.[1]
+  if (table) seen.push(table)
   // Writes succeed with nothing to say (PostgREST's return=minimal); storage and
   // functions have nothing to serve.
   if (!table || (method !== 'GET' && method !== 'HEAD')) return route.fulfill({ status: 204, headers })
 
-  const rows = ROWS[table] ?? []
+  const rows = rowsFor[table] ?? []
   // .single() asks for one object, and PostgREST refuses unless there is exactly one.
   if ((req.headers().accept ?? '').includes('vnd.pgrst.object')) {
     return rows.length === 1
@@ -98,13 +99,18 @@ async function answer(route) {
   return route.fulfill({ headers: { ...headers, 'content-range': range }, json: rows })
 }
 
-// Call before the first page.goto().
-export async function signInAsStubPlayer(page) {
+// Call before the first page.goto(). `profile` overrides fields on the signed-in
+// player's profile row (e.g. { approved: false } for an account awaiting
+// sign-off). Returns the list of REST tables the app asked for, in order.
+export async function signInAsStubPlayer(page, { profile } = {}) {
+  const rowsFor = profile ? { ...ROWS, profiles: [{ ...ROWS.profiles[0], ...profile }] } : ROWS
+  const seen = []
   if (!SUPABASE_URL) throw new Error('VITE_SUPABASE_URL is not set, so the build has no Supabase origin to stub.')
   const url = new URL(SUPABASE_URL)
   const storageKey = `sb-${url.hostname.split('.')[0]}-auth-token`
   await page.addInitScript(([key, value]) => {
     try { localStorage.setItem(key, value) } catch { /* storage blocked: the spec will fail loudly at sign-in */ }
   }, [storageKey, JSON.stringify(session())])
-  await page.route(`${url.origin}/**`, answer)
+  await page.route(`${url.origin}/**`, (route) => answer(route, rowsFor, seen))
+  return seen
 }

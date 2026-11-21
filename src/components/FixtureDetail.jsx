@@ -172,7 +172,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
             <p className="muted" style={{ fontSize: 14 }}>{[f.address, f.postcode].filter(Boolean).join(', ')}</p>
           )}
           {mapEmbed && (
-            <iframe className="venue-map mt-3" src={mapEmbed} title={`Map of ${f.venue}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+            <iframe className="venue-map mt-3" src={mapEmbed} title={`Map of ${f.venue}`} loading="lazy" />
           )}
           <div className="row gap-2 mt-3">
             {dirUrl && <a className="btn btn-primary grow" href={dirUrl} target="_blank" rel="noreferrer">Get directions</a>}

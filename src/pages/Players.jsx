@@ -45,16 +45,20 @@ export default function Players() {
   }, [players, q])
 
   // Sign-off queue first, then the squad, supporters, and removed players.
-  const pendingList = filtered.filter((p) => p.active && p.is_player && !p.approved)
+  // Supporters are signed off like players now (a pending account sees nothing
+  // club-wide), so the queue holds both; once approved a supporter moves to
+  // the Supporters list.
+  const pendingList = filtered.filter((p) => p.active && !p.approved)
   const squadList = filtered.filter((p) => p.active && p.is_player && p.approved)
-  const supporterList = filtered.filter((p) => p.active && !p.is_player)
+  const supporterList = filtered.filter((p) => p.active && !p.is_player && p.approved)
   const inactiveList = filtered.filter((p) => !p.active)
 
   const openAdd = () => { setEditing(null); setFormOpen(true) }
   const openEdit = (p) => { setEditing(p); setFormOpen(true) }
 
-  // One-tap manager sign-off. RLS lets an admin set approved; the protect trigger
-  // blocks everyone else.
+  // One-tap manager sign-off, for players and supporters alike: it only flips
+  // `approved` (no squad membership is added — squads are granted in the form).
+  // RLS lets an admin set approved; the protect trigger blocks everyone else.
   async function approve(id) {
     const { error } = await supabase.from('profiles').update({ approved: true }).eq('id', id)
     if (error) { setToast("Couldn't sign them off — check your signal and give it another go."); return }
@@ -130,7 +134,8 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
                 <span className="pl-name">{p.first_name} {p.last_name}{p.id === meId ? ' · you' : ''}</span>
                 <span className="pl-tags">
                   {!p.is_player && <span className="tag tag-supporter">Supporter</span>}
-                  {p.is_player && !p.approved && <span className="tag tag-pending">Pending</span>}
+                  {p.is_player && !p.approved && <span className="tag tag-player">Player</span>}
+                  {!p.approved && <span className="tag tag-pending">Pending</span>}
                   {p.teamKeys.includes('xl') && <span className="tag tag-xl">First Team</span>}
                   {p.teamKeys.includes('community') && <span className="tag tag-co">Community</span>}
                   {p.role === 'admin' && <span className="tag tag-admin">Manager</span>}
@@ -165,6 +170,7 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
         .tag-co { color: var(--green-bright); border-color: var(--green); }
         .tag-admin { color: var(--gold); border-color: var(--gold); }
         .tag-pending { color: var(--amber); border-color: var(--amber); }
+        .tag-player { color: var(--bone); border-color: var(--line-2); }
         .tag-supporter { color: var(--bone-mute); border-color: var(--line-2); }
         /* Solid fill + dark text so the action is unmistakable (was bright-on-dim, ~1.6:1). */
         .pl-approve { flex: none; font-size: 13px; font-weight: 700; color: var(--ink);

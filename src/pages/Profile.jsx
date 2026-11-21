@@ -65,7 +65,7 @@ export default function Profile() {
 
       <div className="mt-3" style={{ maxWidth: 280 }}>
         <ImageUpload
-          folder="players" shape="round" maxDim={512}
+          folder={`players/${profile.id}`} shape="round" maxDim={512}
           current={profile.photo_url}
           label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
           hint="A square head-and-shoulders shot works best."

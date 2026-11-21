@@ -4,7 +4,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 // Every seasons read is parked in `pending` so a test can settle it after the
 // auth state has moved on.
 const store = vi.hoisted(() => ({ rows: [], pending: [] }))
-const auth = vi.hoisted(() => ({ isAuthed: true }))
+const auth = vi.hoisted(() => ({ isAuthed: true, holding: null, loading: false }))
 vi.mock('../lib/supabase', () => {
   const make = () => {
     const q = {
@@ -15,7 +15,7 @@ vi.mock('../lib/supabase', () => {
   }
   return { supabase: { from: make } }
 })
-vi.mock('./AuthContext', () => ({ useAuth: () => ({ isAuthed: auth.isAuthed }) }))
+vi.mock('./AuthContext', () => ({ useAuth: () => ({ isAuthed: auth.isAuthed, holding: auth.holding, loading: auth.loading }) }))
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
 
 import { SeasonProvider, useSeason } from './SeasonContext'
@@ -24,6 +24,32 @@ beforeEach(() => {
   store.pending.length = 0
   store.rows = [{ id: 's1', label: '2025/26', is_current: true }]
   auth.isAuthed = true
+  auth.holding = null
+  auth.loading = false
+})
+
+describe('SeasonProvider — held accounts', () => {
+  test.each(['pending', 'inactive'])('a %s account fires no seasons fetch and settles quietly', async (h) => {
+    auth.holding = h
+    const { result } = renderHook(() => useSeason(), { wrapper: SeasonProvider })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(store.pending).toHaveLength(0)
+    expect(result.current.seasonId).toBeNull()
+    expect(result.current.error).toBeNull()
+  })
+
+  // Found in a real browser (e2e/holding.spec.js): while the profile is still
+  // loading, holding is null for everyone, so a pending account fired one
+  // seasons fetch before the holding screen took over. Wait until auth knows.
+  test('no seasons fetch while auth is still loading, then one once it lands', async () => {
+    auth.loading = true
+    const { rerender } = renderHook(() => useSeason(), { wrapper: SeasonProvider })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(store.pending).toHaveLength(0)
+    auth.loading = false
+    rerender()
+    await waitFor(() => expect(store.pending).toHaveLength(1))
+  })
 })
 
 describe('SeasonProvider', () => {

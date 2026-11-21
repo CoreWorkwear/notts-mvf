@@ -82,7 +82,7 @@ export default function Auth() {
     } else {
       setNotice(isPlayer
         ? "You're in — confirm your email, then the manager will sign you off to start marking yourself available."
-        : "You're set up as a supporter. Confirm your email and you're good to follow the club.")
+        : "You're set up as a supporter. Confirm your email, then the manager will sign you off to let you in.")
     }
   }
 

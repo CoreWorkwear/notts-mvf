@@ -4,6 +4,8 @@
 // the client error log (so a row carries code/status/hint, not just a message);
 // friendlyError turns the same thing into a line a player can act on.
 
+const MAX_STACK = 4000
+
 export function describeError(e) {
   if (e == null) return { name: 'Unknown', message: 'Unknown error', code: null, status: null, details: null, hint: null, stack: null }
   if (typeof e === 'string') return { name: 'Error', message: e, code: null, status: null, details: null, hint: null, stack: null }
@@ -24,7 +26,9 @@ export function describeError(e) {
     status: numberOrNull(e.status ?? e.statusCode),
     details: e.details ? String(e.details).slice(0, 500) : null,
     hint: e.hint ? String(e.hint).slice(0, 300) : null,
-    stack: typeof e.stack === 'string' ? e.stack : null,
+    // Capped: the client_errors context check is 8192 bytes, and a long stack
+    // alone could push a row over it and get the whole row rejected.
+    stack: typeof e.stack === 'string' ? e.stack.slice(0, MAX_STACK) : null,
   }
 }
 
