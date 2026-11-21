@@ -13,7 +13,7 @@ const testGlobals = {
 }
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'supabase/**', 'Docs/**', '.claude/**', '.codex/**', 'dev-dist/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'supabase/**/*.ts', 'supabase/.temp/**', 'supabase/.branches/**', 'Docs/**', '.claude/**', '.codex/**', 'dev-dist/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx,mjs}'],
@@ -45,6 +45,12 @@ export default [
   {
     files: ['e2e/**', 'scripts/**', 'vite.config.js', 'playwright.config.js', 'eslint.config.js'],
     languageOptions: { globals: { ...globals.node } },
+    rules: { 'no-console': 'off' },
+  },
+  {
+    // Edge Functions' shared logic: plain ESM that runs under Deno and vitest.
+    files: ['supabase/functions/_shared/**/*.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser, Deno: 'readonly' } },
     rules: { 'no-console': 'off' },
   },
   {

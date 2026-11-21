@@ -1,9 +1,13 @@
-import { adminClient, assertTargetAllowed, authedRequested, configured, createTestUsers, deleteTestData } from './users.js'
+import { adminClient, assertTargetAllowed, authedRequested, ciPlaceholder, configured, createTestUsers, deleteTestData } from './users.js'
 
 // Runs once before the whole E2E cycle: create the test users fresh.
 export default async function globalSetup() {
   // No E2E_* emails (CI, and a plain local run): the authed specs skip
   // themselves and nothing here touches a database.
+  if (ciPlaceholder()) {
+    console.log('[e2e] VITE_SUPABASE_URL is the CI placeholder, so there is no project to test against: the authed specs will skip; the no-auth and stubbed layers run')
+    return
+  }
   if (!authedRequested()) {
     console.log('[e2e] no E2E creds — the authed specs will skip; the no-auth and stubbed layers run')
     return
