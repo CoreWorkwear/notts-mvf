@@ -18,8 +18,9 @@
 // sent, pruned, failed by status class, ms) and returns its id in the
 // x-request-id header. Tokens and PII are never logged.
 import webpush from 'npm:web-push@3.6.7'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { mkLog } from '../_shared/log.js'
+import { createClient } from 'npm:@supabase/supabase-js@2.119.2'
+import { mkLog, internalErrorBody } from '../_shared/log.js'
+import { requireActiveAdmin } from '../_shared/auth.js'
 import { validateProfileIds, validateUuid } from '../_shared/validate.js'
 import { pushToTokens } from '../_shared/push.js'
 import { activeRoster } from '../_shared/roster.js'
@@ -42,28 +43,29 @@ Deno.serve(async (req) => {
     const URL_ = Deno.env.get('SUPABASE_URL')!
     const ANON = Deno.env.get('SUPABASE_ANON_KEY')!
     const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    // Caller must be an admin.
+    const userClient = createClient(URL_, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } })
+    const admin = createClient(URL_, SERVICE)
+    const auth = await requireActiveAdmin({
+      getUser: () => userClient.auth.getUser(),
+      loadProfile: (id: string) => admin.from('profiles').select('role, active, club_id').eq('id', id).single(),
+    })
+    if (!auth.ok) {
+      if ((auth as any).user) caller = (auth as any).user.id
+      log.warn(auth.event, { caller, code: auth.code, ms: log.elapsed() })
+      return json({ error: auth.error, requestId: log.id }, auth.status)
+    }
+    const { user, me } = auth as any
+    caller = user.id
+
+    // VAPID setup only after the caller is a verified admin, so an anonymous
+    // request can never be told about (or crash on) a config problem.
     webpush.setVapidDetails(
       Deno.env.get('VAPID_SUBJECT') ?? 'mailto:admin@nottsmvf.app',
       Deno.env.get('VAPID_PUBLIC_KEY')!,
       Deno.env.get('VAPID_PRIVATE_KEY')!,
     )
-
-    // Caller must be an admin.
-    const userClient = createClient(URL_, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } })
-    const { data: { user }, error: uErr } = await userClient.auth.getUser()
-    if (uErr || !user) {
-      log.warn('unauthorized', { ms: log.elapsed() })
-      return json({ error: 'unauthorized', requestId: log.id }, 401)
-    }
-    caller = user.id
-    const admin = createClient(URL_, SERVICE)
-    // Mirror the DB's is_admin(): role AND active. A soft-removed manager
-    // (Inactive, the documented removal path) must lose these powers too.
-    const { data: me, error: meErr } = await admin.from('profiles').select('role, active, club_id').eq('id', user.id).single()
-    if (meErr || me?.role !== 'admin' || me?.active !== true) {
-      log.warn('forbidden', { caller, code: meErr?.code ?? null, ms: log.elapsed() })
-      return json({ error: 'forbidden', requestId: log.id }, 403)
-    }
 
     let b: any
     try { b = await req.json() } catch { return json({ error: 'body must be JSON', requestId: log.id }, 400) }
@@ -90,7 +92,7 @@ Deno.serve(async (req) => {
         .in('id', ids.ids).eq('club_id', me.club_id).eq('active', true).eq('approved', true).eq('is_player', true)
       if (error) {
         log.error('targets_read_failed', { caller, mode, code: error.code, message: error.message, ms: log.elapsed() })
-        return json({ error: 'could not resolve players', requestId: log.id }, 500)
+        return json(internalErrorBody(log.id), 500)
       }
       targets = (rows ?? []).map((r: any) => r.id)
     } else if (fx.value) {
@@ -98,7 +100,7 @@ Deno.serve(async (req) => {
       const { data: fixture, error: fErr } = await admin.from('fixtures').select('team_id, club_id').eq('id', fx.value).maybeSingle()
       if (fErr) {
         log.error('fixture_read_failed', { caller, mode, code: fErr.code, message: fErr.message, ms: log.elapsed() })
-        return json({ error: 'could not read fixture', requestId: log.id }, 500)
+        return json(internalErrorBody(log.id), 500)
       }
       if (!fixture || fixture.club_id !== me.club_id) {
         log.warn('fixture_not_found', { caller, mode, fixtureId: fx.value, ms: log.elapsed() })
@@ -110,7 +112,7 @@ Deno.serve(async (req) => {
         .eq('team_id', fixture.team_id)
       if (mErr) {
         log.error('roster_read_failed', { caller, mode, code: mErr.code, message: mErr.message, ms: log.elapsed() })
-        return json({ error: 'could not read the squad', requestId: log.id }, 500)
+        return json(internalErrorBody(log.id), 500)
       }
       targets = activeRoster(members)
     } else {
@@ -121,7 +123,7 @@ Deno.serve(async (req) => {
         .eq('club_id', me.club_id).eq('active', true).eq('approved', true)
       if (error) {
         log.error('targets_read_failed', { caller, mode, code: error.code, message: error.message, ms: log.elapsed() })
-        return json({ error: 'could not resolve members', requestId: log.id }, 500)
+        return json(internalErrorBody(log.id), 500)
       }
       targets = (members ?? []).map((m: any) => m.id)
     }
@@ -134,7 +136,7 @@ Deno.serve(async (req) => {
     const { data: tokens, error: tErr } = await admin.from('push_tokens').select('id, token').in('profile_id', targets)
     if (tErr) {
       log.error('tokens_read_failed', { caller, mode, targets: targets.length, code: tErr.code, message: tErr.message, ms: log.elapsed() })
-      return json({ error: 'could not read push subscriptions', requestId: log.id }, 500)
+      return json(internalErrorBody(log.id), 500)
     }
 
     const payload = JSON.stringify({ title, body, fixtureId: fx.value, withAvailability, url })
@@ -150,6 +152,6 @@ Deno.serve(async (req) => {
     return json({ sent: res.sent, targeted: res.attempted, pruned: res.pruned, failed: res.failed, requestId: log.id })
   } catch (e) {
     log.error('unhandled', { caller, message: String((e as Error)?.message ?? e), ms: log.elapsed() })
-    return json({ error: String((e as Error)?.message ?? e), requestId: log.id }, 500)
+    return json(internalErrorBody(log.id), 500)
   }
 })

@@ -20,9 +20,11 @@
 // stick (approval, squads) rather than a "clean save" that quietly left the
 // player pending and reserves-only. One JSON `done` line per request; the
 // request id is returned in x-request-id. No PII is logged.
-import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { mkLog } from '../_shared/log.js'
-import { validateTeamKeys } from '../_shared/validate.js'
+import { createClient } from 'npm:@supabase/supabase-js@2.119.2'
+import { mkLog, internalErrorBody } from '../_shared/log.js'
+import { requireActiveAdmin } from '../_shared/auth.js'
+import { validateTeamKeys, validatePlayerBody } from '../_shared/validate.js'
+import { mapCreateUserError, profileInCallerClub } from '../_shared/players.js'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -44,53 +46,64 @@ Deno.serve(async (req) => {
     const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
     const userClient = createClient(URL_, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } })
-    const { data: { user }, error: uErr } = await userClient.auth.getUser()
-    if (uErr || !user) {
-      log.warn('unauthorized', { ms: log.elapsed() })
-      return json({ error: 'unauthorized', requestId: log.id }, 401)
-    }
-    caller = user.id
     const admin = createClient(URL_, SERVICE)
-    // Mirror the DB's is_admin(): role AND active. A soft-removed manager
-    // (Inactive, the documented removal path) must lose these powers too.
-    const { data: me, error: meErr } = await admin.from('profiles').select('role, active, club_id').eq('id', user.id).single()
-    if (meErr || me?.role !== 'admin' || me?.active !== true) {
-      log.warn('forbidden', { caller, code: meErr?.code ?? null, ms: log.elapsed() })
-      return json({ error: 'forbidden', requestId: log.id }, 403)
+    const auth = await requireActiveAdmin({
+      getUser: () => userClient.auth.getUser(),
+      loadProfile: (id: string) => admin.from('profiles').select('role, active, club_id').eq('id', id).single(),
+    })
+    if (!auth.ok) {
+      if ((auth as any).user) caller = (auth as any).user.id
+      log.warn(auth.event, { caller, code: auth.code, ms: log.elapsed() })
+      return json({ error: auth.error, requestId: log.id }, auth.status)
     }
+    const { user, me } = auth as any
+    caller = user.id
 
     let b: any
     try { b = await req.json() } catch { return json({ error: 'body must be JSON', requestId: log.id }, 400) }
-    if (!b?.email || !b?.password || !b?.first_name || !b?.last_name || !b?.phone) {
-      log.warn('bad_request', { caller, error: 'missing required field', ms: log.elapsed() })
-      return json({ error: 'first name, surname, email, phone and password are required', requestId: log.id }, 400)
-    }
     // Keep in step with MIN_PASSWORD in src/lib/constants.js and with the
     // "Minimum password length" setting in Supabase Auth — that dashboard
     // setting is the actual control; this and the client check are UX.
-    if (String(b.password).length < 10) return json({ error: 'password must be at least 10 characters', requestId: log.id }, 400)
+    const v = validatePlayerBody(b, { requirePhone: true, minPassword: 10 })
+    if (!v.ok) {
+      log.warn('bad_request', { caller, error: v.error, ms: log.elapsed() })
+      return json({ error: v.error, requestId: log.id }, 400)
+    }
+    const p = v.value
     const teamKeys = validateTeamKeys(b.teams)
     if (!teamKeys.ok) {
       log.warn('bad_request', { caller, error: teamKeys.error, ms: log.elapsed() })
       return json({ error: teamKeys.error, requestId: log.id }, 400)
     }
 
-    const isPlayer = b.is_player !== false
+    const isPlayer = p.is_player
     const { data, error } = await admin.auth.admin.createUser({
-      email: b.email,
-      password: b.password,
+      email: p.email,
+      password: p.password,
       email_confirm: true,
       user_metadata: {
-        first_name: b.first_name, last_name: b.last_name, phone: b.phone,
-        dob: b.dob ?? null, positions: b.positions ?? [], preferred: b.preferred ?? null,
+        first_name: p.first_name, last_name: p.last_name, phone: p.phone,
+        dob: p.dob, positions: p.positions, preferred: p.preferred,
         teams: teamKeys.keys, is_player: isPlayer,
       },
     })
     if (error || !data.user?.id) {
       log.warn('create_user_failed', { caller, status: (error as any)?.status ?? null, code: (error as any)?.code ?? null, ms: log.elapsed() })
-      return json({ error: error?.message ?? 'could not create the login', requestId: log.id }, 400)
+      const known = error ? mapCreateUserError(error) : null
+      if (known) return json({ error: known.error, requestId: log.id }, known.status)
+      return json(internalErrorBody(log.id), 500)
     }
     const newId = data.user.id
+
+    // Belt and braces for multi-club: the new profile must land in the
+    // caller's club. If it didn't, undo the login and refuse.
+    const { data: made, error: madeErr } = await admin.from('profiles').select('club_id').eq('id', newId).maybeSingle()
+    if (!profileInCallerClub({ made, madeErr, callerClub: me.club_id })) {
+      log.error('club_mismatch', { caller, created: newId, code: madeErr?.code ?? null, readFailed: !!madeErr, ms: log.elapsed() })
+      const { error: undoErr } = await admin.auth.admin.deleteUser(newId)
+      if (undoErr) log.error('club_mismatch_undo_failed', { caller, created: newId, code: (undoErr as any)?.code ?? null })
+      return json({ error: "That player couldn't be added to your club.", requestId: log.id }, 403)
+    }
     const warnings: string[] = []
 
     // Manager-added → sign them off immediately (the trigger lands them pending).
@@ -110,14 +123,9 @@ Deno.serve(async (req) => {
     let teamsSet = 0
     const wanted = teamKeys.keys
     if (isPlayer && wanted.length) {
-      // The new profile is in the caller's club (handle_new_user resolves the
-      // club itself); read it back rather than assume, but fail loudly.
-      const { data: prof, error: profErr } = await admin.from('profiles').select('club_id').eq('id', newId).maybeSingle()
-      const clubId = prof?.club_id ?? null
-      if (profErr || !clubId) {
-        log.error('profile_read_failed', { caller, created: newId, code: profErr?.code ?? null, message: profErr?.message ?? 'no profile row' })
-        warnings.push("their team(s) didn't save — set them in Players")
-      } else {
+      // Verified above to be the caller's club.
+      const clubId = me.club_id
+      {
         const { data: teams, error: teamsErr } = await admin.from('teams').select('id, key').eq('club_id', clubId).in('key', wanted)
         const wantedIds = (teams ?? []).map((t: { id: string }) => t.id)
         if (teamsErr) {
@@ -148,6 +156,6 @@ Deno.serve(async (req) => {
     return json(warning ? { id: newId, warning, requestId: log.id } : { id: newId, requestId: log.id })
   } catch (e) {
     log.error('unhandled', { caller, message: String((e as Error)?.message ?? e), ms: log.elapsed() })
-    return json({ error: String((e as Error)?.message ?? e), requestId: log.id }, 500)
+    return json(internalErrorBody(log.id), 500)
   }
 })

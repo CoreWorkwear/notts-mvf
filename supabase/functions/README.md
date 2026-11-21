@@ -10,9 +10,11 @@ add-player falls back to a browser signup), but deploy these for the real thing.
 ```
 functions/
   _shared/          plain-JS ESM — the decision logic, unit-tested with vitest
-    log.js          JSON-line logger with a per-request id (mkLog)
+    log.js          JSON-line logger with a per-request id (mkLog), PII scrubbing, generic 500 body
+    auth.js         requireActiveAdmin (shared admin gate), constant-time secret compare
+    players.js      create/delete-player decisions (admin target refusal, login ban, club check)
     validate.js     body validation (uuids, profileIds, team keys)
-    push.js         Web Push bookkeeping: prune 404/410 + corrupt tokens, count failures by class
+    push.js         Web Push bookkeeping: prune 404/410 + corrupt tokens (non-https / non-push-host endpoints, missing keys), count failures by class
     roster.js       who counts as "the squad" (approved, active players)
     reminders.js    run-reminders' per-fixture flow (ledger-as-lock, read errors → skip)
   admin-create-player/index.ts
@@ -82,6 +84,39 @@ with nothing in the function's own log. On any non-CLI deploy:
 
 `admin-delete-player` needs **migration 0035** applied first (it calls the
 `anonymise_and_delete_profile` RPC).
+
+## The run-reminders cron
+`run-reminders` has no user: pg_cron calls it every hour and it checks the
+`x-cron-secret` header against the `CRON_SECRET` function secret (compared in
+constant time). Keep that value in **Supabase Vault** and let the job read it
+at run time, so it never appears in the job's SQL, `cron.job`, or the run logs.
+
+```sql
+-- once: store the secret (same value as `supabase secrets set CRON_SECRET=...`)
+select vault.create_secret('<the cron secret>', 'reminders_cron_secret');
+
+-- hourly job: pg_cron + pg_net, secret read from vault.decrypted_secrets
+select cron.schedule(
+  'run-reminders-hourly',
+  '0 * * * *',
+  $$
+  select net.http_post(
+    url     := 'https://<project-ref>.supabase.co/functions/v1/run-reminders',
+    headers := jsonb_build_object(
+      'content-type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'reminders_cron_secret')
+    ),
+    body    := '{}'::jsonb
+  );
+  $$
+);
+```
+**Never paste the secret into the job command** (or any migration): pg_cron
+stores the command text in plain view in `cron.job`. Rotate by updating both the
+Vault entry and `CRON_SECRET`.
+
+Migration 0008 mentions a `run-reminders/README.md`; that file doesn't exist,
+this section is what it means.
 
 ## Logging and the request id
 Every request logs ONE JSON `done` line — who called (profile id), mode,
