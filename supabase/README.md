@@ -3,7 +3,7 @@
 Run order (SQL editor, top to bottom), each as its own run:
 
 1. `migrations/0001_init_schema_and_rls.sql` — tables, helpers, triggers, RLS, grants.
-2. every later numbered migration in order, `0002_*` … `0038_*`, each as its own
+2. every later numbered migration in order, `0002_*` … `0039_*`, each as its own
    run. They are cumulative and the order matters. **Never re-run a migration
    older than the newest one already applied.** Several of them `alter policy`
    in place (0031 above all), so replaying one silently puts back policy bodies
@@ -15,10 +15,24 @@ Run order (SQL editor, top to bottom), each as its own run:
    output (Messages/Notices tab). If any test fails it raises and names the rule
    that broke — fix the policy, re-run.
 
-`0037_security_audit_hardening.sql` is the newest schema change; run it and then
-re-run step 4, where T27–T31 check it landed. It only tightens (revokes, club
-scoping, CHECK constraints on URL columns) — no new columns, so the app never
-needs it to be in place before a deploy.
+`0039_signoff_gates_reads.sql` is the newest schema change; run it and then
+re-run step 4, where T32–T45 check it landed. It makes manager sign-off gate
+every club read, supporters included (a pending or removed account sees only
+its own profile), and closes the rest of the November 2026 review: push
+endpoints, uploads, the error log, cross-club manager writes, anon privileges.
+Ship it **with** the frontend and Edge Functions from the same commit: the
+app's holding screen is what a pending account sees once it lands, and
+`admin-delete-player` maps its new refusal. Read its header first: existing
+supporters are all unapproved, so each one needs a manager's sign-off (or the
+one-off statement given there). A staging project must add its ref to
+`media_url_ok()`.
+
+Before 0039 the harness could never pass: T26 tripped on a NULL-context bug in
+the error-log policy, so T27–T31 had never actually run (T29's sponsor check
+was also vacuous). Both are fixed; a clean run now goes all the way through.
+
+`0037_security_audit_hardening.sql` only tightens (revokes, club scoping, CHECK
+constraints on URL columns) — no new columns.
 
 `0038_relink_league_fixtures.sql` is data only: it repairs four live fixtures by
 id and does nothing on any other database. A data fix on live goes in as a
@@ -39,9 +53,10 @@ after any project change:
   so keeping the schema off the API is what stops them being reachable. See the
   note at the top of migration 0037.
 
-The whole point of step 4: a Community-only player sees First Team fixtures but
-cannot answer them, no club can read or write another club's data, and nobody
-can promote themselves. The harness proves each of those against the real
+The whole point of step 4: nobody reads club data until a manager signs them
+off, a Community-only player sees First Team fixtures but cannot answer them,
+no club can read or write another club's data, and nobody can promote
+themselves. The harness proves each of those against the real
 policies (HANDOVER §8.2).
 
 ## The first admin (real, not test)

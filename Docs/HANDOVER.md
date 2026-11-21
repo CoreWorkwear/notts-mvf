@@ -64,18 +64,25 @@ profiles                                  -- 1:1 with auth.users
   club_id uuid references clubs(id) not null
   first_name text not null                -- REQUIRED
   last_name text not null                 -- REQUIRED
+  -- email, phone, dob, ec_name, ec_phone live in profile_private (migration 0033),
+  -- readable and writable only by the owner and a manager of the same club
+  requested_teams text[]                  -- squads asked for at signup; a request, not a grant (0034)
+  positions text[] not null default '{}'
+  preferred text
+  role text not null default 'player'     -- 'player' | 'admin'
+  approved boolean not null default false -- signed off by a manager (see §4)
+  is_player boolean not null default true -- false = supporter (app user, not in the squad)
+  active boolean not null default true    -- soft delete; inactive kept for history
+  photo_url text                          -- player headshot (Storage)
+  created_at timestamptz default now()
+
+profile_private                           -- 1:1 with profiles; the contact details (migration 0033)
+  profile_id uuid pk references profiles(id) on delete cascade
   email text not null                     -- REQUIRED (also the auth login)
   phone text not null                     -- REQUIRED
   dob date
   ec_name text                            -- emergency contact
   ec_phone text
-  positions text[] not null default '{}'
-  preferred text
-  role text not null default 'player'     -- 'player' | 'admin'
-  xl_eligible boolean not null default false
-  active boolean not null default true    -- soft delete; inactive kept for history
-  photo_url text                          -- player headshot (Storage)
-  created_at timestamptz default now()
 
 team_memberships
   id uuid pk default gen_random_uuid()
@@ -172,7 +179,9 @@ On new `auth.users` signup, a Postgres trigger (`handle_new_user`) creates the `
 
 Enable RLS on every table. The UI mirrors these rules; RLS *is* the security. Helper: `is_admin(uid)` returning boolean (`security definer` to avoid recursion).
 
-- **profiles** — SELECT: any authed user in the club (needed for squad lists / who's-in / stats). UPDATE self: only own row, and a `BEFORE UPDATE` trigger blocks non-admins changing `role`, `xl_eligible`, `active`, `club_id` (reset to old values). UPDATE admin: any profile in club, all columns. INSERT via trigger only. DELETE: none (use `active=false`).
+- **Sign-off gate (migration 0039)**: an account must be signed off by a manager (`approved` and `active`) before it can read any club data. This now covers supporters too: before 0039 they were never signed off and could read club data regardless. Managers are exempt. A removed (inactive) account can read only its own profile.
+- **profiles**: SELECT: any signed-off, active user in the club (needed for squad lists / who's-in / stats), plus your own row whatever its state. Contains no contact details. UPDATE self: only own row, and a `BEFORE UPDATE` trigger blocks non-admins changing `role`, `active`, `club_id` (reset to old values), and nobody can demote or deactivate themselves.
+- **profile_private**: email, phone, DOB, emergency contact (migration 0033, split off `profiles` because row-level security cannot hide columns, so any club member could otherwise read everyone's). SELECT/INSERT/UPDATE: the owner, or a manager of the same club. DELETE: manager only. The app never needs another member's contact details, so no squad-wide read exists. UPDATE admin: any profile in club, all columns. INSERT via trigger only. DELETE: none (use `active=false`).
 - **team_memberships** — SELECT authed; write admin only.
 - **fixtures** — SELECT: any active member of the club, via `can_select_fixture` (club-scoped only since 0023 — no team or eligibility term). Admins all. Write: admin only. `lineups_select` reads the same helper, so tightening it hides line-ups too.
 - **availability** — SELECT authed in club (who's-in is club-wide). INSERT/UPDATE: own row (`profile_id = auth.uid()`) AND `is_active_player` (approved + active + player) AND `can_respond_to_fixture` (a team_memberships row for that fixture's team) AND `fixture_open_for_responses` (before kickoff, Europe/London) — migration 0034, no admin bypass, all of it in WITH CHECK so a refusal is a real 42501 rather than a silent zero-row update. DELETE: own or admin, deliberately ungated so a stale answer can always be withdrawn.
@@ -180,7 +189,7 @@ Enable RLS on every table. The UI mirrors these rules; RLS *is* the security. He
 - **league_tables** — SELECT authed; write admin only.
 - **opponents, media_assets** — SELECT authed; write admin only.
 
-The "only admins create admins" and "only admins set xl_eligible/active" rules live in the profiles UPDATE policy/trigger, **not** the React.
+The "only admins create admins" and "only admins set active" rules live in the profiles UPDATE policy/trigger, **not** the React.
 
 ---
 
@@ -191,7 +200,7 @@ Bottom tab nav, mobile-first. Hardware back closes open sheets (the prototype pu
 **Tabs — player:** Fixtures · Results · Club · You (profile).
 **Tabs — admin:** Fixtures · Results · Club · Who's In · Players · You.
 
-**Auth** — login + register tabs. Register captures first/last/phone/email/password (all REQUIRED), positions (multi-select), preferred position, team(s). Lands as player / not eligible.
+**Auth** — login + register tabs. Register captures first/last/phone/email/password (all REQUIRED), positions (multi-select), preferred position, team(s). Lands as a player, pending sign-off by a manager, in the reserves squad.
 
 **Fixtures (the landing + primary action surface — see UX-AND-IA.md)** — everyone lands here; it's not a passive list. List (default) and Calendar toggle, plus a team filter that only appears for admins or players in both squads. The **next-game poster hero** tops it and is an *action surface*: for a **player** it carries the **in / maybe / out** control inline (one tap, saved-confirmation inline, no drill-in; if unanswered it's the visual focus); for the **gaffer** it leads with **squad state** ("9 in · 3 maybe · 4 not replied") tappable to who's-in / chase. Below: a personal status line (player: "you're in for 2 of 3"; admin: a subtle "needs doing" strip — results to log, low-numbers games, subs outstanding), then **strip rows** reading as a clear matchup (our team v opponent, home team first, kickoff/home-away/type/venue tags), each showing the viewer's own availability at a glance and settable inline. Calendar = month grid with team-coloured tappable dots + a "this month" agenda list. Tap a fixture → detail sheet (venue, directions, weather, full who's-in) — only needed for the fuller picture, never for the common one-tap job. Availability is also settable from push notifications (inline In/Maybe/Out actions — MVP infra, Android solid, iPhone best-effort).
 
@@ -205,9 +214,9 @@ Bottom tab nav, mobile-first. Hardware back closes open sheets (the prototype pu
 - *League Table*: per team, per season, **fully manual**. Admin "Edit table" opens an editable grid (team, P/W/D/L/GF/GA/Pts), auto-sorts by pts→GD→GF, our row highlighted. View mode: pos, team, P, GD, Pts, W-D-L.
 - *Club Stats* (FM-style): a **Whole Club / XL 11s / Community** toggle. A **Golden Boot** panel (crown; club-wide on Whole Club, per-team when filtered; handles ties). Leaderboards: top scorers, assists, appearances, MOTM. Full sortable squad table — every figure shows the combined total with a **league/friendly split underneath** (e.g. "3" over "2L · 1F"). All derived from results; nothing manually entered here.
 
-**You / Profile** — self-edit name/phone/positions/preferred (email is the login, admin-changed). Shows team badges, XL-eligible badge, admin badge.
+**You / Profile** — self-edit name/phone/positions/preferred (email is the login, admin-changed). Shows team badges and the admin badge.
 
-**Players (admin)** — full squad records. Search, add manually (with starter password to hand over), edit any field (name, phone, DOB, email, emergency contact, positions, preferred, teams, XL flag, role), reset password (a reset action — passwords are never viewable, hashed), and active/inactive toggle (inactive drops off squad/availability but stays on past results). Active and inactive shown in separate sections. Required-field validation + duplicate-email guard.
+**Players (admin)** — full squad records. Search, add manually (with starter password to hand over), edit any field (name, phone, DOB, email, emergency contact, positions, preferred, squads, role), reset password (a reset action — passwords are never viewable, hashed), and active/inactive toggle (inactive drops off squad/availability but stays on past results). Active and inactive shown in separate sections. Required-field validation + duplicate-email guard.
 
 ---
 
@@ -244,10 +253,10 @@ Design tokens, palette, fonts (Anton display / DM Sans body / DM Mono data), the
 ## 8. Build order
 
 1. Supabase project; `.env` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`), gitignored.
-2. Schema + RLS migration (§3, §4). Seed club, season, two teams. **Test RLS with two test users before any frontend** — confirm a non-eligible player cannot select an XL fixture.
+2. Schema + RLS migration (§3, §4). Seed club, season, two teams. **Test RLS with two test users before any frontend** — confirm a Community-only player cannot answer a First Team fixture (visibility is club-wide, answering is squad-scoped).
 3. Vite + React scaffold; Supabase client, Auth + Season contexts, routing, bottom nav.
-4. Auth (register writes trigger metadata; confirm new user = player/not-eligible).
-5. Fixtures (player view + eligibility filter first, then admin CRUD with the opponents table).
+4. Auth (register writes trigger metadata; confirm new user = player, unapproved, reserves only).
+5. Fixtures (player view first, then admin CRUD with the opponents table).
 6. Fixture detail + availability (tabs, save, who's-in).
 7. Results + match centre + admin result entry.
 8. Club: league table (manual grid) + stats engine (port `buildStats`, key by profile_id).
