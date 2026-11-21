@@ -113,6 +113,16 @@ describe('scrub — row echoes and phone numbers', () => {
     expect(full).not.toMatch(/Morris|1990/)
     expect(scrub('Failing row contains (1, Joe, Mor')).toBe('Failing row contains ([redacted])')
   })
+  // CI caught this: a short git sha that happened to be all digits turned the
+  // build stamp into '0.1.0+[phone]'. Ids, uuids and timestamps are not phones.
+  test('build stamps, uuid pieces and timestamps are not mistaken for phone numbers', () => {
+    expect(scrub('0.1.0+9043233')).toBe('0.1.0+9043233')
+    expect(scrub({ build: '0.1.0+1234567' })).toEqual({ build: '0.1.0+1234567' })
+    expect(scrub('fixture 01234567-8901-4abc-9def-012345678901 failed')).toBe('fixture 01234567-8901-4abc-9def-012345678901 failed')
+    expect(scrub('at 1732150000000 ms')).toBe('at 1732150000000 ms')
+    expect(scrub('row 1234567 of 9876543')).toBe('row 1234567 of 9876543')
+  })
+
   test('phone-like digit runs are masked in strings, nested context and details', () => {
     expect(scrub('call 07700 900123 now')).toBe('call [phone] now')
     expect(scrub('+44 (0)7700-900-123')).toBe('[phone]')
