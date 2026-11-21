@@ -4,15 +4,39 @@
 //
 // Rules:
 //   • 404 / 410 from the push service → the subscription is gone → PRUNE.
-//   • a token that is not valid JSON (or has no endpoint) can never be sent to
+//   • a token that is not valid JSON, has no keys, or whose endpoint is not https on a
+//     known push service host can never (or must never) be sent to
 //     → PRUNE, rather than throwing on JSON.parse every hour forever.
 //   • other 4xx (401/403 = VAPID misconfig, 413, 429) and 5xx → keep the
 //     token, count the failure by class so the summary line shows it.
+
+// Only real browser push services are ever contacted. A subscription row is
+// client-written, so its endpoint is attacker-controlled: without this check
+// web-push would POST to any URL the row names (SSRF from the function).
+const PUSH_HOSTS = new Set(['fcm.googleapis.com', 'android.googleapis.com', 'updates.push.services.mozilla.com'])
+const PUSH_HOST_SUFFIXES = ['.push.apple.com', '.notify.windows.com']
+
+export function isAllowedPushEndpoint(endpoint) {
+  if (typeof endpoint !== 'string' || !endpoint) return false
+  let u
+  try { u = new URL(endpoint) } catch { return false }
+  if (u.protocol !== 'https:') return false
+  if (u.username || u.password) return false
+  if (u.port) return false
+  // An explicit default port ("…:443") is normalised away by URL, so look at the source too.
+  if (/^https:\/\/[^/?#]*:\d*(?:[/?#]|$)/i.test(endpoint)) return false
+  const host = u.hostname.toLowerCase()
+  if (PUSH_HOSTS.has(host)) return true
+  return PUSH_HOST_SUFFIXES.some((s) => host.length > s.length && host.endsWith(s))
+}
 
 export function parseSubscription(token) {
   try {
     const sub = JSON.parse(token)
     if (!sub || typeof sub !== 'object' || typeof sub.endpoint !== 'string' || !sub.endpoint) return { corrupt: true }
+    if (!isAllowedPushEndpoint(sub.endpoint)) return { corrupt: true }
+    const k = sub.keys
+    if (!k || typeof k !== 'object' || typeof k.p256dh !== 'string' || !k.p256dh || typeof k.auth !== 'string' || !k.auth) return { corrupt: true }
     return { sub }
   } catch {
     return { corrupt: true }
