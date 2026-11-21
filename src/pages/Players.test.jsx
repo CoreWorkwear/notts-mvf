@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Let the mocked teams fetch settle so its setState lands inside the test.
@@ -86,6 +86,69 @@ describe('Players — a failed players load is not an empty squad', () => {
   })
 })
 
+// Every self sign-up lands approved=false, supporters included (the trigger in
+// 0034). The queue, the Pending tag and the form's sign-off control were all
+// gated on is_player, so a supporter could never be signed off: no news pushes
+// (send-push requires approved) and no photo (storage RLS requires it too),
+// while his row looked like any other supporter's.
+describe('Players — a supporter can be signed off too', () => {
+  const SUE = { id: 's1', first_name: 'Sue', last_name: 'Fan', active: true, approved: false, is_player: false, role: 'player', teamKeys: [], teamIds: [] }
+
+  test('a pending player has independent keyboard actions for edit and sign off', async () => {
+    playersState.players = [{ ...JOE, approved: false }]
+    render(<Players />)
+    await settle()
+    const edit = screen.getByText('Joe Morris').closest('button')
+    const approve = screen.getByText('Sign off')
+    expect(edit).not.toContainElement(approve)
+    expect(edit).toHaveAccessibleName('Edit Joe Morris')
+    expect(approve).toHaveAccessibleName('Sign off Joe Morris')
+    edit.focus()
+    await userEvent.tab()
+    expect(approve).toHaveFocus()
+    await userEvent.keyboard(' ')
+    expect(playersState.refetch).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('player-form')).toBeNull()
+    await userEvent.tab({ shift: true })
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByTestId('player-form')).toBeInTheDocument()
+    expect(sb.mock.writes).toHaveLength(1)
+  })
+
+  test('an unapproved supporter waits in the sign-off queue, tagged, and one tap signs her off', async () => {
+    playersState.players = [JOE, SUE]
+    render(<Players />)
+    await settle()
+    const queue = screen.getByText(/awaiting sign-off · 1/i).parentElement
+    expect(within(queue).getByText(/Sue Fan/)).toBeInTheDocument()
+    expect(within(queue).getByText('Pending')).toBeInTheDocument()
+    expect(within(queue).getByText('Supporter')).toBeInTheDocument()
+
+    await userEvent.click(within(queue).getByText('Sign off'))
+    await settle()
+    expect(sb.mock.writes).toContainEqual({ table: 'profiles', op: 'update', payload: { approved: true } })
+    expect(playersState.refetch).toHaveBeenCalled()
+  })
+
+  test('once signed off she sits under Supporters, and nobody is left waiting', async () => {
+    playersState.players = [JOE, { ...SUE, approved: true }]
+    render(<Players />)
+    await settle()
+    expect(screen.queryByText(/awaiting sign-off/i)).toBeNull()
+    const supporters = screen.getByText(/supporters · 1/i).parentElement
+    expect(within(supporters).getByText(/Sue Fan/)).toBeInTheDocument()
+    expect(within(supporters).queryByText('Pending')).toBeNull()
+  })
+
+  test('she is listed once: waiting, not also under Supporters', async () => {
+    playersState.players = [JOE, SUE]
+    render(<Players />)
+    await settle()
+    expect(screen.getAllByText(/Sue Fan/)).toHaveLength(1)
+    expect(screen.queryByText(/supporters · /i)).toBeNull()
+  })
+})
+
 describe('Players — supporters are signed off like players', () => {
   const SUP = { id: 'p2', first_name: 'Sue', last_name: 'Fan', active: true, approved: false, is_player: false, role: 'player', teamKeys: [], teamIds: [] }
   const NEWBIE = { id: 'p3', first_name: 'Nat', last_name: 'New', active: true, approved: false, is_player: true, role: 'player', teamKeys: [], teamIds: [] }
@@ -96,7 +159,7 @@ describe('Players — supporters are signed off like players', () => {
     render(<Players />)
     await settle()
     expect(screen.getByText(/awaiting sign-off · 2/i)).toBeInTheDocument()
-    const sue = screen.getByText(/Sue Fan/).closest('button')
+    const sue = screen.getByText(/Sue Fan/).closest('.pl-row')
     expect(sue).toHaveTextContent('Supporter')
     expect(sue).toHaveTextContent('Pending')
     expect(sue).toHaveTextContent('Sign off')

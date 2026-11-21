@@ -1,8 +1,9 @@
+import LoadIssue from './LoadIssue'
+import ClubImage from './ClubImage'
 import { useState } from 'react'
 import { useSquad } from '../hooks/useSquad'
 import { squadByPosition, primaryPosition } from '../lib/squadList'
 import { TEAMS, TEAM_ORDER } from '../lib/constants'
-import { Stagger, StaggerItem } from './Stagger'
 import SquadDepth from './SquadDepth'
 import Loader from './Loader'
 
@@ -12,17 +13,19 @@ const initials = (p) => `${(p.first_name?.[0] ?? '')}${(p.last_name?.[0] ?? '')}
 // FM-style depth chart (pitch + tap-a-position), each filterable by team via the
 // red/green toggle. Player-facing (Club tab), so it reads a PII-free roster.
 export default function SquadList() {
-  const { players, loading } = useSquad()
+  const { players, loading, error, refetch } = useSquad()
   const [view, setView] = useState('list') // 'list' | 'depth'
   const [team, setTeam] = useState('all')  // 'all' | 'xl' | 'community'
-  if (loading) return <Loader label="Loading the squad…" />
+  if (loading && !players.length) return <Loader label="Loading the squad…" />
 
   const filtered = team === 'all' ? players : players.filter((p) => p.teamKeys?.includes(team))
   const groups = squadByPosition(filtered)
   const total = groups.reduce((n, g) => n + g.players.length, 0)
 
+  if (error && !players.length) return <LoadIssue subject="the squad" retry={refetch} />
   return (
     <div className="mt-4">
+      {error && <LoadIssue subject="the squad" retry={refetch} stale />}
       {/* View selector (parent) on top; team filter (red/green) below it. */}
       <div className="sq-seg" role="tablist" aria-label="Squad view">
         <button className={'sq-seg-btn' + (view === 'list' ? ' on' : '')} role="tab" aria-selected={view === 'list'} onClick={() => setView('list')}>List</button>
@@ -38,18 +41,17 @@ export default function SquadList() {
       {total === 0 ? (
         <div className="empty mt-4">
           <p className="empty-title">No squad yet</p>
-          <p>Signed-off players line up here by position.</p>
         </div>
       ) : view === 'depth' ? <SquadDepth players={filtered} /> : (
         <SquadByPosition groups={groups} total={total} />
       )}
 
       <style>{`
-        .sq-seg { display: flex; gap: 4px; padding: 4px; background: var(--slate); border: 1px solid var(--line);
-          border-radius: 12px; }
-        .sq-seg-btn { flex: 1; padding: 9px 10px; border: none; background: none; color: var(--bone-mute);
-          font-family: var(--font-body); font-size: 14px; font-weight: 600; border-radius: 9px; transition: all var(--t-fast); }
-        .sq-seg-btn.on { background: var(--red); color: #fff; }
+        .sq-seg { display: flex; gap: var(--space-1); padding: var(--space-1); background: var(--slate); border: 1px solid var(--line);
+          border-radius: var(--r-card); }
+        .sq-seg-btn { flex: 1; padding: var(--space-2) var(--space-2); border: none; background: none; color: var(--bone-mute);
+          font-family: var(--font-body); font-size: var(--type-sm); font-weight: 600; min-height: var(--target); border-radius: var(--r-input); transition: background var(--t-fast); }
+        .sq-seg-btn.on { background: var(--action-fill); color: var(--on-action); }
       `}</style>
     </div>
   )
@@ -58,46 +60,45 @@ export default function SquadList() {
 function SquadByPosition({ groups, total }) {
   return (
     <div className="mt-4">
-      <p className="sq-total mono">{total} in the squad</p>
+      <p className="sq-total"><span className="mono">{total}</span> in the squad</p>
 
       {groups.map((g) => (
         <section key={g.key} className="mt-4">
           <p className="kicker"><span className="kicker-rule">{g.label}</span> <span className="sq-count mono">{g.players.length}</span></p>
-          <Stagger className="col gap-2 mt-2">
+          <div className="col gap-2 mt-2">
             {g.players.map((p) => (
-              <StaggerItem key={p.id} className="card sq-row">
+              <div key={p.id} className="card sq-row">
                 {p.photo_url
-                  ? <img className="sq-av" src={p.photo_url} alt="" />
+                  ? <ClubImage sizes="40px" className="sq-av" src={p.photo_url} alt="" />
                   : <span className="sq-av mono">{initials(p)}</span>}
                 <span className="sq-main">
                   <span className="sq-name">{p.first_name} {p.last_name}</span>
                   <span className="sq-teams">
-                    {p.teamKeys?.includes('xl') && <span className="sq-dot xl" title="First Team" />}
-                    {p.teamKeys?.includes('community') && <span className="sq-dot co" title="Community" />}
+                    {TEAM_ORDER.filter(key => p.teamKeys?.includes(key)).map(key =>
+                      <span key={key} className={'sq-team ' + key}>{TEAMS[key].label}</span>)}
                   </span>
                 </span>
                 {primaryPosition(p) && <span className="sq-pos mono">{primaryPosition(p)}</span>}
-              </StaggerItem>
+              </div>
             ))}
-          </Stagger>
+          </div>
         </section>
       ))}
 
       <style>{`
-        .sq-total { font-size: 12px; color: var(--bone-mute); letter-spacing: .04em; text-transform: uppercase; }
-        .sq-count { color: var(--bone-mute); font-size: 12px; margin-left: 6px; }
-        .sq-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+        .sq-total { font-size: var(--type-caption); color: var(--bone-mute); letter-spacing: .04em; text-transform: uppercase; }
+        .sq-count { color: var(--bone-mute); font-size: var(--type-caption); margin-left: var(--space-1); }
+        .sq-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
         .sq-av { width: 40px; height: 40px; border-radius: 50%; flex: none; object-fit: cover;
           display: grid; place-items: center; background: var(--slate); border: 1px solid var(--line-2);
-          font-size: 13px; font-weight: 600; color: var(--bone-mute); }
-        .sq-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+          font-size: var(--type-sm); font-weight: 600; color: var(--bone-mute); }
+        .sq-main { flex: 1; min-width: 0; display: grid; gap: var(--space-1); }
         .sq-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .sq-teams { display: flex; gap: 4px; flex: none; }
-        .sq-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .sq-dot.xl { background: var(--red); }
-        .sq-dot.co { background: var(--green); }
-        .sq-pos { flex: none; font-size: 12px; font-weight: 600; color: var(--bone-mute);
-          background: var(--slate); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+         .sq-teams { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--type-xs); }
+        .sq-team.xl { color: var(--team-xl); }
+        .sq-team.community { color: var(--team-community); }
+        .sq-pos { flex: none; font-size: var(--type-caption); font-weight: 600; color: var(--bone-mute);
+          background: var(--slate); border: 1px solid var(--line); border-radius: var(--r-input); padding: var(--space-1) var(--space-2); }
       `}</style>
     </div>
   )

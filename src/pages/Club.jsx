@@ -1,3 +1,4 @@
+import LoadIssue from '../components/LoadIssue'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
@@ -22,9 +23,9 @@ const CLUB_TABS = [
 // live in the Manage hub, not here.
 export default function Club() {
   const { club } = useAuth()
-  const { seasonId } = useSeason()
+  const { seasonId, error: seasonError, refreshSeasons } = useSeason()
   const { table, teams, stats, loading, error, refetch } = useClub(seasonId)
-  const { competitions } = useCompetitions(seasonId)
+  const { competitions, error: competitionError, refetch: reloadCompetitions, loading: loadingCompetitions } = useCompetitions(seasonId)
   const [view, setView] = useState('table')
 
   const empty = table.length === 0 && teams.length === 0
@@ -32,6 +33,7 @@ export default function Club() {
   // Only the first load gets the Loader: a refetch (e.g. after the league table
   // is edited) flips loading too, and swapping the page out unmounted the panel
   // and any sheet it had open.
+  if (seasonError && !seasonId) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
   if (loading && empty) return <Loader label="Loading the club…" />
 
   // A failed first load (flaky connection) gets a retry, not a blank club.
@@ -39,7 +41,6 @@ export default function Club() {
     <div className="page">
       <div className="empty mt-5" role="alert">
         <p className="empty-title">Couldn't load the club</p>
-        <p>Looks like a dodgy connection. Have another go.</p>
         <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
       </div>
     </div>
@@ -48,13 +49,16 @@ export default function Club() {
   return (
     <div className="page">
       <PageHead kicker="THE CLUB" title={club?.name ?? 'The Club'} />
-      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 'var(--type-sm)' }}>Couldn't refresh. Showing saved club details.</p>}
       <div className="mt-3">
         <TabBar id="club" tabs={CLUB_TABS} value={view} onChange={setView} />
       </div>
 
       <div className="mt-4">
-        {view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
+        {view === 'table' && competitionError && <LoadIssue subject="the competitions" retry={reloadCompetitions} stale={!!competitions.length} />}
+        {view === 'table' && !competitions.length && competitionError ? null
+          : view === 'table' && !competitions.length && loadingCompetitions ? <Loader label="Loading competitions…" />
+          : view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
           : view === 'squad' ? <SquadList />
           : view === 'stats' ? <StatsPanel stats={stats} />
           : <SponsorsList />}

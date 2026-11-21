@@ -1,13 +1,17 @@
+import ClubImage from './ClubImage'
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
+import LoadIssue from './LoadIssue'
+import { logError } from '../lib/logger'
 import ScoreBug from './ScoreBug'
 import PitchView from './PitchView'
 import { supabase } from '../lib/supabase'
-import { resolveName, outcome } from '../hooks/useResults'
+import { resolveName } from '../hooks/useResults'
 import { rowsToState } from '../lib/lineup'
 import { isSquadMember } from '../lib/players'
 import { fmtDateLong } from '../lib/format'
 import { heroBackground } from '../lib/media'
+import { halfTimeScore } from '../lib/teams'
 
 // Match centre (HANDOVER §5): big FT score + HT, MOTM with a star, the goal
 // timeline, and who actually played — the manager's selected line-up (pitch +
@@ -20,6 +24,8 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   const [linePhotos, setLinePhotos] = useState({}) // profile_id -> headshot url
   const [motmSponsor, setMotmSponsor] = useState(null)
   const [zoom, setZoom] = useState(false) // MOTM photo lightbox
+  const [squadState, setSquadState] = useState('loading')
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!open) return
@@ -30,12 +36,15 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
 
   useEffect(() => {
     if (!open || !fixture) return
-    setLineup(null); setLineNames({}); setLinePhotos({}); setPlayed([]); setZoom(false)
+    let active = true
+    setSquadState('loading'); setLineup(null); setLineNames({}); setLinePhotos({}); setPlayed([]); setZoom(false)
     ;(async () => {
-      const { data: lrows } = await supabase
+      const { data: lrows, error: lineupError } = await supabase
         .from('lineups')
         .select('profile_id, player_name, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
         .eq('fixture_id', fixture.id)
+      if (!active) return
+      if (lineupError) throw lineupError
       if (lrows && lrows.length) {
         // Key by profile_id, falling back to the name snapshot for a since-deleted
         // player so they still appear in this past line-up.
@@ -48,13 +57,16 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         setLineNames(nm)
         setLinePhotos(ph)
         setLineup(rowsToState(lrows, keyOf))
+        setSquadState('ready')
         return
       }
-      const { data } = await supabase
+      const { data, error: availabilityError } = await supabase
         .from('availability')
         .select('status, profile:profiles(id, first_name, last_name, active, approved, is_player)')
         .eq('fixture_id', fixture.id)
         .eq('status', 'in')
+      if (!active) return
+      if (availabilityError) throw availabilityError
       // An 'in' row is not proof of a squad place: supporters, players still
       // waiting on the manager's sign-off and removed players can all hold one.
       // Only squad members count towards the fallback list — anyone else who
@@ -62,8 +74,14 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
       setPlayed((data ?? []).filter((a) => isSquadMember(a.profile)).map((a) => ({
         id: a.profile.id, name: `${a.profile.first_name ?? ''} ${a.profile.last_name ?? ''}`.trim(),
       })))
-    })()
-  }, [open, fixture])
+      setSquadState('ready')
+    })().catch(error => {
+      if (!active) return
+      logError('fetch', error, { op: 'matchCentreLineup', fixtureId: fixture.id })
+      setSquadState('error')
+    })
+    return () => { active = false }
+  }, [open, fixture, attempt])
 
   if (!fixture) return null
   const f = fixture
@@ -71,7 +89,6 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   const sb = f.squadById ?? {}
   const isXL = f.team?.key === 'xl'
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
-  const res = outcome(r)
   const motm = resolveName(sb, r.motm_profile_id, r.motm_name)
 
   // Tally goals/assists per resolved name (key by profile_id then free name).
@@ -102,12 +119,12 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
     <Sheet open={open} onClose={onClose}>
       <div className="mc-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <div className="row spread">
-          <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>FULL TIME · {f.fixture_type}</span>
+          <span className="kicker poster-plate">Full time · {f.fixture_type}</span>
           {isAdmin && <button className="btn btn-ghost mc-edit" onClick={onEdit}>Edit</button>}
         </div>
         <div className="mt-3"><ScoreBug fixture={f} size="lg" /></div>
-        <p className="mono center mt-3" style={{ color: 'rgba(255,255,255,.85)', fontSize: 12 }}>
-          HT {r.ht_us}–{r.ht_them} · {fmtDateLong(f.match_date)}
+        <p className="mono center mt-3" style={{ color: 'var(--on-photo-muted)', fontSize: 'var(--type-caption)' }}>
+          {halfTimeScore(r) ? `HT ${halfTimeScore(r)} · ` : ''}{fmtDateLong(f.match_date)}
         </p>
       </div>
 
@@ -116,7 +133,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
           {r.motm_photo_url ? (
             <button type="button" className="mc-motm-thumb" onClick={() => setZoom(true)}
               aria-label={motm ? `Enlarge ${motm}'s photo` : 'Enlarge man of the match photo'}>
-              <img src={r.motm_photo_url} alt="" />
+              <ClubImage sizes="64px" src={r.motm_photo_url} alt="" />
             </button>
           ) : (
             <span className="mc-star">★</span>
@@ -127,7 +144,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
             {motmSponsor && (
               <div className="mc-motm-sponsor">
                 sponsored by {motmSponsor.name}
-                {motmSponsor.logo_url && <img src={motmSponsor.logo_url} alt={motmSponsor.name} />}
+                {motmSponsor.logo_url && <ClubImage sizes="64px" src={motmSponsor.logo_url} alt={motmSponsor.name} />}
               </div>
             )}
           </div>
@@ -142,7 +159,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
 
       <p className="kicker mt-5"><span className="kicker-rule">GOALS</span></p>
       {f.goals.length === 0 ? (
-        <p className="dim mt-2" style={{ fontSize: 14 }}>{res === 'L' || r.us === 0 ? 'None for us this time.' : '—'}</p>
+        <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>{r.us === 0 ? 'No goals' : 'No scorers recorded'}</p>
       ) : (
         <div className="mc-timeline mt-3">
           {f.goals.map((g) => {
@@ -154,7 +171,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
                 <span className="mc-dot" />
                 <div>
                   <div style={{ fontWeight: 600 }}>{scorer}</div>
-                  {assist && <div className="muted" style={{ fontSize: 13 }}>assist · {assist}</div>}
+                  {assist && <div className="muted" style={{ fontSize: 'var(--type-sm)' }}>assist · {assist}</div>}
                 </div>
               </div>
             )
@@ -162,11 +179,13 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
         </div>
       )}
 
-      {lineup ? (
+      {squadState === 'error' ? <LoadIssue subject="the line-up" retry={() => setAttempt(n => n + 1)} />
+        : squadState === 'loading' ? <p className="mt-3 muted" role="status">Loading the line-up…</p>
+        : lineup ? (
         <>
           <p className="kicker mt-5"><span className="kicker-rule">LINE-UP</span></p>
           <div className="mt-3">
-            <PitchView formation={lineup.formation} starters={lineup.starters} names={lineNames} photos={linePhotos}
+            <PitchView teamKey={f.team?.key} formation={lineup.formation} starters={lineup.starters} names={lineNames} photos={linePhotos}
               badge={(id) => (goalsById[id] ? `⚽${goalsById[id]}` : null)} />
           </div>
           {lineup.subs.length > 0 && (
@@ -196,31 +215,31 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
       ) : null}
 
       <style>{`
-        .mc-hero { border-radius: var(--r-hero); padding: 16px; position: relative; }
-        .mc-edit { padding: 5px 12px; font-size: 13px; background: rgba(0,0,0,.25); color: #fff; border-color: rgba(255,255,255,.25); }
-        .mc-motm { display: flex; align-items: center; gap: 12px; background: var(--slate);
-          border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-        .mc-star { color: var(--gold); font-size: 26px; }
+        .mc-hero { border-radius: var(--r-card); padding: var(--space-4); position: relative; }
+        .mc-edit { padding: var(--space-1) var(--space-3); font-size: var(--type-sm); background: var(--photo-overlay); color: var(--on-photo); border-color: var(--photo-edge); }
+        .mc-motm { display: flex; align-items: center; gap: var(--space-3); background: var(--slate);
+          border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--space-3) var(--space-3); }
+        .mc-star { color: var(--gold); font-size: var(--type-title); }
         /* MOTM photo as a small avatar in the row; tap to enlarge. */
-        .mc-motm-thumb { flex: none; width: 56px; height: 56px; border-radius: 12px; padding: 0;
+        .mc-motm-thumb { flex: none; width: 56px; height: 56px; border-radius: var(--r-card); padding: 0;
           overflow: hidden; border: 1.5px solid var(--gold); background: var(--slate); cursor: zoom-in; }
         .mc-motm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .mc-motm-zoom { position: fixed; inset: 0; z-index: 210; background: rgba(0,0,0,.85);
-          display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out;
+        .mc-motm-zoom { position: fixed; inset: 0; z-index: 210; background: var(--shadow-deep);
+          display: flex; align-items: center; justify-content: center; padding: var(--space-6); cursor: zoom-out;
           animation: fade var(--t-fast); }
-        .mc-motm-zoom img { max-width: 100%; max-height: 100%; border-radius: 14px; object-fit: contain;
-          box-shadow: 0 20px 50px -12px rgba(0,0,0,.8); }
-        .mc-motm-sponsor { display: flex; align-items: center; gap: 8px; margin-top: 6px;
-          font-size: 11px; color: var(--bone-dim); }
-        .mc-motm-sponsor img { height: 18px; width: auto; background: var(--bone); border-radius: 4px; padding: 2px 4px; }
+        .mc-motm-zoom img { max-width: 100%; max-height: 100%; border-radius: var(--r-card); object-fit: contain;
+          box-shadow: var(--shadow-float, var(--shadow-deep)); }
+        .mc-motm-sponsor { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1);
+          font-size: var(--type-xs); color: var(--bone-dim); }
+        .mc-motm-sponsor img { height: 18px; width: auto; background: var(--bone); border-radius: var(--r-input); padding: var(--space-1) var(--space-1); }
         .mc-timeline { display: flex; flex-direction: column; }
-        .mc-goal { display: grid; grid-template-columns: 40px 16px 1fr; align-items: center; gap: 8px; padding: 8px 0; }
-        .mc-min { color: var(--bone-mute); font-size: 13px; }
+        .mc-goal { display: grid; grid-template-columns: 40px 16px 1fr; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; }
+        .mc-min { color: var(--bone-mute); font-size: var(--type-sm); }
         .mc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); justify-self: center; }
-        .mc-squad { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
-        .mc-player { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0;
-          border-bottom: 1px solid var(--line); font-size: 14px; }
-        .mc-ga { color: var(--gold); font-size: 12px; }
+        .mc-squad { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1) var(--space-4); }
+        .mc-player { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) 0;
+          border-bottom: 1px solid var(--line); font-size: var(--type-sm); }
+        .mc-ga { color: var(--gold); font-size: var(--type-caption); }
         @media (max-width: 480px){ .mc-squad { grid-template-columns: 1fr; } }
       `}</style>
     </Sheet>

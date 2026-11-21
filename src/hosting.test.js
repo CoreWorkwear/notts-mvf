@@ -45,3 +45,8 @@ describe('Cloudflare Pages routing', () => {
     expect(config).toMatch(/globIgnores:\s*\[[^\]]*assets\/404\.html/)
   })
 })
+
+test('the installed PWA permits both portrait and landscape', () => {
+  const config = readFileSync(root + 'vite.config.js', 'utf8')
+  expect(config).not.toMatch(/orientation:\s*'portrait'/)
+})

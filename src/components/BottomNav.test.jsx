@@ -9,17 +9,23 @@ vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ isAdmin: h.admin })
 const labels = () => [...document.querySelectorAll('.nav-label')].map((n) => n.textContent)
 
 describe('BottomNav', () => {
-  test('a player gets the four core tabs, no admin clutter', () => {
+  test('a player gets the five core tabs, no admin clutter', () => {
     h.admin = false
     render(<MemoryRouter><BottomNav /></MemoryRouter>)
-    expect(labels()).toEqual(['Fixtures', 'Results', 'Club', 'You'])
+    expect(labels()).toEqual(['Fixtures', 'Training', 'Results', 'Club', 'You'])
   })
 
   test('an admin gets a single Manage hub — not Who\'s In / Players as tabs', () => {
     h.admin = true
     render(<MemoryRouter><BottomNav /></MemoryRouter>)
-    expect(labels()).toEqual(['Fixtures', 'Results', 'Club', 'Manage', 'You'])
+    expect(labels()).toEqual(['Fixtures', 'Training', 'Results', 'Club', 'Manage', 'You'])
     expect(screen.queryByText("Who's In")).not.toBeInTheDocument()
     expect(screen.queryByText('Players')).not.toBeInTheDocument()
   })
+})
+
+test('the manager can identify and return to the Manage hub from Players', () => {
+  h.admin = true
+  render(<MemoryRouter initialEntries={['/players']}><BottomNav /></MemoryRouter>)
+  expect(screen.getByRole('link', { name: 'Manage' })).toHaveAttribute('aria-current', 'location')
 })

@@ -1,5 +1,6 @@
+import NotificationPrompt from '../components/NotificationPrompt'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
@@ -7,40 +8,92 @@ import { useFixtures, setAvailability } from '../hooks/useFixtures'
 import { useCompetitions } from '../hooks/useCompetitions'
 import { usePhotoPool } from '../hooks/useMedia'
 import { logError } from '../lib/logger'
-import { todayISO, fmtDate, hasKickedOff } from '../lib/format'
+import { todayISO, fmtDate, hasKickedOff, addDaysISO, parseDate } from '../lib/format'
 import FixtureHero from '../components/FixtureHero'
 import FixtureStrip from '../components/FixtureStrip'
 import FixtureDetail from '../components/FixtureDetail'
+import WhosInSheet from '../components/WhosInSheet'
 import FixtureForm from '../components/FixtureForm'
 import ResultForm from '../components/ResultForm'
 import CalendarView from '../components/CalendarView'
-import { Stagger, StaggerItem } from '../components/Stagger'
 import PageHead from '../components/PageHead'
-import Magnetic from '../components/Magnetic'
-import Pressable from '../components/Pressable'
 import Segmented from '../components/Segmented'
-import { Reveal } from '../components/Reveal'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
-import { fixtureMatchup } from '../lib/teams'
+import { fixtureMatchup, teamLabel } from '../lib/teams'
+import { leadFixture } from '../lib/players'
+import '../styles/weekly-ux.css'
 
 // The landing + primary action surface (UX-AND-IA §1). Everyone lands here.
 export default function Fixtures() {
   const { user, profile, isAdmin, teamKeys, canRespond, accountStatus, respondBlockFor } = useAuth()
-  const { seasonId, error: seasonError, refreshSeasons } = useSeason()
-  const { upcoming, past, teams, opponents, fixtures, loading, error, refetch, applyMyStatus } = useFixtures(seasonId)
+  const { season, seasonId, setSeasonId, error: seasonError, refreshSeasons } = useSeason()
+  const { upcoming, past, teams, opponents, fixtures, loading, loaded, error, refetch, applyMyStatus } = useFixtures(seasonId, season?.label)
   const { competitions } = useCompetitions(seasonId)
   const pool = usePhotoPool()
   const navigate = useNavigate()
+  const { pathname, search, hash } = useLocation()
 
   const [view, setView] = useState('list')
   const [teamFilter, setTeamFilter] = useState('all')
   const [detail, setDetail] = useState(null)     // fixture being viewed
+  const [initialTab, setInitialTab] = useState('me')
+  const [focusAnswer, setFocusAnswer] = useState(false)
+  const [teamSheet, setTeamSheet] = useState(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)   // fixture being edited
   const [resultFor, setResultFor] = useState(null) // fixture to log a result for
   const [everyone, setEveryone] = useState(null) // every club profile (incl. inactive), for the result form; null = not loaded
   const [toast, setToast] = useState(null)       // availability write failures
+  const [answered, setAnswered] = useState(false)
+  const [notice, setNotice] = useState(null)
+
+  function openDetail(fixture, tab = 'me', focus = false) {
+    setInitialTab(tab)
+    setFocusAnswer(focus)
+    setDetail(fixture)
+  }
+
+  // A reminder body opens the named game, even if the header last selected a
+  // different season. The tray action itself is consumed by PushActions.
+  useEffect(() => {
+    const params = new URLSearchParams(search)
+    const id = params.get('mvf_fixture')
+    if (!id || params.has('mvf_avail') || !loaded || error || !seasonId) return
+    let active = true
+    const tab = params.get('view') === 'lineup' ? 'line' : 'me'
+    const consume = () => {
+      params.delete('mvf_fixture')
+      params.delete('view')
+      navigate({ pathname, search: params.toString(), hash }, { replace: true, preventScrollReset: true })
+    }
+    const fixture = fixtures.find(f => f.id === id)
+    if (fixture) {
+      consume()
+      openDetail(fixture, tab, tab === 'me')
+    } else {
+      async function findSeason() {
+        try {
+          const { data, error } = await supabase.from('fixtures').select('season_id').eq('id', id).maybeSingle()
+          if (!active) return
+          if (error) throw error
+          if (data?.season_id && data.season_id !== seasonId) {
+            setSeasonId(data.season_id)
+            return
+          }
+          consume()
+          setToast('Fixture unavailable.')
+        } catch (err) {
+          if (!active) return
+          logError('fetch', err, { op: 'reminderFixture' })
+          consume()
+          setToast("Couldn't open reminder. Check your connection and retry.")
+        }
+      }
+      findSeason()
+    }
+    return () => { active = false }
+  }, [search, hash, pathname, fixtures, loaded, error, seasonId, setSeasonId, navigate])
 
   // The result form needs the club's profiles: the ACTIVE ones for its
   // scorer/MOTM pickers, and everyone (a scorer since deactivated must still
@@ -63,7 +116,7 @@ export default function Fixtures() {
 
   async function openResultForm(fixture) {
     if (!everyone && !(await loadEveryone())) {
-      setToast("Squad list didn't load. Check your signal and try again.")
+      setToast("Couldn't load squad. Check your connection and retry.")
       return
     }
     setResultFor(fixture)
@@ -77,9 +130,11 @@ export default function Fixtures() {
     [upcoming, teamFilter]
   )
   // The hero leads with a real, on game — postponed ones show as strips below.
+  // For a player it is the next game they can ANSWER (leadFixture), which is not
+  // always the first on the list; the rest keep their date order around it.
   const active = filtered.filter((f) => !f.postponed)
-  const hero = active[0]
-  const rest = active.slice(1)
+  const hero = leadFixture(active, respondBlockFor, { manager: isAdmin })
+  const rest = active.filter((f) => f !== hero)
   const postponedList = filtered.filter((f) => f.postponed)
 
   // Returns true when the write landed, false when it failed (after one retry)
@@ -93,6 +148,10 @@ export default function Fixtures() {
     // this just stops us firing a doomed request and rolling the UI back.
     const target = fixtures.find((f) => f.id === fixtureId)
     if (respondBlockFor(target)) return false
+    if (!navigator.onLine) {
+      setToast("You're offline. Reconnect to save your answer.")
+      return false
+    }
     const prev = target?.myStatus ?? null
     applyMyStatus(fixtureId, status)
     let { error } = await setAvailability(fixtureId, user.id, status)
@@ -100,9 +159,10 @@ export default function Fixtures() {
     if (error) {
       logError('write', error, { op: 'setAvailability', fixtureId, status })
       applyMyStatus(fixtureId, prev)
-      setToast("Couldn't save that — check your signal and give it another go.")
+      setToast("Couldn't save availability. Check your connection and retry.")
       return false
     }
+    setAnswered(true)
     await refetch()
     return true
   }
@@ -117,20 +177,26 @@ export default function Fixtures() {
   const answerable = active.filter((f) => { const b = respondBlockFor(f); return b === null || b === 'kicked-off' })
   const next3 = answerable.slice(0, 3)
   const inCount = next3.filter((f) => f.myStatus === 'in').length
-  const needsResult = past.filter((f) => !f.hasResult).length
-  const lowNumbers = upcoming.filter((f) => !f.postponed && f.match_date <= addDays(todayISO(), 7) && f.counts.in < 8).length
+  const missingResults = past.filter((f) => !f.hasResult && !f.postponed)
+  const needsResult = missingResults.length
+  const lowNumbers = upcoming.filter((f) => !f.postponed && f.match_date <= addDaysISO(todayISO(), 7) && f.counts.in < 8).length
 
-  if (loading && fixtures.length === 0) return <Loader label="Loading fixtures…" />
+  // "First load" = nothing on screen AND no load has completed yet. Not just an
+  // empty list: a season with no fixtures refetches too (every return to the
+  // app), and swapping to the Loader then unmounted the open Add-a-fixture
+  // form, which came back blank.
+  const firstLoad = !loaded && fixtures.length === 0
+  if (firstLoad && navigator.onLine === false) return null // OfflineDiary above the route holds the saved match list.
+  if (loading && firstLoad) return <Loader label="Loading fixtures…" />
 
   // A first load that failed on the network: don't pretend the diary is empty,
   // and don't hang. Say what happened and let them have another go. A failed
   // seasons fetch counts too — without a season this page would show the
   // "nothing in the diary" empty state, which is a lie.
-  if ((error || seasonError) && fixtures.length === 0) return (
+  if ((error || seasonError) && firstLoad) return (
     <div className="page">
       <div className="empty mt-5">
-        <p className="empty-title">Couldn't pull the fixtures</p>
-        <p>Looks like a dodgy connection. Have another go.</p>
+        <p className="empty-title">Couldn't load fixtures</p>
         <button className="btn btn-primary mt-3" onClick={() => { if (seasonError) refreshSeasons(); refetch() }}>Try again</button>
       </div>
     </div>
@@ -139,8 +205,11 @@ export default function Fixtures() {
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
+      <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
+      {/* A refresh that failed leaves the last good page up. Say so, as the
+          other pages do, rather than pass it off as fresh. */}
+      {error && <p className="dim" role="status" style={{ fontSize: 'var(--type-sm)' }}>Couldn't refresh fixtures. Showing saved fixtures.</p>}
       <PageHead
-        kicker="NEXT UP"
         title="Fixtures"
         aside={
           <Segmented
@@ -161,7 +230,7 @@ export default function Fixtures() {
             onChange={setTeamFilter}
             options={[
               { key: 'all', label: 'All' },
-              ...teams.map((t) => ({ key: t.key, label: t.label, accent: t.key === 'community' ? 'community' : 'xl' })),
+              ...teams.map((t) => ({ key: t.key, label: teamLabel(t), accent: t.key === 'community' ? 'community' : 'xl' })),
             ]}
           />
         </div>
@@ -172,33 +241,22 @@ export default function Fixtures() {
       {profile && !isAdmin && !canRespond && (
         <div className="banner mt-3">
           {accountStatus === 'supporter'
-            ? "Supporter account — follow the games, but you're not in the squad."
+            ? 'Supporter · View only'
             : accountStatus === 'inactive'
-            ? 'Account inactive. Have a word with the manager.'
-            : 'Waiting on the manager to sign you off.'}
+            ? 'Account inactive'
+            : 'Awaiting manager approval'}
         </div>
       )}
 
-      {/* Both inputs on the one control: Magnetic leans it toward a cursor,
-          Pressable gives it under a thumb. Nested rather than merged because
-          they animate different transforms on different elements, and only one
-          of the two is ever live on a given device. */}
-      {isAdmin && (
-        <Magnetic className="mt-3">
-          <Pressable>
-            <button className="btn btn-primary btn-block" onClick={openAdd}>Add a fixture</button>
-          </Pressable>
-        </Magnetic>
-      )}
+      {isAdmin && <button className="btn btn-primary btn-block mt-3" onClick={openAdd}>Add a fixture</button>}
 
       {view === 'calendar' ? (
         <div className="mt-4">
-          <CalendarView fixtures={teamFilter === 'all' ? fixtures : fixtures.filter((f) => f.team?.key === teamFilter)} onOpen={setDetail} />
+          <CalendarView fixtures={teamFilter === 'all' ? fixtures : fixtures.filter((f) => f.team?.key === teamFilter)} onOpen={openDetail} />
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty mt-5">
-          <p className="empty-title">Nothing in the diary yet</p>
-          <p>{isAdmin ? 'Add the first fixture.' : "First one lands here when the manager sets it."}</p>
+          <p className="empty-title">No fixtures</p>
         </div>
       ) : (
         <>
@@ -210,60 +268,67 @@ export default function Fixtures() {
                 blockReason={respondBlockFor(hero)}
                 pool={pool}
                 onSetAvail={(s) => handleSetAvail(hero.id, s)}
-                onOpenWhosIn={() => (isAdmin ? navigate('/whos-in') : setDetail(hero))}
-                onOpenDetail={() => setDetail(hero)}
+                onOpenWhosIn={() => (isAdmin ? setTeamSheet(hero) : openDetail(hero, 'who'))}
+                onOpenDetail={() => openDetail(hero)}
+                onOpenLineup={isAdmin ? () => openDetail(hero, 'line') : undefined}
                 onEdit={() => openEdit(hero)}
               />
             </div>
           )}
 
+          {answered && <NotificationPrompt />}
+
           {/* status line / needs-doing */}
           {isAdmin ? (
             (needsResult > 0 || lowNumbers > 0) && (
               <div className="needs mt-3">
-                {needsResult > 0 && <span>{needsResult} {needsResult === 1 ? 'game needs' : 'games need'} a result</span>}
+                {needsResult > 0 && <button className="needs-link" onClick={() => needsResult === 1
+                  ? openResultForm(missingResults[0])
+                  : navigate('/results')}>{needsResult} {needsResult === 1 ? 'game needs' : 'games need'} a result →</button>}
                 {needsResult > 0 && lowNumbers > 0 && <span className="dim"> · </span>}
                 {lowNumbers > 0 && <span>{lowNumbers} low on numbers</span>}
               </div>
             )
-          ) : (
-            next3.length > 0 && (
-              <p className="status-line mt-3 mono">
-                You're in for {inCount} of the next {next3.length}
-              </p>
-            )
-          )}
+          ) : null}
 
           {rest.length > 0 && (
-            <Stagger className="col gap-2 mt-4">
-              {rest.map((f) => (
-                <StaggerItem key={f.id}>
+            <section className="upcoming-fixtures mt-5" aria-label="Upcoming fixtures">
+              <div className="upcoming-heading">
+                <h2>Upcoming</h2>
+                {rest[0].match_date.slice(0, 7) === rest.at(-1).match_date.slice(0, 7) &&
+                  <span>{parseDate(rest[0].match_date).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</span>}
+              </div>
+              <div className="upcoming-list">
+                {rest.map((f) => (
                   <FixtureStrip
+                    key={f.id}
                     fixture={f}
                     isAdmin={isAdmin}
                     blockReason={respondBlockFor(f)}
                     onSetAvail={(s) => handleSetAvail(f.id, s)}
-                    onOpen={() => setDetail(f)}
+                    onOpen={() => openDetail(f)}
+                    onOpenWhosIn={() => setTeamSheet(f)}
                   />
-                </StaggerItem>
-              ))}
-            </Stagger>
+                ))}
+              </div>
+            </section>
           )}
+          {!isAdmin && next3.length > 0 && <p className="status-line mt-3">You're in for {inCount} of the next {next3.length}</p>}
 
           {postponedList.length > 0 && (
-            <Reveal className="mt-5">
+            <div className="mt-5">
               <p className="kicker" style={{ color: 'var(--bone-mute)' }}>POSTPONED</p>
               <div className="col gap-2 mt-2">
                 {postponedList.map((f) => (
                   <button key={f.id} className={'card spine ppd-row' + (f.team?.key === 'community' ? ' community' : '')}
-                    onClick={() => setDetail(f)}>
+                    onClick={() => openDetail(f)}>
                     <span className="flash D ppd-badge">P-P</span>
                     <span className="grow" style={{ textAlign: 'left' }}>{fixtureMatchup(f)}</span>
                     <span className="mono muted">{fmtDate(f.match_date)}</span>
                   </button>
                 ))}
               </div>
-            </Reveal>
+            </div>
           )}
         </>
       )}
@@ -271,20 +336,24 @@ export default function Fixtures() {
       <FixtureDetail
         open={!!detail}
         fixture={detail}
+        initialTab={initialTab}
+        focusAnswer={focusAnswer}
         isAdmin={isAdmin}
         blockReason={respondBlockFor(detail)}
         pool={pool}
         // Not for a game that already has one. The calendar opens played games
         // here, and this row carries no result or goals, so the form would open
         // blank and a save would wipe the stored score and scorers. Editing a
-        // result is done from Results, where the full row is loaded.
-        canLogResult={!!detail && isAdmin && !detail.hasResult && hasKickedOff(detail.match_date, detail.kickoff)}
+        // result is done from Results, where the full row is loaded. Nor for a
+        // postponed one: it was not played, so there is no result to log.
+        canLogResult={!!detail && isAdmin && !detail.hasResult && !detail.postponed && hasKickedOff(detail.match_date, detail.kickoff)}
         onChanged={refetch}
         onClose={() => setDetail(null)}
         onSetAvail={(s) => handleSetAvail(detail.id, s)}
         onEdit={() => { const d = detail; setDetail(null); openEdit(d) }}
         onLogResult={() => { const d = detail; setDetail(null); openResultForm(d) }}
       />
+      {isAdmin && <WhosInSheet open={!!teamSheet} fixture={teamSheet} onClose={() => setTeamSheet(null)} />}
 
       {/* Always mounted (open toggled) so the sheet's hardware-back stays sane;
           the forms reset their fields on open, so Edit prefills correctly. */}
@@ -308,29 +377,23 @@ export default function Fixtures() {
           squad={squad}
           everyone={everyone ?? undefined}
           onClose={() => setResultFor(null)}
-          onSaved={refetch}
+          onSaved={() => { setNotice('Result saved.'); refetch() }}
           onStale={refetch}
         />
       )}
 
       <style>{`
-        .status-line { color: var(--bone-mute); font-size: 14px; }
-        .banner { font-size: 14px; color: var(--bone); background: var(--coal);
+        .status-line { color: var(--bone-mute); font-size: var(--type-sm); }
+        .banner { font-size: var(--type-sm); color: var(--bone); background: var(--coal);
           border: 1px solid var(--line-2); border-left: 3px solid var(--amber);
-          border-radius: 12px; padding: 12px 14px; line-height: 1.4; }
-        .needs { font-size: 14px; color: var(--amber); background: var(--amber-dim);
-          border: 1px solid rgba(245,166,35,.25); border-radius: 12px; padding: 10px 14px; }
-        .ppd-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 18px;
+          border-radius: 12px; padding: var(--space-3) var(--space-3); line-height: 1.4; }
+        .needs { font-size: var(--type-sm); color: var(--amber); background: var(--amber-dim);
+          border: 1px solid var(--status-maybe); border-radius: 12px; padding: var(--space-2) var(--space-3); }
+        .ppd-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
           background: var(--coal); color: var(--bone); border: 1px solid var(--line); }
-        .ppd-badge { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .05em;
-          padding: 3px 8px; border-radius: 7px; background: var(--slate); color: var(--bone-mute); }
+        .ppd-badge { font-family: var(--font-mono); font-size: var(--type-xs); font-weight: 600; letter-spacing: .05em;
+          padding: var(--space-1) var(--space-2); border-radius: 7px; background: var(--slate); color: var(--bone-mute); }
       `}</style>
     </div>
   )
-}
-
-function addDays(iso, n) {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, m - 1, d + n)
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }

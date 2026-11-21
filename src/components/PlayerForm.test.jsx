@@ -33,6 +33,16 @@ const PLAYER = {
 beforeEach(() => { h.calls.length = 0 })
 
 describe('PlayerForm', () => {
+  test('the membership chip and signup request use the official squad name', async () => {
+    const player = { ...PLAYER, requested_teams: ['xl'] }
+    render(<PlayerForm open onClose={() => {}} onSaved={() => {}} player={player} teams={TEAMS} currentUserId="admin" />)
+    const firstTeam = screen.getByRole('button', { name: '1st Team' })
+    expect(firstTeam).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(firstTeam)
+    expect(screen.getByText('Requested squad · 1st Team')).toBeInTheDocument()
+    expect(screen.queryByText(/XL 11s/)).toBeNull()
+  })
+
   test('edit splits the save: squad fields → profiles, PII → profile_private', async () => {
     const onSaved = vi.fn()
     render(<PlayerForm open onClose={() => {}} onSaved={onSaved} player={PLAYER} teams={TEAMS} currentUserId="admin" />)
@@ -138,5 +148,21 @@ describe('PlayerForm — add: a half-done create is reported', () => {
     expect(onSaved).toHaveBeenCalled()   // the player IS there — refresh the list
     expect(onClose).not.toHaveBeenCalled() // …but don't pretend it went clean
     spy.mockRestore()
+  })
+})
+
+describe('PlayerForm — a supporter can be signed off', () => {
+  const SUPPORTER = { ...PLAYER, id: 's1', first_name: 'Sue', last_name: 'Fan', is_player: false, approved: false, teamKeys: [], teamIds: [] }
+
+  test('the sign-off control is there for a supporter, and the save carries it', async () => {
+    const onSaved = vi.fn()
+    render(<PlayerForm open onClose={() => {}} onSaved={onSaved} player={SUPPORTER} teams={TEAMS} currentUserId="admin" />)
+    await userEvent.click(screen.getByRole('button', { name: /pending sign-off/i }))
+    expect(screen.getByRole('button', { name: /signed off/i })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const upd = h.calls.find((c) => c[0] === 'update' && c[1] === 'profiles')
+    expect(upd[2]).toMatchObject({ is_player: false, approved: true })
   })
 })

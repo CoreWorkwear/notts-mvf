@@ -124,3 +124,65 @@ describe('useLineup — latest request wins', () => {
     expect(result.current.loading).toBe(false)
   })
 })
+
+// Who can be picked. Before kickoff: the squad members who said in or maybe.
+// After kickoff nobody can answer any more (0034, no admin path), so that rule
+// left the manager unable to field a player who turned up unannounced or had
+// said out, and the player got no appearance (appearances are read from
+// lineups). From kickoff the pool is the whole squad for that team.
+describe('useLineup — the pool of pickable players', () => {
+  const prof = (id, first, last) => ({ id, first_name: first, last_name: last, photo_url: null, active: true, approved: true, is_player: true })
+  const joe = prof('p1', 'Joe', 'Bloggs'), sam = prof('p2', 'Sam', 'Lee'), tom = prof('p3', 'Tom', 'Reid'), al = prof('p4', 'Al', 'Dunn')
+  const other = prof('p9', 'Mo', 'Other') // answered, but plays for the other squad
+
+  const seed = (fixtureId) => {
+    store.tables = {
+      lineups: [],
+      team_memberships: [joe, sam, tom, al].map((p) => ({ team_id: 't1', profiles: p })).concat({ team_id: 't2', profiles: other }),
+      availability: [
+        { fixture_id: fixtureId, status: 'in', profiles: joe },
+        { fixture_id: fixtureId, status: 'maybe', profiles: sam },
+        { fixture_id: fixtureId, status: 'out', profiles: tom },
+        { fixture_id: fixtureId, status: 'in', profiles: other },
+      ],
+    }
+  }
+
+  test('before kickoff: only squad members who said in or maybe, in first', async () => {
+    seed('F')
+    const fixture = { id: 'F', team_id: 't1', match_date: '2099-05-03', kickoff: '14:00:00' }
+    const { result } = renderHook(() => useLineup(fixture, true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.pool.map((p) => [p.name, p.status])).toEqual([['Joe Bloggs', 'in'], ['Sam Lee', 'maybe']])
+    expect(result.current.wholeSquad).toBe(false)
+  })
+
+  test('after kickoff: the whole squad, so a player who never answered or said out can be fielded', async () => {
+    seed('P')
+    const fixture = { id: 'P', team_id: 't1', match_date: '2020-01-05', kickoff: '14:00:00' }
+    const { result } = renderHook(() => useLineup(fixture, true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.pool.map((p) => [p.name, p.status])).toEqual([
+      ['Joe Bloggs', 'in'], ['Sam Lee', 'maybe'], ['Al Dunn', 'none'], ['Tom Reid', 'out'],
+    ])
+    expect(result.current.wholeSquad).toBe(true)
+    expect(result.current.names.p4).toBe('Al Dunn') // a pick must be able to show its name
+  })
+
+  test('a postponed game past its old slot never kicked off: still in/maybe only', async () => {
+    seed('P')
+    const fixture = { id: 'P', team_id: 't1', match_date: '2020-01-05', kickoff: '14:00:00', status: 'postponed', postponed: true }
+    const { result } = renderHook(() => useLineup(fixture, true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.wholeSquad).toBe(false)
+    expect(result.current.pool.map((p) => p.status)).toEqual(['in', 'maybe'])
+  })
+
+  test('after kickoff the other squad is still not pickable', async () => {
+    seed('P')
+    const fixture = { id: 'P', team_id: 't1', match_date: '2020-01-05', kickoff: '14:00:00' }
+    const { result } = renderHook(() => useLineup(fixture, true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.pool.map((p) => p.id)).not.toContain('p9')
+  })
+})

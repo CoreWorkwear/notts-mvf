@@ -1,3 +1,4 @@
+import LoadIssue from '../components/LoadIssue'
 import { useEffect, useState } from 'react'
 import { useSeason } from '../context/SeasonContext'
 import { useCompetitions } from '../hooks/useCompetitions'
@@ -11,8 +12,8 @@ import PageHead from '../components/PageHead'
 // Admin: the competitions a club runs this season (league / cup / friendlies),
 // each carrying its squad-registration rule (§2). Fixtures attach to these.
 export default function Competitions() {
-  const { seasonId, seasons } = useSeason()
-  const { competitions, loading, error, save, remove, refetch } = useCompetitions(seasonId)
+  const { seasonId, seasons, error: seasonError, refreshSeasons } = useSeason()
+  const { competitions, loading, loaded, error, save, remove, refetch } = useCompetitions(seasonId)
   const [editing, setEditing] = useState(null) // competition or null
   const [open, setOpen] = useState(false)
   const [squadFor, setSquadFor] = useState(null) // competition whose squad we're picking
@@ -21,14 +22,17 @@ export default function Competitions() {
   // Only the first load gets the Loader. save() → await load() flips loading
   // true mid-save; swapping the page out unmounted the open CompetitionForm
   // sheet and remounted it (a stray history entry each time).
-  if (loading && competitions.length === 0) return <Loader label="Loading competitions…" />
+  // "First" is the hook's `loaded`, not an empty list: saving the first-ever
+  // competition refetches with none listed yet.
+  const firstLoad = !loaded && competitions.length === 0
+  if (seasonError && !seasonId) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
+  if (loading && firstLoad) return <Loader label="Loading competitions…" />
 
   // A failed first load is not "No competitions yet": say so and offer a retry.
-  if (error && competitions.length === 0) return (
+  if (error && firstLoad) return (
     <div className="page">
       <div className="empty mt-5" role="alert">
         <p className="empty-title">Couldn't load the competitions</p>
-        <p>Looks like a dodgy connection. Have another go.</p>
         <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
       </div>
     </div>
@@ -37,14 +41,13 @@ export default function Competitions() {
   return (
     <div className="page">
       <PageHead kicker="COMPETITIONS" title="Competitions" />
-      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Couldn't refresh just now — showing what we had.</p>}
-      <p className="muted mt-2" style={{ fontSize: 13 }}>{seasonLabel ? `Season ${seasonLabel}.` : ''} Leagues, cups and friendly series. Each can cap a registered squad (§2).</p>
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 'var(--type-sm)' }}>Couldn't refresh. Showing saved competitions.</p>}
+      {seasonLabel && <p className="muted mt-2">Season <span className="mono">{seasonLabel}</span></p>}
 
       <button className="btn btn-primary btn-block mt-3" onClick={() => { setEditing(null); setOpen(true) }}>+ Add a competition</button>
 
       {competitions.length === 0 ? (
-        <div className="empty mt-5"><p className="empty-title">No competitions yet</p>
-          <p>Add the leagues and cups you play in.</p></div>
+        <div className="empty mt-5"><p className="empty-title">No competitions yet</p></div>
       ) : (
         <div className="col gap-2 mt-4">
           {competitions.map((c) => (
@@ -63,15 +66,15 @@ export default function Competitions() {
       <SquadPicker open={!!squadFor} competition={squadFor} onClose={() => setSquadFor(null)} />
 
       <style>{`
-        .comp-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--coal);
+        .comp-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); background: var(--coal);
           color: var(--bone); border: 1px solid var(--line); }
         .comp-main { flex: 1; min-width: 0; background: none; border: none; color: inherit; text-align: left;
-          display: flex; flex-direction: column; gap: 2px; cursor: pointer; padding: 0; }
-        .comp-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; display: flex; align-items: center; gap: 8px; }
-        .comp-sub { font-size: 12px; color: var(--bone-mute); }
+          display: flex; flex-direction: column; gap: var(--space-1); cursor: pointer; padding: 0; }
+        .comp-name { font-family: var(--font-display); font-weight: 600; font-size: var(--type-lead); display: flex; align-items: center; gap: var(--space-2); }
+        .comp-sub { font-size: var(--type-caption); color: var(--bone-mute); }
         .comp-row.retired { opacity: .6; }
-        .comp-tag { font-size: 9px; letter-spacing: .08em; color: var(--bone-dim); border: 1px solid var(--line-2);
-          border-radius: 5px; padding: 1px 6px; }
+        .comp-tag { font-size: var(--type-xs); letter-spacing: .08em; color: var(--bone-dim); border: 1px solid var(--line-2);
+          border-radius: 5px; padding: var(--space-1) var(--space-1); }
       `}</style>
     </div>
   )
@@ -122,7 +125,7 @@ function CompetitionForm({ open, competition, onClose, onSave, onRemove }) {
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
       <p className="kicker"><span className="kicker-rule">{adding ? 'ADD COMPETITION' : 'EDIT COMPETITION'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>{adding ? 'New competition' : name}</h2>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{adding ? 'New competition' : name}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={submit}>
         <div className="field"><label className="label">Name</label>
@@ -138,13 +141,13 @@ function CompetitionForm({ open, competition, onClose, onSave, onRemove }) {
             <button type="button" className="chip" aria-pressed={active} onClick={() => setActive(true)}>Active</button>
             <button type="button" className="chip" aria-pressed={!active} onClick={() => setActive(false)}>Retired</button>
             <label className="row gap-2" style={{ alignItems: 'center', marginLeft: 'auto' }}>
-              <span className="dim" style={{ fontSize: 12 }}>Order</span>
+              <span className="dim" style={{ fontSize: 'var(--type-caption)' }}>Order (lowest first)</span>
               <input className="input" type="number" aria-label="Order" value={sortOrder}
                 style={{ width: 70, textAlign: 'center' }} onChange={(e) => setSortOrder(e.target.value)} />
             </label>
           </div>
-          <span className="dim" style={{ fontSize: 12 }}>
-            Retired leagues keep their fixtures & results but drop out of the standings. Lower order shows first (First Team league first).
+          <span className="dim" style={{ fontSize: 'var(--type-caption)' }}>
+            Retired leagues keep fixtures and results. Standings show active leagues.
           </span>
         </div>
 
@@ -157,12 +160,11 @@ function CompetitionForm({ open, competition, onClose, onSave, onRemove }) {
             <input className="input mt-2" type="number" min="1" aria-label="Squad size" value={limit}
               placeholder="e.g. 16" style={{ maxWidth: 140 }} onChange={(e) => setLimit(e.target.value)} />
           )}
-          <span className="dim" style={{ fontSize: 12 }}>
-            {limitOn ? 'The manager registers up to this many players for this competition.' : 'Any number of players can be registered.'}
-          </span>
         </div>
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Saving…' : adding ? 'Add competition' : 'Save changes'}</button>
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Saving…' : adding ? 'Add competition' : 'Save changes'}</button>
+        </div>
         {!adding && (
           <button type="button" className="btn btn-ghost btn-block" disabled={busy} onClick={del}
             style={{ color: 'var(--red-bright)', borderColor: 'var(--line)' }}>Delete competition</button>

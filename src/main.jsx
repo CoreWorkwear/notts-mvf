@@ -6,6 +6,7 @@ import { reloadOnceOnPreloadError, clearPreloadReloadFlag } from './lib/preloadR
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/motion.css'
+import './styles/club-tools.css'
 
 // Catch uncaught errors + unhandled promise rejections app-wide.
 installGlobalErrorLogging()
@@ -39,12 +40,8 @@ const updateSW = registerSW({
   },
 })
 import App from './App'
-import GrainOverlay from './components/GrainOverlay'
-import AmbientField from './components/AmbientField'
-import InstallPrompt from './components/InstallPrompt'
 import UpdatePrompt from './components/UpdatePrompt'
 import PushActions from './components/PushActions'
-import NotificationPrompt from './components/NotificationPrompt'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
@@ -56,13 +53,9 @@ createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <AuthProvider>
           <SeasonProvider>
-            <AmbientField />
             <App />
-            <GrainOverlay />
             <UpdatePrompt />
-            <InstallPrompt />
             <PushActions />
-            <NotificationPrompt />
           </SeasonProvider>
         </AuthProvider>
       </ThemeProvider>

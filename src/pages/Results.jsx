@@ -5,32 +5,36 @@ import { useResults, outcome } from '../hooks/useResults'
 import { usePhotoPool } from '../hooks/useMedia'
 import { fmtDate } from '../lib/format'
 import { heroBackground } from '../lib/media'
-import { fixtureMatchup } from '../lib/teams'
+import { fixtureMatchup, matchupScore, halfTimeScore } from '../lib/teams'
 import ScoreBug from '../components/ScoreBug'
 import MatchCentre from '../components/MatchCentre'
 import ResultForm from '../components/ResultForm'
 import Loader from '../components/Loader'
-import { Stagger, StaggerItem } from '../components/Stagger'
 import PageHead from '../components/PageHead'
+import Toast from '../components/Toast'
+import LoadIssue from '../components/LoadIssue'
+import '../styles/weekly-ux.css'
 
 const OUTCOME_LABEL = { W: 'Won', D: 'Drawn', L: 'Lost' }
 
 export default function Results() {
   const { isAdmin } = useAuth()
-  const { seasonId } = useSeason()
+  const { seasonId, loading: seasonLoading, error: seasonError, refreshSeasons } = useSeason()
   const { played, needsResult, postponed, squad, everyone, loading, error, refetch } = useResults(seasonId)
   const pool = usePhotoPool()
   const [centre, setCentre] = useState(null)   // fixture for match centre
   const [editing, setEditing] = useState(null) // fixture for result form
+  const [justSaved, setJustSaved] = useState(false)
 
+  if (!seasonId && seasonError) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
+  if (!seasonId && seasonLoading) return <Loader label="Loading results…" />
   if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader label="Loading results…" />
 
   // A failed first load (flaky connection) gets a retry, not "no games played".
   if (error && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return (
     <div className="page">
       <div className="empty mt-5">
-        <p className="empty-title">Couldn't pull the results</p>
-        <p>Looks like a dodgy connection. Have another go.</p>
+        <p className="empty-title">Couldn't load results</p>
         <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
       </div>
     </div>
@@ -40,7 +44,9 @@ export default function Results() {
 
   return (
     <div className="page">
-      <PageHead kicker="FULL TIME" title="Results" />
+      <PageHead title="Results" />
+      {error && <LoadIssue subject="results" retry={refetch} stale />}
+      <Toast message={justSaved ? 'Result saved.' : null} tone="success" onDismiss={() => setJustSaved(false)} />
 
       {/* Admin: games still needing a result */}
       {isAdmin && needsResult.length > 0 && (
@@ -53,7 +59,7 @@ export default function Results() {
                   {fixtureMatchup(f)}
                 </span>
                 <span className="mono muted">{fmtDate(f.match_date)}</span>
-                <span className="needs-cta">Log it →</span>
+                <span className="needs-cta">Log result →</span>
               </button>
             ))}
           </div>
@@ -63,7 +69,6 @@ export default function Results() {
       {played.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">No games played yet</p>
-          <p>First result logged will sit here, big and proud. {isAdmin ? 'Log one above.' : 'Get a game won first.'}</p>
         </div>
       ) : (
         <>
@@ -74,35 +79,33 @@ export default function Results() {
             onClick={() => setCentre(latest)}
           >
             <div className="row spread">
-              <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>LATEST · {fmtDate(latest.match_date)}</span>
+              <span className="kicker poster-plate">Latest · <span className="mono">{fmtDate(latest.match_date)}</span></span>
               <span className={'flash ' + outcome(latest.result)}>{OUTCOME_LABEL[outcome(latest.result)]}</span>
             </div>
             <div className="mt-3"><ScoreBug fixture={latest} size="lg" /></div>
-            <p className="mono center mt-3" style={{ color: 'rgba(255,255,255,.85)', fontSize: 12 }}>
-              HT {latest.result.ht_us}–{latest.result.ht_them} · tap for the match centre
+            <p className="result-open mt-3" style={{ color: 'var(--on-photo-muted)', fontSize: 'var(--type-caption)' }}>
+              {halfTimeScore(latest.result) && <span className="mono">HT {halfTimeScore(latest.result)}</span>}<strong>Match centre <span aria-hidden="true">→</span></strong>
             </p>
           </button>
 
           {/* Earlier = strips with a W/D/L flash */}
           {earlier.length > 0 && (
-            <Stagger className="col gap-2 mt-4">
+            <div className="col gap-2 mt-4">
               {earlier.map((f) => {
                 const o = outcome(f.result)
                 const community = f.team?.key === 'community'
                 return (
-                  <StaggerItem key={f.id}>
-                    <button className={'card spine res-strip' + (community ? ' community' : '')} style={{ width: '100%' }} onClick={() => setCentre(f)}>
-                      <span className={'flash sm ' + o}>{o}</span>
-                      <div className="grow" style={{ textAlign: 'left' }}>
-                        <div className="res-match">{fixtureMatchup(f)}</div>
-                        <div className="mono res-when">{fmtDate(f.match_date)} · {f.fixture_type}</div>
-                      </div>
-                      <span className="mono res-score">{f.result.us}–{f.result.them}</span>
-                    </button>
-                  </StaggerItem>
+                  <button key={f.id} className={'card spine res-strip' + (community ? ' community' : '')} style={{ width: '100%' }} onClick={() => setCentre(f)}>
+                    <span className={'flash sm ' + o}>{o}</span>
+                    <div className="grow" style={{ textAlign: 'left' }}>
+                      <div className="res-match">{fixtureMatchup(f)}</div>
+                      <div className="res-when"><span className="mono">{fmtDate(f.match_date)}</span> · {f.fixture_type}</div>
+                    </div>
+                    <span className="mono res-score">{matchupScore(f)}</span>
+                  </button>
                 )
               })}
-            </Stagger>
+            </div>
           )}
         </>
       )}
@@ -117,7 +120,7 @@ export default function Results() {
                 <span className="flash sm D">P-P</span>
                 <div className="grow">
                   <div className="res-match">{fixtureMatchup(f)}</div>
-                  <div className="mono res-when">{fmtDate(f.match_date)} · postponed</div>
+                  <div className="res-when"><span className="mono">{fmtDate(f.match_date)}</span> · postponed</div>
                 </div>
               </div>
             ))}
@@ -134,27 +137,34 @@ export default function Results() {
       {isAdmin && (
         <ResultForm
           open={!!editing} fixture={editing} squad={squad} everyone={everyone}
-          onClose={() => setEditing(null)} onSaved={refetch} onStale={refetch}
+          onClose={() => setEditing(null)} onSaved={() => { setJustSaved(true); refetch() }} onStale={refetch}
         />
       )}
 
       <style>{`
-        .needs-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--coal);
-          color: var(--bone); border: 1px solid var(--line); }
-        .needs-cta { color: var(--amber); font-size: 13px; font-weight: 600; }
-        .result-hero { display: block; width: 100%; text-align: left; border: none; color: #fff;
-          border-radius: var(--r-hero); padding: 18px; box-shadow: 0 18px 40px -20px rgba(0,0,0,.9); }
-        .flash { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: .05em;
-          padding: 3px 10px; border-radius: 999px; text-transform: uppercase; }
+        .needs-row { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+          gap: var(--space-1) var(--space-2); align-items: center; padding: var(--space-3);
+          text-align: start; background: var(--coal); color: var(--bone); border: 1px solid var(--line); }
+        .needs-row .grow { grid-column: 1 / -1; font-size: var(--type-body); font-weight: 600; }
+        .needs-row .mono { font-size: var(--type-sm); }
+        .needs-cta { color: var(--amber); font-size: var(--type-sm); font-weight: 600; }
+        .result-hero { display: block; width: 100%; text-align: left; border: none; color: var(--on-photo);
+          border-radius: var(--r-card); padding: var(--space-4); border: 1px solid var(--border-strong); }
+        .flash { font-size: var(--type-caption); font-weight: 600; letter-spacing: .05em;
+          padding: var(--space-1) var(--space-2); border-radius: var(--r-pill); text-transform: uppercase; }
         .flash.W { background: var(--green-dim-2); color: var(--green-bright); }
         .flash.L { background: var(--red-dim-2); color: var(--red-bright); }
         .flash.D { background: var(--slate); color: var(--bone-mute); }
+        .result-hero .flash { background: var(--poster-control); }
+        .result-hero .flash.W { color: var(--poster-green); }
+        .result-hero .flash.L { color: var(--poster-red); }
+        .result-hero .flash.D { color: var(--on-photo-muted); }
         .flash.sm { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border-radius: 8px; }
-        .res-strip { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 18px;
+        .res-strip { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
           background: var(--coal); color: var(--bone); border: 1px solid var(--line); }
-        .res-match { font-family: var(--font-display); font-weight: 600; font-size: 16px; line-height: 1.1; }
-        .res-when { font-size: 12px; color: var(--bone-mute); margin-top: 3px; }
-        .res-score { font-size: 20px; font-weight: 600; }
+        .res-match { font-family: var(--font-display); font-weight: 600; font-size: var(--type-body); line-height: 1.1; }
+        .res-when { font-size: var(--type-caption); color: var(--bone-mute); margin-top: var(--space-1); }
+        .res-score { font-size: var(--type-lg); font-weight: 600; }
       `}</style>
     </div>
   )

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
 import { squadIdsByTeam } from '../lib/players'
+import { saveDiary } from '../lib/fixtureDiary'
 import { logError } from '../lib/logger'
 
 // A focus/visibility refetch this soon after the last load started is skipped
@@ -30,12 +31,19 @@ const EMPTY_SQUAD = new Set()
 // member sees every fixture). We enrich each fixture with the viewer's own
 // availability, the in/maybe/out tally, and the not-replied count (derived
 // from the approved active roster for that team).
-export function useFixtures(seasonId) {
+export function useFixtures(seasonId, seasonLabel = '') {
   const { user } = useAuth()
   const [fixtures, setFixtures] = useState([])
   const [teams, setTeams] = useState([])
   const [opponents, setOpponents] = useState([])
   const [loading, setLoading] = useState(true)
+  // Has a load of THIS season ever completed? "loading && nothing in the list"
+  // is not the same question: it is also true on every refetch of a season that
+  // really is empty, and a page that swaps to its Loader on that unmounts an
+  // open form. Kept per season: carried over from another one, it made a failed
+  // load of this season read as an empty diary.
+  const [loadedSeason, setLoadedSeason] = useState(null)
+  const loaded = !!seasonId && loadedSeason === seasonId
   const [error, setError] = useState(null)
   const lastLoadStart = useRef(0)
   // Latest-wins: only the most recent load may apply its response. A slower,
@@ -120,7 +128,9 @@ export function useFixtures(seasonId) {
         }
       })
 
+      saveDiary(user?.id, enriched, seasonLabel)
       setFixtures(enriched)
+      setLoadedSeason(seasonId)
       setTeams((teamRes.data ?? []).sort((a, b) => Number(b.is_first_team) - Number(a.is_first_team)))
       setOpponents(oppRes.data ?? [])
     } catch (e) {
@@ -133,9 +143,12 @@ export function useFixtures(seasonId) {
     } finally {
       if (isCurrent()) setLoading(false)
     }
-  }, [seasonId, user?.id])
+  }, [seasonId, seasonLabel, user?.id])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => { reqId.current++ }
+  }, [load])
 
   // First-cut realtime: refetch when the tab regains focus (HANDOVER §7).
   // On mobile/installed PWAs the window `focus` event is unreliable, so we also
@@ -149,11 +162,13 @@ export function useFixtures(seasonId) {
     const refresh = () => { if (Date.now() - lastLoadStart.current > FOCUS_REFETCH_MIN_MS) load() }
     const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
     const onApplied = () => load()
+    window.addEventListener('online', load)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', onVisible)
     // A push-notification availability action just committed → show the new value.
     window.addEventListener('mvf-availability-applied', onApplied)
     return () => {
+      window.removeEventListener('online', load)
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('mvf-availability-applied', onApplied)
@@ -180,7 +195,7 @@ export function useFixtures(seasonId) {
   const upcoming = fixtures.filter((f) => !f.concluded && !f.hasResult)
   const past = fixtures.filter((f) => f.concluded && !f.hasResult && !f.postponed)
 
-  return { fixtures, upcoming, past, teams, opponents, loading, error, refetch: load, applyMyStatus }
+  return { fixtures, upcoming, past, teams, opponents, loading, loaded, error, refetch: load, applyMyStatus }
 }
 
 // Set (upsert) the current user's availability for a fixture. RLS enforces

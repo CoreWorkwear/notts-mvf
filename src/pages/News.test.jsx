@@ -18,6 +18,7 @@ const POST = { id: 'n1', title: 'Presentation night', body: 'Saturday at the clu
 beforeEach(() => {
   state.items = []
   state.loading = false
+  state.loaded = undefined // older tests model the hook without it
   state.error = null
   state.refetch = vi.fn()
 })
@@ -26,7 +27,7 @@ describe('News — a failed load is not an empty diary', () => {
   test('first load failed → error + Try again (calls refetch), no empty state', async () => {
     state.error = { message: 'boom' }
     render(<News />)
-    expect(screen.queryByText(/nothing in the diary yet/i)).toBeNull()
+    expect(screen.queryByText(/no club news/i)).toBeNull()
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn't/i)
     await userEvent.click(screen.getByRole('button', { name: /try again/i }))
     expect(state.refetch).toHaveBeenCalled()
@@ -42,7 +43,7 @@ describe('News — a failed load is not an empty diary', () => {
 
   test('a genuinely empty diary still shows the empty state', () => {
     render(<News />)
-    expect(screen.getByText(/nothing in the diary yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/no club news/i)).toBeInTheDocument()
   })
 
   test('a refetch with posts already loaded keeps the page mounted (no Loader)', () => {
@@ -50,5 +51,27 @@ describe('News — a failed load is not an empty diary', () => {
     state.loading = true // the hook flips this on every refetch (e.g. right after a post)
     render(<News />)
     expect(screen.getByText('Presentation night')).toBeInTheDocument()
+  })
+})
+
+// The first-ever post: the list is empty, so "loading && no items" swapped the
+// page for the Loader mid-post and unmounted the compose sheet, losing its
+// "the push didn't go out" notice.
+describe('News — an empty list does not go back to the Loader on a refetch', () => {
+  test('with one load already done, the page and the open compose sheet stay', async () => {
+    state.loaded = true
+    const { rerender } = render(<News />)
+    await userEvent.click(screen.getByRole('button', { name: /post news/i }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    state.loading = true // the hook flips this mid-post
+    rerender(<News />)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.queryByText(/loading news/i)).toBeNull()
+  })
+  test('the very first load still gets the Loader', () => {
+    state.loaded = false
+    state.loading = true
+    render(<News />)
+    expect(screen.getByText(/loading news/i)).toBeInTheDocument()
   })
 })

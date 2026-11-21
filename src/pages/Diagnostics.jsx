@@ -119,17 +119,17 @@ export default function Diagnostics() {
           <PageHead kicker="DIAGNOSTICS" title="App errors" />
         </div>
         <div className="row gap-2">
-          <button className="chip" disabled={busy} onClick={ping} title="Log a test error from this device">Test</button>
+          <button className="chip" disabled={busy} onClick={ping}>Log test error</button>
           {rows.length > 0 && <button className="chip" disabled={busy} onClick={clearAll}>Clear</button>}
         </div>
       </div>
 
-      {error && <p className="dim mt-2" role="status" style={{ fontSize: 13 }}>Refresh failed — showing the last good list. {friendlyError(error)}</p>}
+      {error && <p className="dim mt-2" role="status" style={{ fontSize: 'var(--type-sm)' }}>Refresh failed. Showing saved errors. {friendlyError(error)}</p>}
 
       {device && (
         <div className="card err-row mt-4" data-testid="device-panel">
           <p className="kicker"><span className="kicker-rule">THIS DEVICE</span></p>
-          <div className="mono err-kv mt-2">
+          <div className="err-kv mt-2">
             <span>build</span><span>{device.build}</span>
             <span>online</span><span>{String(device.online)}</span>
             <span>device</span><span>{device.ua}{device.installed ? ' · installed' : ' · browser tab'}</span>
@@ -139,7 +139,7 @@ export default function Diagnostics() {
             {device.queued > 0 && <><span>unsent errors</span><span>{device.queued} queued (offline)</span></>}
           </div>
           <details className="mt-2">
-            <summary className="dim" style={{ fontSize: 13, cursor: 'pointer' }}>Breadcrumbs this session</summary>
+            <summary className="err-disclosure dim">Breadcrumbs this session</summary>
             <pre className="mono err-pre">{getBreadcrumbs().map(fmtCrumb).join('\n') || '—'}</pre>
           </details>
         </div>
@@ -158,8 +158,7 @@ export default function Diagnostics() {
 
       {rows.length === 0 ? (
         <div className="empty mt-5">
-          <p className="empty-title">All quiet 🟢</p>
-          <p>Nothing logged from any device.</p>
+          <p className="empty-title">No errors logged</p>
         </div>
       ) : (
         <div className="col gap-2 mt-4">
@@ -179,7 +178,7 @@ export default function Diagnostics() {
                 {isOpen && (
                   <div className="col gap-2 mt-2">
                     {g.rows.slice(0, 10).map((r) => <Occurrence key={r.id} row={r} />)}
-                    {g.rows.length > 10 && <p className="dim mono" style={{ fontSize: 11 }}>… and {g.rows.length - 10} more</p>}
+                    {g.rows.length > 10 && <p className="dim mono" style={{ fontSize: 'var(--type-xs)' }}>… and {g.rows.length - 10} more</p>}
                   </div>
                 )}
               </div>
@@ -189,20 +188,22 @@ export default function Diagnostics() {
       )}
 
       <style>{`
-        .err-row { padding: 12px 14px; background: var(--coal); border: 1px solid var(--line); }
+        .err-row { padding: var(--space-3) var(--space-3); background: var(--coal); border: 1px solid var(--line); }
+        .err-disclosure { min-block-size: var(--target); padding-block: var(--space-3); font-size: var(--type-sm); cursor: pointer; }
         .err-head { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
-        .err-kind { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .05em;
-          text-transform: uppercase; padding: 2px 8px; border-radius: 6px; background: var(--slate); color: var(--bone-mute); }
+        .err-kind { font-family: var(--font-mono); font-size: var(--type-xs); font-weight: 700; letter-spacing: .05em;
+          text-transform: uppercase; padding: var(--space-1) var(--space-2); border-radius: 6px; background: var(--slate); color: var(--bone-mute); }
         .err-kind.k-render, .err-kind.k-rejection, .err-kind.k-error { color: var(--red-bright); border: 1px solid var(--red); }
         .err-kind.k-write, .err-kind.k-fetch, .err-kind.k-timeout, .err-kind.k-auth, .err-kind.k-push { color: var(--amber); border: 1px solid var(--amber); }
         .err-kind.k-test { color: var(--green-bright); border: 1px solid var(--green); }
-        .err-when { font-size: 11px; color: var(--bone-dim); }
-        .err-msg { margin-top: 8px; font-size: 14px; line-height: 1.35; word-break: break-word; }
-        .err-url { font-size: 11px; color: var(--bone-mute); margin-top: 6px; word-break: break-all; }
-        .err-occ { border-top: 1px solid var(--line); padding-top: 8px; }
-        .err-pre { font-size: 10.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; margin: 6px 0 0;
-          padding: 8px; background: var(--slate); border-radius: 8px; color: var(--bone-mute); max-height: 260px; overflow: auto; }
-        .err-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12px; }
+        .err-when { font-size: var(--type-xs); color: var(--bone-dim); }
+        .err-msg { margin-top: var(--space-2); font-size: var(--type-sm); line-height: 1.35; word-break: break-word; }
+        .err-url { font-size: var(--type-xs); color: var(--bone-mute); margin-top: var(--space-1); word-break: break-all; }
+        .err-occ { border-top: 1px solid var(--line); padding-top: var(--space-2); }
+        .err-pre { font-size: var(--type-xs); line-height: 1.4; white-space: pre-wrap; word-break: break-word; margin: var(--space-1) 0 0;
+          padding: var(--space-2); background: var(--slate); border-radius: 8px; color: var(--bone-mute); max-height: 260px; overflow: auto; }
+        .err-kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-3); font-size: var(--type-caption); }
+        .err-kv > span:nth-child(even) { font-family: var(--font-mono); overflow-wrap: anywhere; }
         .err-kv > span:nth-child(odd) { color: var(--bone-dim); }
       `}</style>
     </div>

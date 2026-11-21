@@ -7,7 +7,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 //    response used to null the profile and show an approved player as
 //    "awaiting sign-off" for the whole session.
 
-const store = vi.hoisted(() => ({ profile: null, profErr: null, hold: false, held: [], profileFetches: 0 }))
+const store = vi.hoisted(() => ({ profile: null, profErr: null, hold: false, held: [], profileFetches: 0, stored: false }))
 vi.mock('../lib/supabase', () => {
   const table = (t) => {
     if (t === 'profiles') store.profileFetches++
@@ -26,6 +26,9 @@ vi.mock('../lib/supabase', () => {
     return q
   }
   return {
+    // Whether supabase-js still has a session in storage (a failed refresh on a
+    // dead signal leaves it there; a refused one removes it).
+    hasStoredSession: () => store.stored,
     supabase: {
       auth: {
         getSession: vi.fn(),
@@ -72,6 +75,7 @@ beforeEach(() => {
   store.hold = false
   store.held = []
   store.profileFetches = 0
+  store.stored = false
   supabase.auth.onAuthStateChange.mockImplementation(() => ({ data: { subscription: { unsubscribe: () => {} } } }))
   sessionStorage.clear()
   window.history.replaceState(null, '', '/')
@@ -275,5 +279,183 @@ describe('AuthContext — offline sign-out still signs this device out', () => {
 
     await act(async () => { screen.getByText('signout').click() })
     expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+})
+
+// Pitch-side cold start, more than an hour since the app was last open, weak or
+// no signal. The access token has expired, so supabase-js has to refresh it
+// before it can hand a session over. Two things went wrong:
+//  1. the refresh failing (or simply outlasting the 6s safety timer) left
+//     session=null, which the app read as "signed out" and showed the sign-in
+//     form to a signed-in player, though the session was still in storage;
+//  2. when signal came back the only event was TOKEN_REFRESHED, which was
+//     skipped unconditionally, so the app appeared with profile=null:
+//     "Availability is closed for this one", a blank You, no Manage.
+function ReconnectProbe() {
+  const { loading, isAuthed, reconnecting, profile, retryRestore, signInInstead } = useAuth()
+  return (
+    <div>
+      <span>{loading ? 'LOADING' : !isAuthed ? (reconnecting ? 'RECONNECTING' : 'SIGN-IN') : 'APP'}</span>
+      <span>{profile?.first_name ?? 'NO-PROFILE'}</span>
+      <button onClick={retryRestore}>retry</button>
+      <button onClick={signInInstead}>sign-in-instead</button>
+    </div>
+  )
+}
+
+describe('AuthContext — a stored session that could not be restored is not "signed out"', () => {
+  const joe = { id: 'u1', first_name: 'Joe', role: 'player', approved: true, active: true, is_player: true, club_id: null }
+  const capture = () => {
+    const ref = {}
+    supabase.auth.onAuthStateChange.mockImplementation((fn) => { ref.cb = fn; return { data: { subscription: { unsubscribe() {} } } } })
+    return ref
+  }
+
+  test('the refresh failed but the session is still stored: reconnecting, not the sign-in form', async () => {
+    store.stored = true
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+    expect(screen.queryByText('SIGN-IN')).toBeNull()
+  })
+
+  test('the refresh was refused and the session is gone: that IS signed out', async () => {
+    store.stored = false
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Invalid Refresh Token') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('SIGN-IN')).toBeInTheDocument())
+  })
+
+  test('the safety timer fires while the refresh is still out: reconnecting, not the sign-in form', async () => {
+    vi.useFakeTimers()
+    store.stored = true
+    supabase.auth.getSession.mockReturnValue(new Promise(() => {}))
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await act(async () => { vi.advanceTimersByTime(6000) })
+    expect(screen.getByText('RECONNECTING')).toBeInTheDocument()
+  })
+
+  test('INITIAL_SESSION arriving empty first does not flash the sign-in form either', async () => {
+    store.stored = true
+    const ref = capture()
+    supabase.auth.getSession.mockReturnValue(new Promise(() => {}))
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await act(async () => { ref.cb('INITIAL_SESSION', null) })
+    expect(screen.getByText('RECONNECTING')).toBeInTheDocument()
+  })
+
+  test('signal returns: TOKEN_REFRESHED brings the session AND loads the profile', async () => {
+    store.stored = true
+    store.profile = joe
+    const ref = capture()
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+
+    await act(async () => { ref.cb('TOKEN_REFRESHED', { user: { id: 'u1' } }) })
+    await waitFor(() => expect(screen.getByText('Joe')).toBeInTheDocument())
+    expect(screen.getByText('APP')).toBeInTheDocument()
+  })
+
+  test('an ordinary hourly TOKEN_REFRESHED still does not reload a profile that is already loaded', async () => {
+    store.profile = joe
+    const ref = capture()
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('Joe')).toBeInTheDocument())
+    const before = store.profileFetches
+
+    await act(async () => { ref.cb('TOKEN_REFRESHED', { user: { id: 'u1' } }) })
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)) })
+    expect(store.profileFetches).toBe(before)
+  })
+
+  test('"Try again" that works brings the app back with the profile', async () => {
+    store.stored = true
+    store.profile = joe
+    supabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+
+    supabase.auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } }, error: null })
+    await act(async () => { screen.getByText('retry').click() })
+    await waitFor(() => expect(screen.getByText('Joe')).toBeInTheDocument())
+    expect(screen.getByText('APP')).toBeInTheDocument()
+  })
+
+  test('"Try again" that finds the session revoked falls through to the sign-in form', async () => {
+    store.stored = true
+    supabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+
+    store.stored = false // supabase-js removed it: the refresh token was refused
+    supabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: new Error('Invalid Refresh Token') })
+    await act(async () => { screen.getByText('retry').click() })
+    await waitFor(() => expect(screen.getByText('SIGN-IN')).toBeInTheDocument())
+  })
+
+  test('"Try again" that still cannot get through stays put', async () => {
+    store.stored = true
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+    await act(async () => { screen.getByText('retry').click() })
+    expect(screen.getByText('RECONNECTING')).toBeInTheDocument()
+  })
+
+  test('the player can choose the sign-in form instead', async () => {
+    store.stored = true
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+    await act(async () => { screen.getByText('sign-in-instead').click() })
+    expect(screen.getByText('SIGN-IN')).toBeInTheDocument()
+  })
+
+  // On a dead signal supabase-js spends tens of seconds in refresh backoff, so
+  // getSession and the empty INITIAL_SESSION land long after the safety timer
+  // put the reconnect screen up. Both used to put it straight back over a
+  // sign-in form the player had chosen and was typing into.
+  test('"Sign in instead" sticks when the slow answers finally arrive', async () => {
+    vi.useFakeTimers()
+    store.stored = true
+    const ref = capture()
+    let answer
+    supabase.auth.getSession.mockReturnValue(new Promise((r) => { answer = r }))
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await act(async () => { vi.advanceTimersByTime(6000) })
+    expect(screen.getByText('RECONNECTING')).toBeInTheDocument()
+
+    await act(async () => { screen.getByText('sign-in-instead').click() })
+    expect(screen.getByText('SIGN-IN')).toBeInTheDocument()
+
+    await act(async () => { answer({ data: { session: null }, error: new Error('Failed to fetch') }) })
+    await act(async () => { ref.cb('INITIAL_SESSION', null) })
+    expect(screen.getByText('SIGN-IN')).toBeInTheDocument()
+  })
+
+  test('...and a session arriving after that still brings the app up', async () => {
+    store.stored = true
+    store.profile = joe
+    const ref = capture()
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+    await act(async () => { screen.getByText('sign-in-instead').click() })
+
+    await act(async () => { ref.cb('TOKEN_REFRESHED', { user: { id: 'u1' } }) })
+    await waitFor(() => expect(screen.getByText('Joe')).toBeInTheDocument())
+  })
+
+  test('signing out for real clears it', async () => {
+    store.stored = true
+    const ref = capture()
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: new Error('Failed to fetch') })
+    render(<AuthProvider><ReconnectProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('RECONNECTING')).toBeInTheDocument())
+    store.stored = false
+    await act(async () => { ref.cb('SIGNED_OUT', null) })
+    expect(screen.getByText('SIGN-IN')).toBeInTheDocument()
   })
 })

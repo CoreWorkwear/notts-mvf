@@ -26,6 +26,20 @@ const COMPETITIONS = [{ id: 'comp-1', name: 'Sunday League', type: 'league' }]
 beforeEach(() => { calls.length = 0; for (const k of Object.keys(fail)) delete fail[k] })
 
 describe('LeagueTablePanel (per competition)', () => {
+  test('a historical club squad row displays its competitive name throughout the table and editor', async () => {
+    const table = ['XL 11s', 'Carlton XL'].map((team_name, i) => ({
+      id: String(i), competition_id: 'comp-1', team_name, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0,
+    }))
+    const { container } = render(<LeagueTablePanel table={table} competitions={COMPETITIONS} teams={TEAMS} seasonId="s1" onSaved={vi.fn()} />)
+    expect(screen.getByRole('cell', { name: 'Nottingham' }).closest('tr')).toHaveClass('lt-ours')
+    expect(screen.getByRole('cell', { name: 'Carlton XL' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /edit table/i }))
+    expect(screen.getByDisplayValue('Nottingham')).toBeInTheDocument()
+    expect(container.querySelector('option[value="First Team"]')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /save table/i }))
+    await waitFor(() => expect(calls.find(([op]) => op === 'insert')?.[2].map((row) => row.team_name)).toEqual(['XL 11s', 'Carlton XL']))
+  })
+
   test('with no competitions, prompts to add one', () => {
     render(<LeagueTablePanel table={[]} competitions={[]} teams={TEAMS} seasonId="s1" onSaved={vi.fn()} />)
     expect(screen.getByText(/no competitions yet/i)).toBeInTheDocument()

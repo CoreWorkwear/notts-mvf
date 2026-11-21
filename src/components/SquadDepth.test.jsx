@@ -39,7 +39,7 @@ describe('SquadDepth (§4.2)', () => {
 
   test('starts with a hint and no list until a position is tapped', () => {
     renderDepth()
-    expect(screen.getByText(/tap a position/i)).toBeInTheDocument()
+    expect(screen.getByText(/select a position/i)).toBeInTheDocument()
     expect(document.querySelector('.sd-row')).toBeNull()
   })
 

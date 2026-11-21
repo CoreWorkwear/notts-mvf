@@ -1,3 +1,4 @@
+import ClubImage from './ClubImage'
 import Crest from './Crest'
 import { teamMatchName } from '../lib/teams'
 
@@ -14,7 +15,7 @@ export default function ScoreBug({ fixture, size = 'lg' }) {
     <div className={'bug' + (big ? ' lg' : '')}>
       <div className="bug-side">
         <Crest size={big ? 40 : 30} />
-        <span className="bug-team mono">{teamMatchName(f.team)}</span>
+        <span className="bug-team">{teamMatchName(f.team)}</span>
       </div>
 
       <div className="bug-score mono">
@@ -25,24 +26,24 @@ export default function ScoreBug({ fixture, size = 'lg' }) {
 
       <div className="bug-side">
         {them?.badge_url
-          ? <img src={them.badge_url} alt="" width={big ? 40 : 30} height={big ? 40 : 30} style={{ borderRadius: 8 }} />
+          ? <ClubImage loading="eager" src={them.badge_url} alt="" width={big ? 40 : 30} height={big ? 40 : 30} style={{ borderRadius: 8 }} />
           : <span className="bug-monogram" style={{ width: big ? 40 : 30, height: big ? 40 : 30 }}>{(them?.name || '?')[0]}</span>}
-        <span className="bug-team mono">{them?.name}</span>
+        <span className="bug-team">{them?.name}</span>
       </div>
 
       <style>{`
-        .bug { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
-        .bug-side { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-        .bug-team { font-size: 11px; color: var(--bone-mute); text-align: center; max-width: 100%;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .02em; }
-        .bug-score { display: flex; align-items: center; gap: 10px; }
+        .bug { color: var(--on-photo); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-2); }
+        .bug-side { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); min-width: 0; }
+        .bug-team { font-size: var(--type-sm); font-weight: 650; color: var(--on-photo); text-align: center; max-width: 100%;
+          overflow-wrap: anywhere; line-height: 1.2; letter-spacing: .02em; }
+        .bug-score { display: flex; align-items: center; gap: var(--space-2); }
         .bug .num { font-weight: 600; animation: scorein var(--t-med) backwards; }
-        .bug .dash { color: var(--bone-dim); }
-        .bug.lg .num { font-size: 54px; }
-        .bug.lg .dash { font-size: 38px; }
-        .bug:not(.lg) .num { font-size: 30px; }
-        .bug-monogram { border-radius: 8px; display: grid; place-items: center; font-weight: 700;
-          border: 1.5px dashed var(--line-2); color: var(--bone-mute); }
+        .bug .dash { color: var(--on-photo-muted); }
+        .bug.lg .num { font-size: var(--type-poster); }
+        .bug.lg .dash { font-size: var(--type-score); }
+        .bug:not(.lg) .num { font-size: var(--type-display); }
+        .bug-monogram { border-radius: var(--r-input); display: grid; place-items: center; font-weight: 700;
+          border: 1px solid var(--photo-edge); color: var(--on-photo-muted); }
         @keyframes scorein { from { opacity: 0; transform: translateY(6px) scale(.9) } to { opacity: 1; transform: none } }
       `}</style>
     </div>

@@ -6,17 +6,19 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {} } catch (e) { data = { body: event.data && event.data.text() } }
 
   const title = data.title || 'Nottinghamshire MvF'
-  const fixtureId = data.fixtureId || null
-  // Inline actions for an availability nudge (Android; iOS ignores). Chrome
-  // renders at most Notification.maxActions = 2 and silently DROPS the rest —
-  // three buttons meant "Can't make it" never showed. Keep the two decisive
-  // answers; "maybe" is a tap on the notification body (opens the fixture).
+  const training = data.kind === 'training'
+  const fixtureId = training ? null : (data.fixtureId || null)
+  // Keep the two decisive answers first on platforms with two tray buttons.
+  // Where three fit, Maybe is one tap too. The body always opens the fixture.
   const actions = data.withAvailability && fixtureId
     ? [
         { action: 'in', title: "I'm in" },
         { action: 'out', title: "Can't make it" },
       ]
-    : (data.actions || [])
+    : (training ? [] : (data.actions || []))
+  if (data.withAvailability && fixtureId && self.Notification?.maxActions >= 3) {
+    actions.push({ action: 'maybe', title: 'Maybe' })
+  }
 
   // Tag per KIND per fixture: an availability nudge and a match reminder for
   // the same game must not replace each other (the default offsets collide at
@@ -123,8 +125,9 @@ self.addEventListener('notificationclick', (event) => {
   const avail = ['in', 'maybe', 'out'].includes(action) ? action : null
   // Anything we can't vouch for falls back to the app root, so a tap still
   // opens the club rather than doing nothing (or going somewhere else).
-  const url = safePath(d.url) || '/'
+  let url = safePath(d.url) || '/'
   const answering = !!(avail && d.fixtureId)
+  if (d.fixtureId && (url === '/fixtures' || url === '/')) url = '/fixtures?mvf_fixture=' + encodeURIComponent(d.fixtureId)
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {

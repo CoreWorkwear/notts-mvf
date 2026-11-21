@@ -13,7 +13,7 @@ export default function Holding({ status }) {
   const [leaving, setLeaving] = useState(false)
 
   const inactive = status === 'inactive'
-  const kind = profile?.is_player === false ? 'supporter' : 'player'
+  const kind = profile?.is_player === false ? 'Supporter' : 'Player'
 
   async function checkAgain() {
     setChecking(true)
@@ -26,27 +26,16 @@ export default function Holding({ status }) {
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      <div className="page" style={{ paddingTop: 'calc(48px + var(--safe-t))', maxWidth: 460, margin: '0 auto', width: '100%' }}>
+      <div className="page" style={{ paddingTop: 'calc(var(--space-12) + var(--safe-t))', maxWidth: 460, margin: '0 auto', width: '100%' }}>
         <div className="center">
           <Crest size={56} />
-          <h1 className="display mt-3" style={{ fontSize: 34 }}>{inactive ? 'ACCOUNT OFF' : 'NEARLY THERE'}</h1>
-          <p className="kicker mt-2"><span className="kicker-rule">{inactive ? 'SWITCHED OFF' : 'AWAITING SIGN-OFF'}</span></p>
+          <h1 className="display mt-3" style={{ fontSize: 'var(--type-poster)' }}>{inactive ? 'Account inactive' : 'Awaiting manager sign-off'}</h1>
         </div>
 
-        <div className="card mt-5" style={{ padding: 16, borderColor: inactive ? 'var(--line-2)' : 'var(--amber)' }} role="status">
-          {inactive ? (
-            <p>Your account&rsquo;s been switched off. Have a word with the manager if that&rsquo;s a mistake.</p>
-          ) : (
-            <>
-              <p style={{ fontWeight: 600 }}>You&rsquo;re signed up as a {kind}.</p>
-              <p className="dim mt-2">
-                The manager needs to sign you off before you can see fixtures, results and the squad. You&rsquo;ll get in as soon as they do.
-              </p>
-            </>
-          )}
-          {checkedOnce && !checking && (
-            <p className="dim mt-3" style={{ fontSize: 13 }}>Nothing&rsquo;s changed yet.</p>
-          )}
+        <div className="card mt-5" style={{ padding: 'var(--space-4)' }} role="status">
+          <p className="row spread"><span className="dim">Account type</span><strong>{kind}</strong></p>
+          {inactive && <p className="mt-2">Contact your manager</p>}
+          {checkedOnce && !checking && <p className="dim mt-2">Status unchanged</p>}
         </div>
 
         <div className="col gap-2 mt-4">

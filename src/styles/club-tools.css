@@ -1,0 +1,39 @@
+.offline-diary {
+  margin-block: var(--space-2);
+  margin-inline: max(var(--space-4), var(--safe-l)) max(var(--space-4), var(--safe-r));
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.offline-diary summary { cursor: pointer; padding-block: var(--space-3); min-height: var(--target); }
+.offline-diary ul { padding-inline-start: var(--space-6); }
+.offline-diary li { margin-block: var(--space-2); }
+.manage-section { margin-block-start: var(--space-5); }
+.manage-section h2 { font: 600 var(--type-body)/1.25 var(--font-body); margin-block-end: var(--space-2); }
+.manage-links { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-card); }
+.manage-link {
+  display: flex; align-items: center; gap: var(--space-3); min-height: var(--target);
+  padding: var(--space-2) var(--space-4); font-weight: 600; text-decoration: none; color: var(--text);
+}
+.manage-link + .manage-link { border-top: 1px solid var(--border); }
+.manage-link:first-child { border-start-start-radius: var(--r-card); border-start-end-radius: var(--r-card); }
+.manage-link:last-child { border-end-start-radius: var(--r-card); border-end-end-radius: var(--r-card); }
+.manage-link svg { flex: none; color: var(--text-muted); }
+.manage-link .go { margin-inline-start: auto; transform: rotate(-90deg); }
+.manage-link:active, .manage-link:hover { background: var(--surface-input); }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.profile-field { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-1) var(--space-3); padding-block: var(--space-2); font-size: var(--type-sm); }
+.profile-field + .table-scroll { max-width: 100%; overflow-x: auto; }
+.profile-field { border-top: 1px solid var(--border); }
+.profile-field dd { margin: 0 0 0 auto; overflow-wrap: anywhere; }
+.member-tag { display: inline-block; padding: var(--space-1) var(--space-2); border: 1px solid currentColor; border-radius: var(--r-input); font-size: var(--type-xs); font-weight: 600; color: var(--text-muted); }
+.member-tag.xl { color: var(--team-xl); }
+.member-tag.community { color: var(--team-community); }
+
+.photo-open { display: block; width: 100%; height: 100%; border: 0; padding: 0; background: var(--surface-input); }
+.photo-viewer { width: 100%; height: auto; display: block; margin-block: var(--space-4); touch-action: pinch-zoom pan-x pan-y; }
+
+.optional-positions summary { cursor: pointer; padding-block: var(--space-3); min-block-size: var(--target); }
+.optional-positions[open] .field { margin-block: var(--space-3); }

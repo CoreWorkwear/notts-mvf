@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import Crest from './Crest'
 import { IconLogout, IconBell, IconManage } from './Icons'
 import ThemeToggle from './ThemeToggle'
+import Sheet from './Sheet'
 import { useAuth } from '../context/AuthContext'
 import { useSeason } from '../context/SeasonContext'
 
@@ -13,9 +14,10 @@ export default function Header() {
   const [confirming, setConfirming] = useState(false)
 
   return (
+    <>
     <header className={'app-header' + (isRealAdmin ? ' admin' : '')}>
       <Crest size={30} />
-      <span className="wordmark grow">NOTTS MvF</span>
+      <span className="wordmark grow" aria-hidden="true"><span>Notts MvF</span></span>
 
       {seasons.length > 0 && (
         <select
@@ -39,7 +41,6 @@ export default function Header() {
           onClick={() => setManagerView(!managerView)}
           aria-label="Manager view"
           aria-pressed={managerView}
-          title={managerView ? 'Manager view on — tap to use the app as a player' : 'Manager view off — tap to show management tools'}
         >
           <IconManage />
         </button>
@@ -65,19 +66,19 @@ export default function Header() {
         <IconLogout />
       </button>
 
-      {confirming && (
-        <div className="sheet-backdrop" onClick={() => setConfirming(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="grab-handle" />
-            <p className="display" style={{ fontSize: 22 }}>Off home, then?</p>
-            <p className="muted mt-2">You'll need to sign back in next time.</p>
-            <div className="row gap-2 mt-4">
-              <button className="btn btn-ghost grow" onClick={() => setConfirming(false)}>Stay</button>
-              <button className="btn btn-primary grow" onClick={signOut}>Sign out</button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
+
+    {/* A sibling of the header, never a child: the header's backdrop-filter makes
+        it the containing block for anything position: fixed inside it, which
+        shrank this backdrop to the header's own height and hung the sheet above
+        the top of the screen (e2e/overlays.spec.js). */}
+    <Sheet open={confirming} onClose={() => setConfirming(false)}>
+      <h2 className="display" style={{ fontSize: 'var(--type-title)' }}>Sign out?</h2>
+      <div className="row gap-2 mt-4">
+        <button className="btn btn-ghost grow" onClick={() => setConfirming(false)}>Stay</button>
+        <button className="btn btn-primary grow" onClick={signOut}>Sign out</button>
+      </div>
+    </Sheet>
+    </>
   )
 }

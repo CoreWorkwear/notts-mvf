@@ -41,7 +41,7 @@ export default function SeasonForm({ open, onClose, onSave, season }) {
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} onDismiss={() => setError(null)} />
       <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT SEASON' : 'NEW SEASON'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>{editing ? label : 'New season'}</h2>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{editing ? label : 'New season'}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit}>
         <div className="field">
@@ -62,20 +62,21 @@ export default function SeasonForm({ open, onClose, onSave, season }) {
           {makeCurrent ? 'Current season ✓' : 'Make this the current season'}
         </button>
         {lockedCurrent && (
-          <p className="dim" style={{ fontSize: 12 }}>
-            This is the current season. To move on, set another season as current from the list.
+          <p className="dim" style={{ fontSize: 'var(--type-caption)' }}>
+            Set another season as current to switch.
           </p>
         )}
         {makeCurrent && !editing && (
-          <p className="dim" style={{ fontSize: 12 }}>
-            Rolling over: players &amp; opponents carry forward; fixtures, results, the table and stats start fresh.
-            Old seasons stay viewable in the picker. Mark any leavers inactive over in Players.
+          <p className="dim" style={{ fontSize: 'var(--type-caption)' }}>
+            Players and opponents carry over. Fixtures, results, tables and stats stay with their season.
           </p>
         )}
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>
-          {busy ? 'Saving…' : editing ? 'Save season' : 'Create season'}
-        </button>
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>
+            {busy ? 'Saving…' : editing ? 'Save season' : 'Create season'}
+          </button>
+        </div>
       </form>
     </Sheet>
   )

@@ -19,6 +19,14 @@ export function parseDate(iso) {
   return new Date(y, m - 1, d)
 }
 
+// 'YYYY-MM-DD' n days on (negative = back). Calendar arithmetic on the date
+// alone, so no time zone or clock change can move it.
+export function addDaysISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + n)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
 // "Sun 22 Jun"
 export function fmtDate(iso) {
   const d = parseDate(iso)

@@ -20,26 +20,36 @@ vi.mock('../lib/supabase', () => {
   return { supabase: { from: () => q } }
 })
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
+const who = vi.hoisted(() => ({ account: { approved: true, active: true }, isRealAdmin: false }))
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
-    profile: { id: 'me', first_name: 'Joe', last_name: 'Bloggs', positions: [], preferred: null, photo_url: null },
+    profile: { id: 'me', first_name: 'Joe', last_name: 'Bloggs', positions: [], preferred: null, photo_url: null, ...who.account },
     teamKeys: [],
-    isRealAdmin: false,
+    isRealAdmin: who.isRealAdmin,
     refreshProfile: vi.fn(),
   }),
 }))
 vi.mock('../components/NotificationToggle', () => ({ default: () => null }))
 const upload = vi.hoisted(() => ({ props: null }))
-vi.mock('../components/ImageUpload', () => ({ default: (props) => { upload.props = props; return null } }))
+vi.mock('../components/ImageUpload', () => ({ default: (props) => { upload.props = props; return <button>{props.label}</button> } }))
 vi.mock('../components/ProfileEdit', () => ({ default: ({ open }) => (open ? <div data-testid="edit-sheet" /> : null) }))
 
 import Profile from './Profile'
 
-beforeEach(() => { store.privErr = null })
+beforeEach(() => { store.privErr = null; who.account = { approved: true, active: true }; who.isRealAdmin = false; upload.props = null })
 
 describe('Profile — avatar uploads go to the per-user folder (media policy: players/<uid>/…)', () => {
   test('ImageUpload is given players/<profile id>, not the shared players folder', async () => {
     render(<Profile />)
+    expect(upload.props.folder).toBe('players/me')
+  })
+
+  test('a bootstrapped manager can upload to their own folder without a player approval flag', async () => {
+    who.account = { approved: false, active: true }
+    who.isRealAdmin = true
+    render(<Profile />)
+    await waitFor(() => expect(screen.getByText('joe@x.com')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /add your photo/i })).toBeInTheDocument()
     expect(upload.props.folder).toBe('players/me')
   })
 })
@@ -52,7 +62,7 @@ describe('Profile — the edit sheet is gated on the private row (data-loss guar
 
     // Old code opened the sheet with blank fields — a save wiped phone/DOB/EC.
     expect(screen.queryByTestId('edit-sheet')).toBeNull()
-    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't fetch your details/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't load your details/i)
   })
 
   test('once the private row has loaded, Edit opens', async () => {
@@ -60,5 +70,28 @@ describe('Profile — the edit sheet is gated on the private row (data-loss guar
     await waitFor(() => expect(screen.getByText('joe@x.com')).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: /edit your details/i }))
     expect(screen.getByTestId('edit-sheet')).toBeInTheDocument()
+  })
+})
+
+// Storage only takes a headshot from an approved, active member (0030/0031).
+// The button was offered to everyone, and a pending sign-up who used it got the
+// raw "new row violates row-level security policy" back.
+describe('Profile — the photo upload is for signed-off members', () => {
+  test('a signed-off member is offered it', () => {
+    render(<Profile />)
+    expect(screen.getByRole('button', { name: /add your photo/i })).toBeInTheDocument()
+  })
+
+  test('awaiting sign-off: no button, and a line saying when it opens', () => {
+    who.account = { approved: false, active: true }
+    render(<Profile />)
+    expect(screen.queryByRole('button', { name: /add your photo/i })).toBeNull()
+    expect(screen.getByText(/photo upload requires manager approval/i)).toBeInTheDocument()
+  })
+
+  test('an inactive account is not offered it either', () => {
+    who.account = { approved: true, active: false }
+    render(<Profile />)
+    expect(screen.queryByRole('button', { name: /add your photo/i })).toBeNull()
   })
 })

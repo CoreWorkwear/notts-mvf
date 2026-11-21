@@ -41,6 +41,26 @@ const TAB = String.fromCharCode(9)
 const windowClient = () => ({ focus: vi.fn(() => Promise.resolve()), postMessage: vi.fn() })
 
 describe('push → notification', () => {
+  test.each([
+    ['Training moved', true], ['Training cancelled', false],
+  ])('%s preserves its training tag and deep link without RSVP actions', async (title, canReply) => {
+    await fire('push', { data: { json: () => ({
+      title, body: 'Session details.', kind: 'training', canReply,
+      tag: 'training-notice-1', url: '/training?session=s1',
+      // Even stale fixture action fields cannot turn cancellation into an answer.
+      fixtureId: 'f1', withAvailability: true, actions: [{ action: 'in', title: "I'm in" }],
+    }) } })
+    const [actualTitle, opts] = registration.showNotification.mock.calls[0]
+    expect(actualTitle).toBe(title)
+    expect(opts).toMatchObject({ tag: 'training-notice-1', renotify: true, actions: [], data: { url: '/training?session=s1', fixtureId: null } })
+  })
+  test('adds Maybe when the platform has room for three actions', async () => {
+    vi.stubGlobal('Notification', { maxActions: 3 })
+    try {
+      await fire('push', { data: { json: () => ({ fixtureId: 'f1', withAvailability: true }) } })
+      expect(registration.showNotification.mock.calls[0][1].actions.map(a => a.action)).toEqual(['in', 'out', 'maybe'])
+    } finally { vi.unstubAllGlobals() }
+  })
   test('an availability nudge shows the two actions Chrome renders, tagged per kind per fixture, and renotifies', async () => {
     await fire('push', { data: { json: () => ({ title: 'Sunday?', body: 'In or out', fixtureId: 'f1', withAvailability: true, url: '/fixtures' }) } })
     const [title, opts] = registration.showNotification.mock.calls[0]
@@ -63,6 +83,26 @@ describe('push → notification', () => {
 })
 
 describe('notificationclick', () => {
+  test('a training event opens its particular session in an open or cold app', async () => {
+    const data = { url: '/training?session=s1', fixtureId: null }
+    const c = windowClient()
+    clients.matchAll.mockResolvedValue([c])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data } })
+    expect(c.postMessage).toHaveBeenCalledWith({ type: 'mvf-navigate', url: '/training?session=s1' })
+    clients.matchAll.mockResolvedValue([])
+    await fire('notificationclick', { action: 'in', notification: { close: vi.fn(), data } })
+    expect(clients.openWindow).toHaveBeenCalledWith('/training?session=s1')
+  })
+  test('tapping the reminder body opens the particular game, including on browsers without tray actions', async () => {
+    const data = { url: '/fixtures', fixtureId: 'next-away' }
+    const c = windowClient()
+    clients.matchAll.mockResolvedValue([c])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data } })
+    expect(c.postMessage).toHaveBeenCalledWith({ type: 'mvf-navigate', url: '/fixtures?mvf_fixture=next-away' })
+    clients.matchAll.mockResolvedValue([])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data } })
+    expect(clients.openWindow).toHaveBeenCalledWith('/fixtures?mvf_fixture=next-away')
+  })
   test('an inline In/Out tap with the app open posts the availability to the page and focuses it', async () => {
     const c = windowClient()
     clients.matchAll.mockResolvedValue([c])

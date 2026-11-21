@@ -60,8 +60,14 @@ describe('PitchView drag-and-drop', () => {
     const s0 = slot(container, 0)
     fireEvent.pointerDown(s0, { clientX: 10, clientY: 10, pointerId: 1 })
     fireEvent.pointerUp(s0, { clientX: 12, clientY: 11, pointerId: 1 })
-    expect(onTapSlot).toHaveBeenCalledWith(0)
+    expect(onTapSlot).toHaveBeenCalledWith(0, s0)
     expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  test('keyboard and assistive technology activation opens a shirt without a pointer', () => {
+    const { container, onTapSlot } = renderEditor()
+    fireEvent.click(slot(container, 0), { detail: 0 })
+    expect(onTapSlot).toHaveBeenCalledWith(0, slot(container, 0))
   })
 
   test('dropping back on the same slot does nothing', () => {

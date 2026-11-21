@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 
 // Capture setAvailability calls; assert each notification action persists ITS OWN
 // status (the bug report: "I'm in" must write 'in', never 'maybe').

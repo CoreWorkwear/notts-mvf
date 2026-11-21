@@ -5,8 +5,10 @@ import userEvent from '@testing-library/user-event'
 const add = vi.fn().mockResolvedValue({ error: null })
 const remove = vi.fn().mockResolvedValue({ error: null })
 let squadState
+let playerError
+const retryPlayers = vi.fn()
 vi.mock('../hooks/usePlayers', () => ({
-  usePlayers: () => ({ loading: false, players: [
+  usePlayers: () => ({ loading: false, error: playerError, refetch: retryPlayers, players: [
     { id: 'p1', first_name: 'Joe', last_name: 'Morris', active: true, is_player: true },
     { id: 'p2', first_name: 'Sam', last_name: 'Lee', active: true, is_player: true },
     { id: 'p3', first_name: 'Sup', last_name: 'Porter', active: true, is_player: false }, // supporter — excluded
@@ -18,12 +20,23 @@ import SquadPicker from './SquadPicker'
 
 beforeEach(() => {
   add.mockClear(); remove.mockClear()
+  playerError = null
   squadState = { registered: new Set(), count: 0, loading: false, add, remove, refetch: vi.fn() }
 })
 
 const COMP = { id: 'comp-1', name: 'County Cup', squad_limit_enabled: true, squad_limit: 2 }
 
 describe('SquadPicker (§2)', () => {
+  test.each(['players', 'registrations'])('offers a retry and withholds edits when %s fail to load', async source => {
+    if (source === 'players') playerError = Error('offline')
+    else squadState.error = Error('offline')
+    render(<SquadPicker open competition={COMP} onClose={() => {}} />)
+    expect(screen.getByRole('alert')).toBeVisible()
+    expect(screen.queryByText('Register')).toBeNull()
+    expect(screen.queryByText(/0 \/ 2 registered/i)).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(source === 'players' ? retryPlayers : squadState.refetch).toHaveBeenCalled()
+  })
   test('lists only squad players (not supporters) and shows the count/cap', () => {
     render(<SquadPicker open competition={COMP} onClose={() => {}} />)
     expect(screen.getByText('Joe Morris')).toBeInTheDocument()

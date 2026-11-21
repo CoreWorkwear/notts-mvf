@@ -8,6 +8,9 @@ const base = {
 export const IconFixtures = (p) => (
   <svg {...base} {...p}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
 )
+export const IconTraining = (p) => (
+  <svg {...base} {...p}><path d="M4 20h16M6 20l5-15h2l5 15M8 14h8M10 9h4" /></svg>
+)
 export const IconResults = (p) => (
   <svg {...base} {...p}><path d="M6 9H4a2 2 0 0 1-2-2V4h4M18 9h2a2 2 0 0 0 2-2V4h-4M6 4h12v5a6 6 0 0 1-12 0V4ZM12 15v3M9 21h6M10 18h4" /></svg>
 )

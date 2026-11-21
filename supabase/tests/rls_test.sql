@@ -867,8 +867,6 @@ do $$ begin
   raise notice 'T31 PASS: availability_delete cannot cross a club boundary';
 end $$;
 
-
--- ============================================================================
 -- 0039 (sign-off gates reads, Nov 2026 review) — T32…T45
 -- ============================================================================
 -- Extra actors, created here so nothing above changes shape:
@@ -1230,7 +1228,32 @@ do $$ declare blocked boolean; begin
 end $$;
 
 
+-- T46 — half time is optional (0040). NULL means "not recorded", and it is
+-- both sides or neither. Fails by name while 0040 has not been run.
 reset role;
+do $$
+declare blocked boolean := false;
+begin
+  if not exists (select 1 from results where fixture_id = 'd0000004-0000-0000-0000-000000000004') then
+    insert into results (fixture_id, us, them) values ('d0000004-0000-0000-0000-000000000004', 2, 1);
+  end if;
+  begin
+    update results set ht_us = null, ht_them = null
+     where fixture_id = 'd0000004-0000-0000-0000-000000000004';
+  exception when not_null_violation then
+    raise exception 'T46 FAIL: results.ht_us / ht_them are still NOT NULL. Run migration 0040';
+  end;
+  begin
+    update results set ht_us = 1, ht_them = null
+     where fixture_id = 'd0000004-0000-0000-0000-000000000004';
+  exception when check_violation then blocked := true;
+  end;
+  if not blocked then raise exception 'T46 FAIL: half a half-time score (one side NULL) was accepted'; end if;
+  raise notice 'T46 PASS: half time may be left unrecorded, both sides or neither';
+end $$;
+
+
+-- ============================================================================
 do $$ begin raise notice '================  ALL RLS TESTS PASSED  ================'; end $$;
 
 rollback;

@@ -48,7 +48,7 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} onDismiss={() => setError(null)} />
       <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT OPPONENT' : 'ADD OPPONENT'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>{editing ? name : 'New opponent'}</h2>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{editing ? name : 'New opponent'}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="field">
@@ -86,9 +86,11 @@ export default function OpponentForm({ open, onClose, onSave, opponent }) {
             label={badgeUrl ? 'Replace badge' : 'Add badge'} onUploaded={(url) => setBadgeUrl(url)} />
         </div>
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>
-          {busy ? 'Saving…' : editing ? 'Save opponent' : 'Add opponent'}
-        </button>
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>
+            {busy ? 'Saving…' : editing ? 'Save opponent' : 'Add opponent'}
+          </button>
+        </div>
       </form>
     </Sheet>
   )

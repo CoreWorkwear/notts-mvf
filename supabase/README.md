@@ -3,7 +3,7 @@
 Run order (SQL editor, top to bottom), each as its own run:
 
 1. `migrations/0001_init_schema_and_rls.sql` — tables, helpers, triggers, RLS, grants.
-2. every later numbered migration in order, `0002_*` … `0039_*`, each as its own
+2. every later numbered migration in order, `0002_*` … `0043_*`, each as its own
    run. They are cumulative and the order matters. **Never re-run a migration
    older than the newest one already applied.** Several of them `alter policy`
    in place (0031 above all), so replaying one silently puts back policy bodies
@@ -15,7 +15,7 @@ Run order (SQL editor, top to bottom), each as its own run:
    output (Messages/Notices tab). If any test fails it raises and names the rule
    that broke — fix the policy, re-run.
 
-`0039_signoff_gates_reads.sql` is the newest schema change; run it and then
+`0039_signoff_gates_reads.sql` tightens access to club data. After applying it,
 re-run step 4, where T32–T45 check it landed. It makes manager sign-off gate
 every club read, supporters included (a pending or removed account sees only
 its own profile), and closes the rest of the November 2026 review: push
@@ -40,6 +40,14 @@ constraints on URL columns) — no new columns.
 id and does nothing on any other database. A data fix on live goes in as a
 numbered file like this one, with the before-image and the undo in its header,
 rather than as an ad-hoc statement nobody can find afterwards.
+
+`0040_half_time_optional.sql` makes `results.ht_us` / `ht_them` nullable (NULL =
+half time not recorded) and adds a both-or-neither CHECK. It changes no rows.
+**Run it before the build that ships with it goes live** (safe: the old build
+never writes NULL). The other order works for a new result but refuses a save
+that *clears* a half time already stored. T46 in step 4 checks it landed.
+
+Migrations 0041 and 0042 add Training sessions, replies, club notices and push delivery records. Run `tests/training_test.sql` against an isolated test database after the migrations. Its synthetic accounts and activity roll back. Migration 0043 configures dispatch scheduling. See [the release and rollback procedure](../Docs/mobile-ux/TRAINING-RELEASE.md) and [Edge Function setup](functions/README.md) before enabling push.
 
 ## Two settings that live in the Dashboard, not in SQL
 The database cannot enforce these, so they are easy to lose and worth checking

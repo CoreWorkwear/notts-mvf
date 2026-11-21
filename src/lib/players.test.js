@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { validatePlayer, diffMemberships, isSelf, isSquadMember, squadIds, squadIdsByTeam, canSetAvailability, accountStatus, holdingStatus, respondBlock, respondBlockCopy } from './players'
+import { validatePlayer, diffMemberships, isSelf, isSquadMember, squadIds, squadIdsByTeam, canSetAvailability, accountStatus, holdingStatus, respondBlock, respondBlockCopy, leadFixture } from './players'
 import { MIN_PASSWORD } from './constants'
 
 const ok = { first_name: 'Joe', last_name: 'Morris', email: 'joe@notts.test', phone: '07700900000' }
@@ -191,18 +191,14 @@ describe('respondBlock', () => {
 })
 
 describe('respondBlockCopy', () => {
-  test('names the squad that actually plays the game', () => {
-    expect(respondBlockCopy('other-team', xlGame)).toMatch(/First Team squad only/)
-    expect(respondBlockCopy('other-team', commGame)).toMatch(/Community squad only/)
-  })
-
-  test('has a short form for a list row', () => {
-    expect(respondBlockCopy('other-team', xlGame, { compact: true })).toBe('First Team squad only')
+  test('omits the other-team notice in the detail and the list', () => {
+    expect(respondBlockCopy('other-team')).toBeNull()
+    expect(respondBlockCopy('other-team', { compact: true })).toBeNull()
   })
 
   test('says something sensible for every reason, and never blows up without a fixture', () => {
-    for (const r of ['supporter', 'pending', 'inactive', 'other-team', 'kicked-off', 'unknown']) {
-      expect(respondBlockCopy(r, null).length).toBeGreaterThan(0)
+    for (const r of ['supporter', 'pending', 'inactive', 'kicked-off', 'unknown']) {
+      expect(respondBlockCopy(r).length).toBeGreaterThan(0)
     }
   })
 })
@@ -226,5 +222,56 @@ describe('validatePlayer — starter password length', () => {
 
   test('an edit (no new password) is unaffected', () => {
     expect(validatePlayer(ok, { needPassword: false, password: '' })).toBeNull()
+  })
+})
+
+// The Fixtures hero. It used to be the club's next game whoever was looking, so
+// on a Sunday when the First Team kicked off first a Community-only player
+// (every new signing starts there) landed on "1st Team squad only" with his
+// own game demoted to a strip and no filter to reach it.
+describe('leadFixture', () => {
+  const ft = { id: 'ft', team: 'xl' }, co = { id: 'co', team: 'community' }, ft2 = { id: 'ft2', team: 'xl' }
+  const communityOnly = (f) => (f.team === 'xl' ? 'other-team' : null)
+
+  test('a player leads with the first game they can answer, not the first on the list', () => {
+    expect(leadFixture([ft, co, ft2], communityOnly)).toBe(co)
+  })
+  test('a game that has kicked off is not answerable: lead with the next one that is', () => {
+    const blockFor = (f) => (f.id === 'co' ? 'kicked-off' : null)
+    expect(leadFixture([co, ft], blockFor)).toBe(ft)
+  })
+  test('nothing answerable (supporter, pending, other squad throughout): fall back to the next game', () => {
+    expect(leadFixture([ft, ft2], communityOnly)).toBe(ft)
+    expect(leadFixture([ft, co], () => 'pending')).toBe(ft)
+  })
+  test("the manager always leads with the club's next game", () => {
+    expect(leadFixture([ft, co], communityOnly, { manager: true })).toBe(ft)
+  })
+  test('no games: no hero', () => {
+    expect(leadFixture([], communityOnly)).toBeNull()
+    expect(leadFixture(undefined, communityOnly)).toBeNull()
+  })
+})
+
+// A postponed game keeps its old date until the league gives a new one. It was
+// still offering In / Maybe / Out (for a date that is going to change), and
+// looked like any other fixture in the detail sheet and the calendar.
+describe('respondBlock — a postponed game', () => {
+  const postponed = { ...commGame, status: 'postponed' }
+
+  test('nobody answers it, even in their own squad and before the old kickoff', () => {
+    expect(respondBlock(squadPlayer, [COMM], postponed)).toBe('postponed')
+    expect(respondBlock(squadPlayer, [COMM], { ...commGame, postponed: true })).toBe('postponed')
+  })
+  test('account state and squad still lead, so the reason shown is the one that will not change', () => {
+    expect(respondBlock({ ...squadPlayer, approved: false }, [COMM], postponed)).toBe('pending')
+    expect(respondBlock(squadPlayer, [XL], postponed)).toBe('other-team')
+  })
+  test('it says postponed rather than "under way" once the old slot has passed', () => {
+    expect(respondBlock(squadPlayer, [COMM], { ...playedGame, status: 'postponed' })).toBe('postponed')
+  })
+  test('the copy says what happens next', () => {
+    expect(respondBlockCopy('postponed')).toMatch(/postponed/i)
+    expect(respondBlockCopy('postponed', { compact: true })).toBe('Postponed')
   })
 })

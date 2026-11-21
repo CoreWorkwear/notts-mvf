@@ -1,3 +1,4 @@
+import ClubImage from './ClubImage'
 import { useMemo, useRef, useState } from 'react'
 import { formationSlots } from '../lib/lineup'
 
@@ -18,7 +19,7 @@ const DRAG_THRESHOLD = 8 // px before a press becomes a drag (vs a tap)
 // Read-only by default. In the editor (onTapSlot set) a TAP opens the picker and,
 // when onSwap is given, DRAGGING a shirt onto another swaps the two players
 // (or moves into an empty slot). Pointer-events based, so it works on touch.
-export default function PitchView({ formation, slots, starters, names, photos = {}, onTapSlot, onSwap, activeSlot, badge }) {
+export default function PitchView({ teamKey, formation, slots, starters, names, photos = {}, onTapSlot, onSwap, activeSlot, badge }) {
   const lines = useMemo(() => {
     const ss = slots || formationSlots(formation)
     const byLine = {}
@@ -56,7 +57,7 @@ export default function PitchView({ formation, slots, starters, names, photos = 
       const target = slotAt(e.clientX, e.clientY)
       if (target != null && target !== p.slot) onSwap(p.slot, target)
     } else if (!p.moved) {
-      onTapSlot(p.slot)
+      onTapSlot(p.slot, e.currentTarget)
     }
   }
   // A cancelled gesture (e.g. the OS taking over) must clear state cleanly.
@@ -68,7 +69,7 @@ export default function PitchView({ formation, slots, starters, names, photos = 
   const dragName = drag ? names[starters[drag.from]] : ''
 
   return (
-    <div className={'pitch' + (editor ? ' editing' : '') + (drag ? ' dragging' : '')}>
+    <div data-team={teamKey} className={'pitch' + (editor ? ' editing' : '') + (drag ? ' dragging' : '')}>
       {lines.map((line, i) => (
         <div className="pitch-line" key={i}>
           {line.map((s) => {
@@ -84,11 +85,13 @@ export default function PitchView({ formation, slots, starters, names, photos = 
                 onPointerDown={editor ? (e) => onPointerDown(e, s.slot) : undefined}
                 onPointerMove={editor ? onPointerMove : undefined}
                 onPointerUp={editor ? onPointerUp : undefined}
+                onClick={editor ? e => { if (e.detail === 0) onTapSlot(s.slot, e.currentTarget) } : undefined}
+                aria-label={editor ? `${s.pos}, ${id ? names[id] || 'Selected player' : 'pick a player'}` : undefined}
                 onPointerCancel={editor ? onPointerCancel : undefined}>
                 <span className="shirt-pos mono">{s.pos}</span>
                 <span className="shirt-badge">
                   {id
-                    ? (photos[id] ? <img className="shirt-photo" src={photos[id]} alt="" draggable={false} /> : initials(names[id]))
+                    ? (photos[id] ? <ClubImage sizes="40px" className="shirt-photo" src={photos[id]} alt="" draggable={false} /> : initials(names[id]))
                     : '+'}
                   {extra ? <span className="shirt-tag">{extra}</span> : null}
                 </span>
@@ -106,38 +109,39 @@ export default function PitchView({ formation, slots, starters, names, photos = 
       {drag && (
         <div className="drag-ghost" style={{ left: drag.x, top: drag.y }}>
           {photos[starters[drag.from]]
-            ? <img src={photos[starters[drag.from]]} alt="" />
+            ? <ClubImage sizes="40px" src={photos[starters[drag.from]]} alt="" />
             : <span className="mono">{initials(dragName)}</span>}
         </div>
       )}
 
       <style>{`
-        .pitch { position: relative; background: linear-gradient(var(--green-dim-2), rgba(47,168,79,.10));
-          border: 1px solid var(--green); border-radius: 14px; padding: 14px 8px;
-          display: flex; flex-direction: column; gap: 10px; min-height: 320px; justify-content: space-between; }
-        .pitch-line { display: flex; justify-content: space-around; gap: 6px; }
-        .shirt { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
+        .pitch { position: relative; --shirt-colour: var(--team-xl); background: var(--surface-raised);
+          border: 1px solid var(--green); border-radius: var(--r-card); padding: var(--space-3) var(--space-2);
+          display: flex; flex-direction: column; gap: var(--space-2); min-height: 320px; justify-content: space-between; }
+        .pitch[data-team="community"] { --shirt-colour: var(--team-community); }
+        .pitch-line { display: flex; justify-content: space-around; gap: var(--space-1); }
+        .shirt { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
           color: var(--bone); padding: 0; min-width: 60px; max-width: 72px; }
         /* In the editor the shirts must own the touch gesture from the FIRST move,
            or a phone scrolls the page instead of starting the drag. */
         .pitch.editing .shirt { touch-action: none; -webkit-user-select: none; user-select: none; }
-        .shirt-pos { font-size: 9px; color: var(--bone-dim); letter-spacing: .04em; }
+        .shirt-pos { font-size: var(--type-xs); color: var(--bone-dim); letter-spacing: .04em; }
         .shirt-badge { position: relative; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
-          overflow: hidden; background: var(--slate); border: 1.5px dashed var(--line-2); font-size: 13px; font-weight: 700; color: var(--bone-mute);
+          overflow: hidden; background: var(--slate); border: 1.5px dashed var(--line-2); font-size: var(--type-sm); font-weight: 700; color: var(--bone-mute);
           transition: box-shadow var(--t-fast), transform var(--t-fast); }
-        .shirt.filled .shirt-badge { background: var(--red-dim-2); border: 1.5px solid var(--red); color: var(--red-bright); border-style: solid; }
-        .shirt.active .shirt-badge { box-shadow: 0 0 0 3px var(--red-dim); }
+        .shirt.filled .shirt-badge { background: var(--surface); border: 1.5px solid var(--shirt-colour); color: var(--shirt-colour); border-style: solid; }
+        .shirt.active .shirt-badge { outline: 2px solid var(--shirt-colour); outline-offset: 2px; }
         .shirt.lifting .shirt-badge { opacity: .35; }
         .shirt.drop-target .shirt-badge { box-shadow: 0 0 0 3px var(--gold); transform: scale(1.08); }
         .shirt-photo { width: 100%; height: 100%; object-fit: cover; }
-        .shirt-tag { position: absolute; top: -6px; right: -6px; background: var(--gold); color: #1a1300;
-          font-family: var(--font-mono); font-size: 9px; font-weight: 700; border-radius: 8px; padding: 1px 4px; line-height: 1.2; z-index: 1; }
+        .shirt-tag { position: absolute; top: -6px; right: -6px; background: var(--award-fill); color: var(--award-ink);
+          font-family: var(--font-mono); font-size: var(--type-xs); font-weight: 700; border-radius: var(--r-input); padding: var(--space-1) var(--space-1); line-height: 1.2; z-index: 1; }
         .shirt-name { display: flex; flex-direction: column; align-items: center; line-height: 1.1; max-width: 72px; }
-        .shirt-first { font-size: 9px; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72px; }
-        .shirt-surname { font-size: 11px; font-weight: 600; color: var(--bone-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72px; }
+        .shirt-first { font-size: var(--type-xs); color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72px; }
+        .shirt-surname { font-size: var(--type-xs); font-weight: 600; color: var(--bone-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72px; }
         .drag-ghost { position: fixed; width: 48px; height: 48px; border-radius: 50%; transform: translate(-50%, -50%);
           overflow: hidden; pointer-events: none; z-index: 50; background: var(--red-dim-2); border: 2px solid var(--red);
-          display: grid; place-items: center; color: var(--red-bright); font-weight: 700; box-shadow: 0 8px 20px -6px rgba(0,0,0,.8); }
+          display: grid; place-items: center; color: var(--red-bright); font-weight: 700; box-shadow: var(--shadow-float); }
         .drag-ghost img { width: 100%; height: 100%; object-fit: cover; }
       `}</style>
     </div>

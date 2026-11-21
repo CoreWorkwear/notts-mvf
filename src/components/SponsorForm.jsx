@@ -52,7 +52,7 @@ export default function SponsorForm({ open, onClose, onSave, sponsor }) {
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
       <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT SPONSOR' : 'ADD SPONSOR'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>{editing ? name : 'New sponsor'}</h2>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{editing ? name : 'New sponsor'}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="field">
@@ -68,7 +68,7 @@ export default function SponsorForm({ open, onClose, onSave, sponsor }) {
               <button type="button" key={t.key} className="chip" aria-pressed={tier === t.key} onClick={() => setTier(t.key)}>{t.label}</button>
             ))}
           </div>
-          <span className="dim" style={{ fontSize: 12 }}>{SPONSOR_TIERS.find((t) => t.key === tier)?.blurb}</span>
+          <span className="dim" style={{ fontSize: 'var(--type-caption)' }}>{SPONSOR_TIERS.find((t) => t.key === tier)?.blurb}</span>
         </div>
 
         <div className="field">
@@ -80,7 +80,6 @@ export default function SponsorForm({ open, onClose, onSave, sponsor }) {
           <label className="label">Logo</label>
           <ImageUpload folder="sponsors" shape="square" maxDim={600} current={logoUrl}
             label={logoUrl ? 'Replace logo' : 'Upload logo'} onUploaded={(url) => setLogoUrl(url)} />
-          <span className="dim" style={{ fontSize: 12 }}>A logo on a transparent or light background works best.</span>
         </div>
 
         {editing && (
@@ -90,9 +89,11 @@ export default function SponsorForm({ open, onClose, onSave, sponsor }) {
           </button>
         )}
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>
-          {busy ? 'Saving…' : editing ? 'Save sponsor' : 'Add sponsor'}
-        </button>
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>
+            {busy ? 'Saving…' : editing ? 'Save sponsor' : 'Add sponsor'}
+          </button>
+        </div>
       </form>
     </Sheet>
   )

@@ -1,8 +1,9 @@
 # Edge Functions — Notts MvF
 
-Four functions. Three are **admin-only** (they verify the caller's JWT is an
+Five functions. Three are **admin-only** (they verify the caller's JWT is an
 ACTIVE admin, mirroring `is_admin()`); `run-reminders` is fired by pg_cron and
-gated by a shared secret instead. Deploy with the Supabase CLI (or the
+gated by a shared secret instead. `run-training-push` uses the same private
+cron gate to dispatch durable training notices. Deploy with the Supabase CLI (or the
 dashboard's Functions UI). The MVP app works without them (push UI hides,
 add-player falls back to a browser signup), but deploy these for the real thing.
 
@@ -17,9 +18,11 @@ functions/
     push.js         Web Push bookkeeping: prune 404/410 + corrupt tokens (non-https / non-push-host endpoints, missing keys), count failures by class
     roster.js       who counts as "the squad" (approved, active players)
     reminders.js    run-reminders' per-fixture flow (ledger-as-lock, read errors → skip)
+    trainingPush.js bounded training outbox delivery and abortable encrypted Web Push
   admin-create-player/index.ts
   admin-delete-player/index.ts
   run-reminders/index.ts
+  run-training-push/index.ts
   send-push/index.ts
 ```
 Each `index.ts` only wires Supabase into `_shared/` (Deno imports the `.js`
@@ -60,7 +63,7 @@ supabase functions deploy admin-create-player
 supabase functions deploy admin-delete-player
 supabase functions deploy run-reminders
 ```
-All four run with **platform `verify_jwt = false`** (set in `supabase/config.toml`)
+All five run with **platform `verify_jwt = false`** (set in `supabase/config.toml`)
 so the browser CORS preflight reaches the function — the admin ones enforce
 auth *inside* (verify the caller's JWT → `is_admin`), and `run-reminders`
 checks `x-cron-secret`, so this is not a hole. If you deploy before that
@@ -117,6 +120,57 @@ Vault entry and `CRON_SECRET`.
 
 Migration 0008 mentions a `run-reminders/README.md`; that file doesn't exist,
 this section is what it means.
+
+## Training notices and the private minute worker
+
+Migration **0042** writes one durable in-app event and one outbox row per
+already subscribed device when a manager moves or cancels a session. The
+cohort is every active, signed-off account in the same club, including
+supporters and players outside the invited squad, regardless of their answer.
+Device opt-in is optional; no device subscription means the in-app notice alone.
+Moved notices contain old/new details and invite eligible players to update
+their availability. Cancelled notices contain no RSVP action. Both open
+`/training?session=<id>` and carry their distinct `training-<notice-id>` tag.
+
+`run-training-push` claims **20** rows once per request, sends at most **4**
+concurrently, and acknowledges each with its lease token. Each provider fetch
+has an **8-second wall-clock abort**, refuses redirects and uses the existing
+subscription host allowlist; each database fetch has a **5-second abort**.
+Web Push encryption/VAPID comes from the installed `web-push` library.
+No request retries locally. Migration 0042 owns the **2-minute lease**,
+`SKIP LOCKED` claims, exponential backoff and **5-attempt cap**. Invalid or
+404/410 subscriptions end that outbox delivery immediately; transient failures
+remain pending. Stale/failed acknowledgements are counted separately.
+Subscriptions and provider response bodies are never logged.
+
+Delivery is **at least once**: a provider can accept a push before the finish
+RPC fails. Its stable tag replaces a duplicate tray card. `sent` means the
+provider accepted the request; it is not proof the device displayed or read it.
+In-app notice delivery remains independent of device delivery.
+
+Release owner setup, in this order (no real push is required for local proof):
+
+1. Apply **0042**; deploy `run-training-push` with its `_shared` imports and
+   **`verify_jwt=false`**, using the existing VAPID and `CRON_SECRET` secrets.
+   `supabase functions deploy run-training-push` reads its config entry.
+   A POST without `x-cron-secret` must return the function's own 401 with
+   `requestId`; authenticated non-POST requests return 405. Do not send a valid
+   cron request against a live queue merely to check authentication.
+2. Apply **0043**. Where `pg_cron` and `pg_net` are installed, it creates or
+   updates only `training-push-minute`; it leaves `run-reminders-hourly`
+   untouched. Each minute checks for due work before making an HTTP request.
+   With no due work, or without Vault configuration, it makes no request.
+3. Once the worker is ready, the owner adds Vault `training_push_url` with
+   `https://<project-ref>.supabase.co/functions/v1/run-training-push`. It reuses
+   the existing Vault `reminders_cron_secret`; neither the migration nor cron
+   command contains its value. Removing `training_push_url` pauses device
+   dispatch without removing in-app notices. If extensions are installed after
+   migration 0043, rerun its final scheduling DO block.
+
+The dispatch function is owner-only: no anon, authenticated or service-role
+execute permission. The worker's claim/finish RPCs are service-role-only.
+Local tests use fake subscriptions and an injected transport; no real push,
+hosted database, deployment or secret is needed.
 
 ## Logging and the request id
 Every request logs ONE JSON `done` line — who called (profile id), mode,

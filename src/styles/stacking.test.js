@@ -21,7 +21,7 @@ const stylesheets = readdirSync(dir)
   .map((f) => [f, readFileSync(dir + f, 'utf8')])
 
 // The chain every overlay sits in. The theme attribute lives on <html>.
-const SHELL = new Set(['html', ':root', '[data-theme="light"]', 'body', '#root', 'main'])
+const SHELL = new Set(['html', ':root', '[data-ground="light"]', '[data-ground="dark"]', 'body', '#root', 'main'])
 
 // Property → the only values that leave a box a plain, non-trapping ancestor.
 const HARMLESS = {

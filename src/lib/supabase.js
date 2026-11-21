@@ -43,6 +43,9 @@ export function requestLabel(input, init = {}) {
 export function timeoutFetch(input, init = {}) {
   const controller = new AbortController()
   const label = requestLabel(input, init)
+  if (navigator.onLine === false && !/^(GET|HEAD) /.test(label) && !label.includes(' /auth/v1/')) {
+    return Promise.reject(new TypeError("You're offline. Connect and try again."))
+  }
   const ceiling = ceilingFor(label)
   const started = Date.now()
   const timer = setTimeout(() => {
@@ -73,3 +76,16 @@ export const supabase = createClient(url, anonKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   global: { fetch: timeoutFetch },
 })
+
+// Is there still a persisted session for this project on the device? A token
+// refresh that fails on a dead signal leaves it in storage (supabase-js only
+// removes it when the server REFUSES the refresh token), so "no session in
+// hand" plus "one in storage" means "not restored yet", not "signed out".
+export function hasStoredSession() {
+  try {
+    const key = supabase.auth?.storageKey
+    return !!key && !!window.localStorage.getItem(key)
+  } catch {
+    return false // storage blocked: nothing could have been persisted
+  }
+}

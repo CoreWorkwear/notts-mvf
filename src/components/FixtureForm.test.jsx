@@ -35,6 +35,7 @@ const TEAMS = [
 const OPPONENTS = [
   { id: 'opp-1', name: 'Long Eaton' }, // name-only (existing tests rely on this)
   { id: 'opp-2', name: 'Carlton Town', home_venue: 'Stoke Lane', home_address: 'Stoke Lane, Gedling', home_postcode: 'NG4 2QT' },
+  { id: 'opp-3', name: 'Bilborough', home_venue: 'Harvey Hadden' }, // a ground name and nothing else
 ]
 const COMPETITIONS = [
   { id: 'comp-1', name: 'MvF XL National League', type: 'league' },
@@ -74,12 +75,26 @@ function Harness({ fixture = null, seasonId = 'season-1', onSaved = () => {} }) 
 beforeEach(() => { calls.length = 0 })
 
 describe('FixtureForm — shares the sheet/back mechanism', () => {
+  test('tapping a team pill sets the fixture squad and the save button stays in the action bar', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByText('Open form'))
+    expect(screen.getByRole('button', { name: '1st Team' })).toHaveAttribute('aria-pressed', 'true')
+    const community = screen.getByRole('button', { name: 'Community' })
+    await userEvent.click(community)
+    expect(community).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.type(screen.getByPlaceholderText('New opponent name'), 'Carlton Town')
+    await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec')
+    const submit = screen.getByRole('button', { name: /add fixture/i })
+    expect(submit.closest('.sheet-actions')).toBeTruthy()
+    await userEvent.click(submit)
+    expect(calls.find(([op,t]) => op === 'insert' && t === 'fixtures')[2].team_id).toBe('t-co')
+  })
   test('ADD: opens from a transition, STAYS open, saves a new fixture', async () => {
     render(<StrictMode><Harness /></StrictMode>)
     await userEvent.click(screen.getByText('Open form'))
     await flush()
 
-    expect(screen.getByText('NEW FIXTURE')).toBeInTheDocument() // didn't snap shut
+    expect(screen.getByRole('heading', { name: 'Add fixture' })).toBeInTheDocument() // didn't snap shut
 
     await userEvent.type(screen.getByPlaceholderText('New opponent name'), 'Carlton Town')
     await userEvent.type(screen.getByPlaceholderText(/Harvey Hadden/i), 'Forest Rec 3G')
@@ -95,7 +110,7 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
     await userEvent.click(screen.getByText('Open form'))
     await flush()
 
-    expect(screen.getByText('EDIT FIXTURE')).toBeInTheDocument() // didn't snap shut
+    expect(screen.getByRole('heading', { name: 'Edit fixture' })).toBeInTheDocument() // didn't snap shut
     expect(screen.getByDisplayValue('Forest Rec 3G')).toBeInTheDocument() // prefilled
 
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
@@ -121,26 +136,6 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
       opponent_id: 'opp-1', venue: 'Memorial Ground',
       club_id: 'club-1', season_id: 'season-1', team_id: 't-xl', status: 'scheduled',
     })
-  })
-
-  test('picking an opponent with a saved home ground auto-fills the venue/address/postcode', async () => {
-    const onSaved = vi.fn()
-    render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
-    await userEvent.click(screen.getByText('Open form'))
-    await flush()
-
-    const oppSelect = [...screen.getAllByRole('combobox')].find((s) => within(s).queryByText('Carlton Town'))
-    await userEvent.selectOptions(oppSelect, 'opp-2')
-
-    // the venue fields are filled from the opponent's home ground, no typing
-    expect(screen.getByPlaceholderText(/Harvey Hadden/i)).toHaveValue('Stoke Lane')
-    expect(screen.getByDisplayValue('Stoke Lane, Gedling')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('NG18 4YD')).toHaveValue('NG4 2QT')
-
-    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
-    await waitFor(() => expect(onSaved).toHaveBeenCalled())
-    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
-    expect(ins[2]).toMatchObject({ opponent_id: 'opp-2', venue: 'Stoke Lane', address: 'Stoke Lane, Gedling', postcode: 'NG4 2QT' })
   })
 
   test('NEGATIVE: missing venue blocks the save, pops an error and flags the field', async () => {
@@ -235,6 +230,112 @@ describe('FixtureForm — shares the sheet/back mechanism', () => {
 // not select arrives here undefined and is saved as null — silently, on every
 // edit. competition_id was exactly that until Oct 2026: 4 of that season's 11
 // League fixtures had lost their competition to a routine kickoff or venue edit.
+// The opponent's saved home ground is where an AWAY game is played. The form
+// used to copy it in whenever an opponent was picked, Home (the default)
+// included, so every home fixture arrived pre-filled with the visitors' ground
+// and passed validation untouched. It also copied field by field, so one
+// opponent's address and postcode survived under the next one's ground name:
+// map, directions and weather for the wrong place.
+describe("FixtureForm — the opponent's ground is for away games", () => {
+  const openForm = async (fixture = null) => {
+    const onSaved = vi.fn()
+    render(<StrictMode><Harness onSaved={onSaved} fixture={fixture} /></StrictMode>)
+    await userEvent.click(screen.getByText('Open form'))
+    await flush()
+    return onSaved
+  }
+  const select = (optionText) => [...screen.getAllByRole('combobox')].find((el) => within(el).queryByText(optionText))
+  const venue = () => screen.getByPlaceholderText(/Harvey Hadden/i)
+  const postcode = () => screen.getByPlaceholderText('NG18 4YD')
+  const address = () => screen.getByRole('textbox', { name: 'Address' })
+
+  test('a HOME game (the default) does not take the visitors\' ground', async () => {
+    await openForm()
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    expect(venue()).toHaveValue('')
+    expect(address()).toHaveValue('')
+    expect(postcode()).toHaveValue('')
+  })
+
+  test('an AWAY game takes the whole ground, and it saves', async () => {
+    const onSaved = await openForm()
+    await userEvent.selectOptions(select('Away'), 'Away')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    expect(venue()).toHaveValue('Stoke Lane')
+    expect(address()).toHaveValue('Stoke Lane, Gedling')
+    expect(postcode()).toHaveValue('NG4 2QT')
+
+    await userEvent.click(screen.getByRole('button', { name: /add fixture/i }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const ins = calls.find((c) => c[0] === 'insert' && c[1] === 'fixtures')
+    expect(ins[2]).toMatchObject({ opponent_id: 'opp-2', home_away: 'Away', venue: 'Stoke Lane', address: 'Stoke Lane, Gedling', postcode: 'NG4 2QT' })
+  })
+
+  test('opponent first, then Away: it fills then; back to Home takes it out again', async () => {
+    await openForm()
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    await userEvent.selectOptions(select('Away'), 'Away')
+    expect(venue()).toHaveValue('Stoke Lane')
+    await userEvent.selectOptions(select('Away'), 'Home')
+    expect(venue()).toHaveValue('')
+    expect(address()).toHaveValue('')
+    expect(postcode()).toHaveValue('')
+  })
+
+  test('a second opponent replaces the whole ground: nothing of the first is left under it', async () => {
+    await openForm()
+    await userEvent.selectOptions(select('Away'), 'Away')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-3')
+    expect(venue()).toHaveValue('Harvey Hadden')
+    expect(address()).toHaveValue('')   // was "Stoke Lane, Gedling"
+    expect(postcode()).toHaveValue('')  // was NG4 2QT
+  })
+
+  test('an opponent with no ground on file clears a ground that was filled in for the last one', async () => {
+    await openForm()
+    await userEvent.selectOptions(select('Away'), 'Away')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-1')
+    expect(venue()).toHaveValue('')
+    expect(postcode()).toHaveValue('')
+  })
+
+  test('a venue the manager typed is never overwritten or cleared', async () => {
+    await openForm()
+    await userEvent.selectOptions(select('Away'), 'Away')
+    await userEvent.type(venue(), 'Neutral Park')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    expect(venue()).toHaveValue('Neutral Park')
+    await userEvent.selectOptions(select('Away'), 'Home')
+    expect(venue()).toHaveValue('Neutral Park')
+  })
+
+  test('typing over a filled-in ground makes it the manager\'s: a later change leaves it alone', async () => {
+    await openForm()
+    await userEvent.selectOptions(select('Away'), 'Away')
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    await userEvent.type(venue(), ' (3G)')
+    await userEvent.selectOptions(select('Away'), 'Home')
+    expect(venue()).toHaveValue('Stoke Lane (3G)')
+    expect(postcode()).toHaveValue('NG4 2QT')
+  })
+
+  test('editing an away game saved AT the opponent\u2019s ground: changing the opponent moves the ground with it', async () => {
+    await openForm({ ...EXISTING, home_away: 'Away', opponent_id: 'opp-2', venue: 'Stoke Lane', address: 'Stoke Lane, Gedling', postcode: 'NG4 2QT' })
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-3')
+    expect(venue()).toHaveValue('Harvey Hadden')
+    expect(address()).toHaveValue('')
+    expect(postcode()).toHaveValue('')
+  })
+
+  test('editing: re-picking the opponent leaves the saved venue alone', async () => {
+    await openForm({ ...EXISTING, home_away: 'Away' })
+    await userEvent.selectOptions(select('Carlton Town'), 'opp-2')
+    expect(venue()).toHaveValue('Forest Rec 3G')
+  })
+})
+
 describe('FixtureForm — an edit must not wipe what the hook loaded', () => {
   const VALUES = {
     id: 'fix-9', match_date: '2026-03-08', kickoff: '13:00:00', home_away: 'Home', fixture_type: 'League',
@@ -278,7 +379,7 @@ describe('FixtureForm — binning a fixture says what goes with it', () => {
     render(<StrictMode><Harness fixture={fixture} /></StrictMode>)
     await userEvent.click(screen.getByText('Open form'))
     await flush()
-    await userEvent.click(screen.getByRole('button', { name: /bin this fixture/i }))
+    await userEvent.click(screen.getByRole('button', { name: /delete fixture/i }))
     await flush()
     const asked = confirm.mock.calls[0]?.[0] ?? ''
     confirm.mockRestore()
@@ -290,7 +391,7 @@ describe('FixtureForm — binning a fixture says what goes with it', () => {
     expect(asked).toMatch(/result/i)
     expect(asked).toMatch(/scorers/i)
     expect(asked).toMatch(/line-up/i)
-    expect(asked).toMatch(/no undo/i)
+    expect(asked).toMatch(/permanently delete/i)
     expect(calls.find((c) => c[0] === 'delete')).toBeFalsy()
   })
 

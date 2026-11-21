@@ -34,7 +34,7 @@ import App from './App'
 const base = { loading: false, isAuthed: true, isAdmin: false, profile: null, passwordRecovery: false }
 
 beforeEach(() => { auth.state = { ...base } })
-afterEach(() => { window.history.replaceState({}, '', '/') })
+afterEach(() => { vi.useRealTimers(); window.history.replaceState({}, '', '/') })
 
 describe('App — admin routes while the profile is still unknown', () => {
   test('a not-yet-loaded profile on /players shows the loader and STAYS on /players', async () => {
@@ -63,6 +63,48 @@ describe('App — admin routes while the profile is still unknown', () => {
   })
 })
 
+// A stored session that could not be restored (expired token, no signal) is
+// not a signed-out user: showing the sign-in form told a signed-in player to
+// type his password in a car park with no signal to send it.
+describe('App — a session that could not be restored yet', () => {
+  test('shows a reconnect screen with a retry, not the sign-in form', async () => {
+    const retryRestore = vi.fn(async () => false)
+    auth.state = { ...base, isAuthed: false, reconnecting: true, retryRestore, signInInstead: vi.fn() }
+    render(<App />)
+    expect(screen.queryByText('AUTH-PAGE')).toBeNull()
+    expect(screen.getByRole('alert')).toHaveTextContent(/can't reach the club/i)
+    await act(async () => { screen.getByRole('button', { name: /try again/i }).click() })
+    expect(retryRestore).toHaveBeenCalled()
+  })
+
+  // supabase-js can sit in refresh backoff for the best part of a minute on a
+  // dead signal. The button must not stay on "Trying…" for all of it.
+  test('"Try again" stops waiting after a few seconds and can be tapped again', async () => {
+    vi.useFakeTimers()
+    const retryRestore = vi.fn(() => new Promise(() => {})) // never answers
+    auth.state = { ...base, isAuthed: false, reconnecting: true, retryRestore, signInInstead: vi.fn() }
+    render(<App />)
+    await act(async () => { screen.getByRole('button', { name: /try again/i }).click() })
+    expect(screen.getByRole('button', { name: /trying/i })).toBeDisabled()
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000) })
+    expect(screen.getByRole('button', { name: /try again/i })).toBeEnabled()
+  })
+
+  test('"Sign in instead" hands over to the sign-in form', async () => {
+    const signInInstead = vi.fn()
+    auth.state = { ...base, isAuthed: false, reconnecting: true, retryRestore: vi.fn(), signInInstead }
+    render(<App />)
+    await act(async () => { screen.getByRole('button', { name: /sign in instead/i }).click() })
+    expect(signInInstead).toHaveBeenCalled()
+  })
+
+  test('signed out with nothing stored still gets the sign-in form', () => {
+    auth.state = { ...base, isAuthed: false, reconnecting: false }
+    render(<App />)
+    expect(screen.getByText('AUTH-PAGE')).toBeInTheDocument()
+  })
+})
+
 describe('App — a tapped push notification navigates the open app', () => {
   test('an mvf-navigate window event moves to that route', async () => {
     window.history.replaceState({}, '', '/fixtures')
@@ -84,9 +126,9 @@ describe('App — a tapped push notification navigates the open app', () => {
 
 describe('App — the holding screen for accounts the database shows nothing', () => {
   test.each([
-    ['pending', { id: 'u1', role: 'player', is_player: true, approved: false, active: true }, /nearly there/i, /signed up as a player/i],
-    ['pending', { id: 'u1', role: 'player', is_player: false, approved: false, active: true }, /nearly there/i, /signed up as a supporter/i],
-    ['inactive', { id: 'u1', role: 'player', is_player: true, approved: true, active: false }, /account off/i, /switched off/i],
+    ['pending', { id: 'u1', role: 'player', is_player: true, approved: false, active: true }, /awaiting manager sign-off/i, /player/i],
+    ['pending', { id: 'u1', role: 'player', is_player: false, approved: false, active: true }, /awaiting manager sign-off/i, /supporter/i],
+    ['inactive', { id: 'u1', role: 'player', is_player: true, approved: true, active: false }, /account inactive/i, /contact your manager/i],
   ])('a %s account sees the holding screen, not the app', async (holding, profile, head, body) => {
     window.history.replaceState({}, '', '/fixtures')
     auth.state = { ...base, profile, holding, refreshProfile: vi.fn(() => Promise.resolve()), signOut: vi.fn() }

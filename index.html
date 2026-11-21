@@ -2,32 +2,29 @@
 <html lang="en-GB">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
-    <meta name="theme-color" content="#0c0f0d" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F2F0E9" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Resolve the same saved preference as ThemeProvider before CSS or PWA chrome paints. -->
+    <script>
+      (function () {
+        var saved
+        try { saved = localStorage.getItem('theme') } catch (e) {}
+        var ground = saved === 'dark' || saved === 'light' ? saved :
+          matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.ground = ground
+        document.querySelector('meta[name="theme-color"]').content = ground === 'dark' ? '#141A12' : '#F2F0E9'
+      })()
+    </script>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Notts MvF" />
     <title>Notts MvF</title>
-
-    <!-- Fonts (DESIGN-SYSTEM §2) are self-hosted: src/styles/fonts.css is
-         bundled into the built stylesheet and the woff2 files are precached
-         by the service worker — no external font origins, correct offline. -->
   </head>
   <body>
     <div id="root"></div>
-    <!-- Set theme before paint to avoid a flash of the wrong theme. Dark default. -->
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('theme') || 'dark'
-          document.documentElement.dataset.theme = t
-          var meta = document.querySelector('meta[name="theme-color"]')
-          if (meta) meta.setAttribute('content', t === 'light' ? '#F3F1EC' : '#0c0f0d')
-        } catch (e) {}
-      })()
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

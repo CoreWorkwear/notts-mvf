@@ -35,6 +35,7 @@ vi.mock('../lib/supabase', () => {
 })
 
 import FixtureDetail from './FixtureDetail'
+import { todayISO } from '../lib/format'
 
 const fx = {
   id: 'f1', myStatus: 'out', team_id: 't-first',
@@ -51,6 +52,23 @@ beforeEach(() => {
 })
 
 describe('FixtureDetail — §2.2 availability reflects immediately', () => {
+  test('a near-term fixture without a forecast has no empty weather section', async () => {
+    render(<FixtureDetail open fixture={{ ...fx, match_date: todayISO() }} onClose={() => {}} />)
+    expect(screen.queryByText(/match-day weather/i)).toBeNull()
+    await tick()
+  })
+  test('a historical fixture without a competitive name announces its squad once', async () => {
+    const team = { key: 'xl', label: 'XL 11s', is_first_team: true }
+    render(<FixtureDetail open fixture={{ ...fx, team }} onClose={() => {}} />)
+    expect(screen.getByText('1st Team · Home · League')).toBeInTheDocument()
+    await tick()
+  })
+  test('a squad-list shortcut opens on Who’s in and keeps the answer within reach', async () => {
+    render(<FixtureDetail open fixture={fx} initialTab="who" onSetAvail={vi.fn()} onClose={() => {}} />)
+    await tick()
+    expect(screen.getByRole('tab', { name: "Who's in" })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: "I'm in" }).closest('.sheet-actions')).toBeTruthy()
+  })
   test('picking In updates the displayed selection without reopening the sheet', async () => {
     const onSetAvail = vi.fn().mockResolvedValue()
     render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={onSetAvail} onClose={() => {}} />)
@@ -96,14 +114,34 @@ describe('FixtureDetail — team-scoped availability', () => {
   test('a player outside the squad gets no options on the Availability tab', async () => {
     render(<FixtureDetail open fixture={fx} isAdmin={false} blockReason="other-team" onSetAvail={vi.fn()} onClose={() => {}} />)
     expect(screen.queryByRole('button', { name: "I'm in" })).not.toBeInTheDocument()
-    expect(screen.getByText(/First Team squad only/i)).toBeInTheDocument()
+    expect(screen.queryByText(/squad only|stepping up/i)).not.toBeInTheDocument()
     await tick()
   })
 
   test('a game that has kicked off is closed, whichever way it was opened', async () => {
     render(<FixtureDetail open fixture={fx} isAdmin={false} blockReason="kicked-off" onSetAvail={vi.fn()} onClose={() => {}} />)
     expect(screen.queryByRole('button', { name: "I'm in" })).not.toBeInTheDocument()
-    expect(screen.getByText(/shut at kickoff/i)).toBeInTheDocument()
+    expect(screen.getByText(/kicked off · availability closed/i)).toBeInTheDocument()
+    await tick()
+  })
+})
+
+// A P-P game opened from the list or the calendar looked exactly like a live
+// one: date, kickoff, weather, In / Maybe / Out, and nothing saying it was off.
+describe('FixtureDetail — a postponed game', () => {
+  const pp = { ...fx, postponed: true, status: 'postponed' }
+
+  test('says it is postponed, up top, and offers no answer', async () => {
+    const { container } = render(<FixtureDetail open fixture={pp} isAdmin={false} blockReason="postponed" onSetAvail={vi.fn()} onClose={() => {}} />)
+    expect(container.querySelector('.det-hero')).toHaveTextContent(/postponed/i)
+    expect(screen.queryByRole('button', { name: "I'm in" })).not.toBeInTheDocument()
+    expect(screen.getByText(/new date/i)).toBeInTheDocument()
+    await tick()
+  })
+
+  test('a game that is on carries no postponed marker', async () => {
+    const { container } = render(<FixtureDetail open fixture={fx} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
+    expect(container.querySelector('.det-hero')).not.toHaveTextContent(/postponed/i)
     await tick()
   })
 })
@@ -144,7 +182,7 @@ describe("FixtureDetail — Who's in tab", () => {
     await userEvent.click(screen.getByRole('tab', { name: /who's in/i }))
 
     expect(await screen.findByText('Joe M')).toBeInTheDocument()
-    expect(screen.getByText(/Available · 1/)).toBeInTheDocument()
+    expect(screen.getByText(/Available ·/)).toHaveTextContent('Available · 1')
     expect(screen.queryByText('Sue S')).not.toBeInTheDocument()
     expect(screen.queryByText('Pat P')).not.toBeInTheDocument()
     expect(screen.queryByText('Mo M')).not.toBeInTheDocument()

@@ -100,11 +100,11 @@ test.describe('player', () => {
     // cold render — exactly the cold-start path users hit.
     await page.route('**/rest/v1/fixtures*', (r) => r.abort())
     await page.reload()
-    await expect(page.getByText(/couldn't pull the fixtures/i)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/couldn't load fixtures/i)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText(/pulling the fixtures/i)).toBeHidden() // no infinite loader
     // Recovery: stop failing, hit Try again, the fixtures surface loads.
     await page.unroute('**/rest/v1/fixtures*')
     await page.getByRole('button', { name: /try again/i }).click()
-    await expect(page.getByText(/couldn't pull the fixtures/i)).toBeHidden({ timeout: 15_000 })
+    await expect(page.getByText(/couldn't load fixtures/i)).toBeHidden({ timeout: 15_000 })
   })
 })

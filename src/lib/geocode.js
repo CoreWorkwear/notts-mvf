@@ -14,8 +14,10 @@ export function normalizePostcode(pc) {
 export async function geocodePostcode(pc) {
   const clean = String(pc ?? '').trim()
   if (!clean) return null
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
   try {
-    const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`)
+    const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`, { signal: controller.signal })
     if (!res.ok) return null
     const json = await res.json()
     const r = json?.result
@@ -23,5 +25,7 @@ export async function geocodePostcode(pc) {
     return null
   } catch {
     return null
+  } finally {
+    clearTimeout(timeout)
   }
 }

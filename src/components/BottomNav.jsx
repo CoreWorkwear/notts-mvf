@@ -1,21 +1,18 @@
-import { NavLink } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { useLayoutEffect, useRef } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { indicatorTransition } from '../lib/motion'
 import {
-  IconFixtures, IconResults, IconClub, IconManage, IconYou,
+  IconFixtures, IconTraining, IconResults, IconClub, IconManage, IconYou,
 } from './Icons'
 
 // Role-gated bottom nav (HANDOVER §5). Admin/config screens live behind a single
 // "Manage" hub rather than crowding the bar with extra tabs.
-// Player: Fixtures · Results · Club · You
-// Admin:  Fixtures · Results · Club · Manage · You
-//
-// The active tab is marked by a short rule that SLIDES between tabs (one shared
-// layoutId) rather than a colour that blinks from one label to another. It is
-// the only thing on screen that tells you where you are, so it earns the motion.
+// Player: Fixtures · Training · Results · Club · You
+// Admin:  Fixtures · Training · Results · Club · Manage · You
+
 const PLAYER_TABS = [
   { to: '/fixtures', label: 'Fixtures', Icon: IconFixtures },
+  { to: '/training', label: 'Training', Icon: IconTraining },
   { to: '/results',  label: 'Results',  Icon: IconResults },
   { to: '/club',     label: 'Club',     Icon: IconClub },
   { to: '/you',      label: 'You',      Icon: IconYou },
@@ -23,30 +20,47 @@ const PLAYER_TABS = [
 const MANAGE_TAB = { to: '/manage', label: 'Manage', Icon: IconManage }
 
 export default function BottomNav() {
+  const rail = useRef(null)
+  const { pathname } = useLocation()
+  const adminSubpage = /^\/(players|whos-in|competitions|opponents|seasons|sponsors|media|reminders|diagnostics|news)\/?$/.test(pathname)
   const { isAdmin } = useAuth()
+  useLayoutEffect(() => {
+    const nav = rail.current
+    const root = document.documentElement
+    function fit() {
+      const bounds = nav.getBoundingClientRect()
+      root.style.setProperty('--nav-height', bounds.height + 'px')
+      const active = nav.querySelector('[aria-current]')?.getBoundingClientRect()
+      if (!active) return
+      const style = getComputedStyle(nav)
+      const right = bounds.right - parseFloat(style.paddingRight || 0)
+      const left = bounds.left + parseFloat(style.paddingLeft || 0)
+      if (active.right > right) nav.scrollLeft += Math.ceil(active.right - right)
+      if (active.left < left) nav.scrollLeft -= Math.ceil(left - active.left)
+    }
+    fit()
+    const observer = window.ResizeObserver && new ResizeObserver(fit)
+    observer?.observe(nav)
+    for (const link of nav.children) observer?.observe(link)
+    return () => {
+      observer?.disconnect()
+      root.style.removeProperty('--nav-height')
+    }
+  }, [pathname, isAdmin])
   const tabs = isAdmin
-    ? [...PLAYER_TABS.slice(0, 3), MANAGE_TAB, PLAYER_TABS[3]]
+    ? [...PLAYER_TABS.slice(0, -1), MANAGE_TAB, PLAYER_TABS.at(-1)]
     : PLAYER_TABS
 
   return (
-    <nav className="bottom-nav">
-      {tabs.map(({ to, label, Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
-        >
-          {({ isActive }) => (
-            <>
-              {isActive && (
-                <motion.span className="nav-rule" layoutId="nav-rule" transition={indicatorTransition} />
-              )}
-              <Icon width={21} height={21} />
-              <span className="nav-label">{label}</span>
-            </>
-          )}
-        </NavLink>
-      ))}
+    <nav ref={rail} className="bottom-nav" aria-label="Club navigation">
+      {tabs.map(({ to, label, Icon }) => {
+        const current = pathname === to ? 'page' : to === '/manage' && adminSubpage ? 'location' : undefined
+        return <Link key={to} to={to} aria-current={current} className={'nav-item' + (current ? ' active' : '')}>
+          {current && <span className="nav-rule" aria-hidden="true" />}
+          <Icon width={21} height={21} aria-hidden="true" />
+          <span className="nav-label">{label}</span>
+        </Link>
+      })}
     </nav>
   )
 }

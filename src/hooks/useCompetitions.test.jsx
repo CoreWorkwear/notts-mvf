@@ -54,3 +54,28 @@ describe('useCompetitions — latest request wins', () => {
     expect(result.current.loading).toBe(false)
   })
 })
+
+describe('useCompetitions — loaded', () => {
+  test('false until the first load completes, true after, even with none set up', async () => {
+    store.tables.competitions = []
+    const { result } = renderHook(() => useCompetitions('s1'))
+    expect(result.current.loaded).toBe(false)
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(true)
+  })
+})
+
+describe('useCompetitions — loaded is per season', () => {
+  test('switching season: not loaded again until that season\u2019s own load completes', async () => {
+    const { result, rerender } = renderHook(({ s }) => useCompetitions(s), { initialProps: { s: 's1' } })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+
+    store.defer = true
+    rerender({ s: 's2' })
+    expect(result.current.loaded).toBe(false)
+    await waitFor(() => expect(store.pending).toHaveLength(1)) // the request is out
+    expect(result.current.loaded).toBe(false)
+    await act(async () => { store.pending.splice(0).forEach((p) => p.resolve()) })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+  })
+})

@@ -1,4 +1,7 @@
-import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
+import { motion, useScroll, useTransform } from 'framer-motion'
+import { useLayoutEffect } from 'react'
+import { useDecorativeMotion } from '../hooks/useDecorativeMotion'
+import GrainOverlay from './GrainOverlay'
 
 // The room the app sits in. Two very soft brand-coloured pools drifting on a
 // minute-long cycle, plus a slow scroll-linked rise — enough that the charcoal
@@ -12,16 +15,24 @@ import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion
 // prefers-reduced-motion, which leaves the static gradients — the depth stays,
 // the movement goes.
 export default function AmbientField() {
-  const reduce = useReducedMotion()
+  const enabled = useDecorativeMotion()
+  useLayoutEffect(() => {
+    document.documentElement.toggleAttribute('data-static-effects', !enabled)
+    return () => document.documentElement.removeAttribute('data-static-effects')
+  }, [enabled])
+  return enabled ? <><DriftingPools /><GrainOverlay /></> : null
+}
+
+function DriftingPools() {
   const { scrollY } = useScroll()
   // Deliberately lazy: the field travels ~12% of the page's scroll, so content
   // slides over a near-stationary backdrop.
   const y = useTransform(scrollY, [0, 2000], [0, -240])
 
   return (
-    <motion.div className="ambient" aria-hidden="true" style={reduce ? undefined : { y }}>
-      <div className={'amb-pool amb-red' + (reduce ? '' : ' drifting')} />
-      <div className={'amb-pool amb-green' + (reduce ? '' : ' drifting')} />
+    <motion.div className="ambient" aria-hidden="true" style={{ y }}>
+      <div className="amb-pool amb-red drifting" />
+      <div className="amb-pool amb-green drifting" />
     </motion.div>
   )
 }

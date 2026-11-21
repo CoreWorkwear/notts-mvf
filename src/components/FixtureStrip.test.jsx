@@ -11,6 +11,13 @@ const fixture = {
 }
 
 describe('FixtureStrip availability', () => {
+  test('tapping the manager counts opens this game’s team sheet', async () => {
+    const onOpen = vi.fn(), onOpenWhosIn = vi.fn()
+    render(<FixtureStrip fixture={fixture} isAdmin onOpen={onOpen} onOpenWhosIn={onOpenWhosIn} />)
+    await userEvent.click(screen.getByRole('button', { name: /see who's in/i }))
+    expect(onOpenWhosIn).toHaveBeenCalledOnce()
+    expect(onOpen).not.toHaveBeenCalled()
+  })
   test('a player gets all three options on the list row', () => {
     render(<FixtureStrip fixture={fixture} isAdmin={false} onSetAvail={() => {}} onOpen={() => {}} />)
     expect(screen.getByRole('button', { name: 'In' })).toBeInTheDocument()
@@ -41,7 +48,7 @@ describe('FixtureStrip availability', () => {
   test('a not-signed-off player gets no options', () => {
     render(<FixtureStrip fixture={fixture} isAdmin={false} blockReason="pending" onSetAvail={() => {}} onOpen={() => {}} />)
     expect(screen.queryByRole('button', { name: 'In' })).not.toBeInTheDocument()
-    expect(screen.getByText(/not signed off yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/pending approval/i)).toBeInTheDocument()
   })
 })
 
@@ -50,10 +57,10 @@ describe('FixtureStrip availability', () => {
 describe('FixtureStrip — team-scoped availability', () => {
   const xlFixture = { ...fixture, team: { key: 'xl', label: 'First Team' } }
 
-  test('a player outside the squad gets no options, and is told whose game it is', () => {
+  test('a player outside the squad sees the fixture without reply buttons or a squad restriction message', () => {
     render(<FixtureStrip fixture={xlFixture} isAdmin={false} blockReason="other-team" onSetAvail={() => {}} onOpen={() => {}} />)
     expect(screen.queryByRole('button', { name: 'In' })).not.toBeInTheDocument()
-    expect(screen.getByText(/first team squad only/i)).toBeInTheDocument()
+    expect(screen.queryByText(/squad only|stepping up/i)).not.toBeInTheDocument()
   })
 
   test('a manager outside the squad keeps the counts but loses their own control', () => {

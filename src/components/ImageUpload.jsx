@@ -1,3 +1,4 @@
+import ClubImage from './ClubImage'
 import { useEffect, useRef, useState } from 'react'
 import { uploadMedia } from '../lib/storage'
 import Toast from './Toast'
@@ -5,10 +6,7 @@ import Toast from './Toast'
 // Admin image picker → resize → upload → onUploaded(publicUrl). Shows the
 // current/just-uploaded image as a preview. round = crest/headshot, square = photo.
 // A sensible default hint per shape; callers can override with `hint`.
-const defaultHint = (shape, maxDim) =>
-  shape === 'round'
-    ? `Square works best — a head-and-shoulders shot (about ${Math.min(maxDim, 512)}×${Math.min(maxDim, 512)}px). We resize + crop to a circle.`
-    : `Landscape works best (roughly 4:3 or 16:9). We shrink it to about ${maxDim}px and compress, so big phone photos are fine.`
+const defaultHint = (shape) => shape === 'round' ? 'Square photo · circular crop' : 'Landscape photo · 4:3 or 16:9'
 
 export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200, multiple = false, hint }) {
   const inputRef = useRef(null)
@@ -33,7 +31,7 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
         if (multiple) setProgress(`${i + 1}/${files.length}`)
         const url = await uploadMedia(files[i], folder, { maxDim })
         if (!multiple) setPreview(url)
-        onUploaded(url)
+        await onUploaded(url)
       }
     } catch (err) {
       setError(err.message || 'Upload failed.')
@@ -43,7 +41,7 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
     }
   }
 
-  const hintText = hint ?? defaultHint(shape, maxDim)
+  const hintText = hint ?? defaultHint(shape)
 
   return (
     <div className="iu-wrap">
@@ -51,7 +49,7 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
       <div className="iu">
         {!multiple && (
           <div className={'iu-preview ' + shape}>
-            {preview ? <img src={preview} alt="" /> : <span className="iu-empty">—</span>}
+            {preview ? <ClubImage sizes="56px" src={preview} alt="" /> : <span className="iu-empty">—</span>}
           </div>
         )}
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => inputRef.current?.click()}>
@@ -62,9 +60,9 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
       {hintText && <p className="iu-hint">{hintText}</p>}
 
       <style>{`
-        .iu-wrap { display: flex; flex-direction: column; gap: 6px; }
-        .iu-hint { font-size: 12px; color: var(--bone-dim); line-height: 1.35; margin: 0; }
-        .iu { display: flex; align-items: center; gap: 12px; }
+        .iu-wrap { display: flex; flex-direction: column; gap: var(--space-1); }
+        .iu-hint { font-size: var(--type-caption); color: var(--bone-dim); line-height: 1.35; margin: 0; }
+        .iu { display: flex; align-items: center; gap: var(--space-3); }
         .iu-preview { width: 56px; height: 56px; flex: none; overflow: hidden; background: var(--slate);
           border: 1px solid var(--line); display: grid; place-items: center; }
         .iu-preview.square { border-radius: 12px; }

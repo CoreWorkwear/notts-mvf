@@ -29,7 +29,7 @@ export default function NotificationToggle() {
   }, [user?.id])
 
   if (!pushSupported) {
-    return <p className="dim" style={{ fontSize: 13 }}>This device can’t do notifications.</p>
+    return <p className="dim" style={{ fontSize: 'var(--type-sm)' }}>Match alerts aren’t available in this browser.</p>
   }
 
   async function toggle() {
@@ -43,11 +43,11 @@ export default function NotificationToggle() {
   return (
     <div>
       <Toast message={error} onDismiss={() => setError(null)} />
-      <button className={'chip' + (on ? ' paid-on' : '')} aria-pressed={on} disabled={busy} onClick={toggle}>
-        {busy ? '…' : on ? 'Notifications on ✓' : 'Turn on match notifications'}
+      <button className="chip" aria-pressed={on} aria-busy={busy} aria-describedby="alert-help" disabled={busy} onClick={toggle}>
+        Match alerts <span aria-hidden="true">· {busy ? 'Updating…' : on ? 'On' : 'Off'}</span>
       </button>
-      <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>
-        New games and reminders, with one-tap In/Maybe/Out. On iPhone, add the app to your home screen first.
+      <p className="dim" id="alert-help" style={{ fontSize: 'var(--type-caption)', marginTop: 'var(--space-1)' }}>
+        New fixtures and reminders
       </p>
     </div>
   )

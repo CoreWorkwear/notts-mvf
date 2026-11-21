@@ -18,11 +18,10 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="empty" style={{ paddingTop: 120 }}>
-          <p className="empty-title">That's gone a bit wrong</p>
-          <p>Give it a refresh — should sort itself.</p>
+        <div className="empty" style={{ paddingTop: 'var(--space-24)' }}>
+          <p className="empty-title">App unavailable</p>
           <button className="btn btn-primary mt-4" onClick={() => location.reload()}>Refresh</button>
-          <p className="mono dim mt-4" style={{ fontSize: 11 }}>build {BUILD}</p>
+          <p className="mono dim mt-4" style={{ fontSize: 'var(--type-xs)' }}>build {BUILD}</p>
         </div>
       )
     }

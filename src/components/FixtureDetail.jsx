@@ -1,3 +1,4 @@
+import ClubImage from './ClubImage'
 import { useEffect, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
@@ -13,7 +14,7 @@ import WeatherStrip from './WeatherStrip'
 import TabBar from './TabBar'
 import { inForecastWindow } from '../lib/weather'
 import { osmEmbedUrl, directionsUrl, mapSearchUrl } from '../lib/maps'
-import { teamMatchName } from '../lib/teams'
+import { teamLabel, teamMatchName } from '../lib/teams'
 import LineupBoard from './LineupBoard'
 import { respondBlockCopy, squadIds } from '../lib/players'
 
@@ -22,7 +23,7 @@ import { respondBlockCopy, squadIds } from '../lib/players'
 // `blockReason` null = the viewer may answer; otherwise respondBlock()'s reason.
 // This sheet is also how the Calendar opens a game, so it is the one surface
 // that can be pointed at an already-played fixture — hence the kickoff reason.
-export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockReason = null, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
+export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockReason = null, initialTab = 'me', focusAnswer = false, pool = [], canLogResult, onSetAvail, onEdit, onLogResult, onChanged }) {
   const { user } = useAuth()
   const [tab, setTab] = useState('me')
   const [rows, setRows] = useState([])
@@ -37,14 +38,14 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
 
   useEffect(() => {
     if (!open || !fixture) return
-    setTab('me')
+    setTab(initialTab)
     setMyStatus(fixture.myStatus ?? null)
     if (isAdmin) {
       supabase.from('media_assets').select('id, url').eq('type', 'photo')
         .then(({ data }) => setPhotoAssets(data ?? []))
         .catch(() => {})
     }
-  }, [open, fixture, isAdmin])
+  }, [open, fixture, isAdmin, initialTab])
 
   // Who's in: reset per fixture (B must never show A's names while it loads),
   // ignore a late answer for a previous fixture, and say so when it fails
@@ -60,7 +61,7 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
         .eq('fixture_id', fixture.id),
       supabase
         .from('team_memberships')
-        .select('profiles!inner(id, active, approved, is_player)')
+        .select('profiles!inner(id, first_name, last_name, active, approved, is_player)')
         .eq('team_id', fixture.team_id),
     ])
       .then(([availRes, rosterRes]) => {
@@ -71,13 +72,19 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
         // (squadIds): an answer from someone no longer in THIS squad is left
         // off, so every reader of this fixture agrees on who counts.
         const squad = squadIds(rosterRes.data)
-        setRows((availRes.data ?? []).filter((r) => r.profile && squad.has(r.profile.id)))
+        const answers = (availRes.data ?? []).filter(r => r.profile && squad.has(r.profile.id))
+        const replied = new Set(answers.map(r => r.profile.id))
+        const waiting = (rosterRes.data ?? [])
+          .map(row => row.profiles)
+          .filter(p => squad.has(p?.id) && !replied.has(p.id))
+          .map(profile => ({ profile, status: 'none' }))
+        setRows([...answers, ...waiting])
         setWhoLoading(false)
       })
       .catch((err) => {
         if (!active) return
         logError('fetch', err, { where: 'FixtureDetail.whosIn', fixtureId: fixture.id })
-        setWhoError(friendlyError(err, "Couldn't load who's in — check your signal and try again."))
+        setWhoError(friendlyError(err, "Couldn't load availability. Check your connection and retry."))
         setWhoLoading(false)
       })
     return () => { active = false }
@@ -85,14 +92,17 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
 
   if (!fixture) return null
   const f = fixture
+  const blockedMessage = blockReason && respondBlockCopy(blockReason)
   const isXL = f.team?.key === 'xl'
+  const matchName = teamMatchName(f.team)
+  const squad = teamLabel(f.team)
   const grad = isXL ? 'var(--grad-xl)' : 'var(--grad-community)'
 
   async function pin(mediaId) {
     const { error } = await setPinnedImage(f.id, f.pinned_image_id === mediaId ? null : mediaId)
     if (error) {
       logError('write', error, { where: 'FixtureDetail.pin', fixtureId: f.id })
-      setToast(friendlyError(error, "Couldn't pin that photo — give it another go."))
+      setToast(friendlyError(error, "Couldn't save poster photo. Try again."))
       return
     }
     onChanged?.()
@@ -101,22 +111,43 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
   const mapEmbed = osmEmbedUrl(f.venue_lat, f.venue_lng)
   const dirUrl = directionsUrl({ lat: f.venue_lat, lng: f.venue_lng, address: f.address, venue: f.venue })
   const mapsUrl = mapSearchUrl({ lat: f.venue_lat, lng: f.venue_lng, address: f.address, venue: f.venue })
-  const showWeather = inForecastWindow(f.match_date)
+  // Called off: the date on the row is the OLD one until the manager re-dates
+  // it, so nothing keyed on that date (the forecast) is worth showing.
+  const postponed = !!f.postponed || f.status === 'postponed'
+  const showWeather = !postponed && inForecastWindow(f.match_date)
 
   const group = (s) => rows.filter((r) => r.status === s)
   const name = (r) => `${r.profile?.first_name ?? '?'} ${(r.profile?.last_name ?? '').slice(0, 1)}`
   const isMe = (r) => r.profile?.id === user?.id
 
+  async function answer(status) {
+    const previous = myStatus
+    setMyStatus(status)
+    try {
+      if (await onSetAvail(status) === false) {
+        setMyStatus(previous)
+        return false
+      }
+      setRows(current => current.map(r => isMe(r) ? { ...r, status } : r))
+      return true
+    } catch {
+      setMyStatus(previous)
+      return false
+    }
+  }
+
   return (
     <Sheet open={open} onClose={onClose}>
       <Toast message={toast} onDismiss={() => setToast(null)} />
       <div className="det-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
-        <span className="kicker" style={{ color: 'rgba(255,255,255,.85)' }}>{teamMatchName(f.team)}{f.team?.is_first_team ? ' · First Team' : ''} · {f.home_away} · {f.fixture_type}</span>
-        <h2 className="display" style={{ fontSize: 32, color: '#fff', marginTop: 6 }}>{f.opponent?.name}</h2>
-        <p className="mono" style={{ color: 'rgba(255,255,255,.9)', fontSize: 13, marginTop: 4 }}>
+        <span className="kicker poster-plate">{matchName}{f.team?.is_first_team && matchName !== squad ? ' · ' + squad : ''} · {f.home_away} · {f.fixture_type}</span>
+        <h2 className="display" style={{ fontSize: 'var(--type-display)', color: 'var(--on-photo)', marginTop: 'var(--space-1)' }}>{f.opponent?.name}</h2>
+        <p className="mono" style={{ color: 'var(--on-photo-muted)', fontSize: 'var(--type-sm)', marginTop: 'var(--space-1)' }}>
           {fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO
         </p>
-        <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>
+        {postponed
+          ? <p className="det-ppd mt-2">Postponed</p>
+          : <div className="mt-2"><WeatherStrip fixture={f} light detailed /></div>}
         {isAdmin && <button className="btn btn-ghost det-edit" onClick={onEdit}>Edit fixture</button>}
       </div>
 
@@ -147,34 +178,17 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
         <LineupBoard key={f.id} fixture={f} isAdmin={isAdmin} open={open} />
       ) : tab === 'me' ? (
         <div className="mt-4">
-          {!blockReason
-            ? <AvailControl value={myStatus} onChange={async (s) => {
-                const prev = myStatus
-                setMyStatus(s) // optimistic — reflect the pick immediately
-                // onSetAvail resolves false (rather than throwing) when the
-                // write failed after retrying — put the old pick back, and
-                // pass the verdict on so the control doesn't say "Saved ✓".
-                try { const ok = await onSetAvail(s); if (ok === false) setMyStatus(prev); return ok }
-                catch { setMyStatus(prev); return false }
-              }} />
-            : <p className="muted" style={{ fontSize: 14 }}>{respondBlockCopy(blockReason, f)}</p>}
-
-          {showWeather && (
-            <>
-              <p className="kicker mt-5"><span className="kicker-rule">MATCH-DAY WEATHER</span></p>
-              <div className="mt-2"><WeatherStrip fixture={f} card /></div>
-            </>
-          )}
+          {showWeather && <WeatherStrip fixture={f} card />}
 
           <p className="kicker mt-5"><span className="kicker-rule">VENUE &amp; DIRECTIONS</span></p>
           <p className="mt-2" style={{ fontWeight: 600 }}>{f.venue}</p>
           {(f.address || f.postcode) && (
-            <p className="muted" style={{ fontSize: 14 }}>{[f.address, f.postcode].filter(Boolean).join(', ')}</p>
+            <p className="muted" style={{ fontSize: 'var(--type-sm)' }}>{[f.address, f.postcode].filter(Boolean).join(', ')}</p>
           )}
           {mapEmbed && (
             <iframe className="venue-map mt-3" src={mapEmbed} title={`Map of ${f.venue}`} loading="lazy" />
           )}
-          <div className="row gap-2 mt-3">
+          <div className="row gap-2 mt-3 venue-actions">
             {dirUrl && <a className="btn btn-primary grow" href={dirUrl} target="_blank" rel="noreferrer">Get directions</a>}
             {mapsUrl && <a className="btn btn-ghost grow" href={mapsUrl} target="_blank" rel="noreferrer">Open in Maps</a>}
             {w3wUrl && <a className="btn btn-ghost grow" href={w3wUrl} target="_blank" rel="noreferrer">{f.w3w}</a>}
@@ -183,17 +197,16 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
           {isAdmin && photoAssets.length > 0 && (
             <>
               <p className="kicker mt-5"><span className="kicker-rule">POSTER PHOTO</span></p>
-              <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Pin one to this game, or leave it on the random club shot.</p>
               <div className="pin-row mt-2">
                 {photoAssets.map((a) => (
                   <button key={a.id} className={'pin-thumb' + (f.pinned_image_id === a.id ? ' on' : '')} onClick={() => pin(a.id)} aria-label="Pin this photo">
-                    <img src={a.url} alt="" />
+                    <ClubImage sizes="72px" src={a.url} alt="" />
                   </button>
                 ))}
               </div>
               <style>{`
-                .pin-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-                .pin-thumb { flex: none; width: 72px; height: 54px; border-radius: 10px; overflow: hidden;
+                .pin-row { display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-1); }
+                .pin-thumb { flex: none; width: 72px; height: 54px; border-radius: var(--r-card); overflow: hidden;
                   border: 2px solid var(--line); padding: 0; background: none; }
                 .pin-thumb.on { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-dim); }
                 .pin-thumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -209,24 +222,33 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
               <button className="btn btn-ghost btn-block" onClick={() => setWhoAttempt((n) => n + 1)}>Try again</button>
             </>
           ) : whoLoading ? (
-            <p className="muted center" style={{ fontSize: 14 }}>Counting heads…</p>
+            <p className="muted center" style={{ fontSize: 'var(--type-sm)' }}>Loading availability…</p>
           ) : (
             <>
               <WhoGroup title="Available" colour="var(--green-bright)" rows={group('in')} name={name} isMe={isMe} />
               <WhoGroup title="Maybe" colour="var(--amber)" rows={group('maybe')} name={name} isMe={isMe} />
               <WhoGroup title="Can't make it" colour="var(--red-bright)" rows={group('out')} name={name} isMe={isMe} />
-              <p className="muted center" style={{ fontSize: 14 }}>{f.noReply} not replied yet</p>
+              <WhoGroup title="Not replied" colour="var(--bone-mute)" rows={group('none')} name={name} isMe={isMe} />
             </>
           )}
         </div>
       )}
 
+      {tab !== 'line' && blockedMessage && (
+        <p className="muted mt-3" data-sheet-focus={focusAnswer ? '' : undefined} tabIndex={focusAnswer ? -1 : undefined}>{blockedMessage}</p>
+      )}
+      {tab !== 'line' && !blockReason && (
+        <div className="sheet-actions"><AvailControl heading="Your availability" value={myStatus} onChange={answer} focusAnswer={focusAnswer} /></div>
+      )}
+
       <style>{`
-        .det-hero { border-radius: var(--r-hero); padding: 16px; position: relative; }
-        .det-edit { position: absolute; top: 14px; right: 14px; padding: 5px 12px; font-size: 13px;
-          background: rgba(0,0,0,.25); color: #fff; border-color: rgba(255,255,255,.25); }
-        .venue-map { width: 100%; height: 200px; border: 1px solid var(--line); border-radius: 12px; display: block; }
-        .det-tab { font-size: 14px; padding-left: 8px; padding-right: 8px; }
+        .det-hero { border-radius: var(--r-card); padding: var(--space-4); position: relative; }
+        .det-ppd { display: inline-block; font-size: var(--type-caption); font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+          padding: var(--space-1) var(--space-2); border-radius: var(--r-input); background: var(--photo-overlay); color: var(--on-photo); border: 1px solid var(--photo-edge); }
+        .det-edit { position: absolute; top: 14px; right: 14px; padding: var(--space-1) var(--space-3); font-size: var(--type-sm);
+          background: var(--photo-overlay); color: var(--on-photo); border-color: var(--photo-edge); }
+        .venue-map { width: 100%; height: 200px; border: 1px solid var(--line); border-radius: var(--r-card); display: block; }
+        .det-tab { font-size: var(--type-sm); padding-left: var(--space-2); padding-right: var(--space-2); }
       `}</style>
     </Sheet>
   )
@@ -235,9 +257,9 @@ export default function FixtureDetail({ open, onClose, fixture, isAdmin, blockRe
 function WhoGroup({ title, colour, rows, name, isMe }) {
   return (
     <div>
-      <p className="kicker" style={{ color: colour }}>{title} · {rows.length}</p>
+      <p className="kicker" style={{ color: colour }}><span className="status-light" aria-hidden="true" /> {title} · <span className="mono">{rows.length}</span></p>
       {rows.length === 0 ? (
-        <p className="dim mt-2" style={{ fontSize: 14 }}>—</p>
+        <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>—</p>
       ) : (
         <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
           {rows.map((r, i) => (

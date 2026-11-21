@@ -270,3 +270,62 @@ describe('useFixtures — counts and noReply are roster-based', () => {
     expect(f.noReply).toBe(1) // b — not 0
   })
 })
+
+// `loaded`: has a load ever COMPLETED? Pages used "loading && list is empty" to
+// mean "first load", which is also true on every refetch of a season that
+// really has no fixtures: the page swapped to the Loader, unmounting an open
+// Add-a-fixture form, and a manager back from WhatsApp with the postcode found
+// it blank.
+describe('useFixtures — loaded', () => {
+  test('false until the first load completes, then true (even when the season is empty)', async () => {
+    store.tables.fixtures = []
+    const { result } = renderHook(() => useFixtures('s1'))
+    expect(result.current.loaded).toBe(false)
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(true)
+    expect(result.current.fixtures).toEqual([])
+  })
+
+  test('a first load that fails is not "loaded"', async () => {
+    store.respErr = true
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(false)
+    expect(result.current.error).toBeTruthy()
+  })
+
+  test('stays true through a later refetch, including one that fails', async () => {
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+    store.respErr = true
+    await act(async () => { await result.current.refetch() })
+    expect(result.current.loaded).toBe(true)
+    expect(result.current.error).toBeTruthy()
+  })
+})
+
+// `loaded` answers for the season on screen. Carried over from another season
+// it made a failed load of THIS one read as an empty diary ("Nothing in the
+// diary yet", no error, no retry) after viewing a season with no fixtures.
+describe('useFixtures — loaded is per season', () => {
+  test('switching season: not loaded again until that season\u2019s own load completes', async () => {
+    const { result, rerender } = renderHook(({ s }) => useFixtures(s), { initialProps: { s: 's1' } })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+
+    store.hold = true
+    rerender({ s: 's2' })
+    expect(result.current.loaded).toBe(false)
+    await act(async () => { store.held.splice(0).forEach((r) => r()) })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+  })
+
+  test('a failed load of the season switched to is not "loaded"', async () => {
+    const { result, rerender } = renderHook(({ s }) => useFixtures(s), { initialProps: { s: 's1' } })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+
+    store.respErr = true
+    rerender({ s: 's2' })
+    await waitFor(() => expect(result.current.error).toBeTruthy())
+    expect(result.current.loaded).toBe(false)
+  })
+})

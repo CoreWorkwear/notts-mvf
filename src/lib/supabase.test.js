@@ -8,7 +8,7 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({ stub: tru
 vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
 vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
 
-const { timeoutFetch, requestLabel, REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, SLOW_REQUEST_MS } = await import('./supabase')
+const { supabase, hasStoredSession, timeoutFetch, requestLabel, REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, SLOW_REQUEST_MS } = await import('./supabase')
 const { getBreadcrumbs, clearBreadcrumbs } = await import('./breadcrumbs')
 
 // A fetch that resolves after `ms` (or rejects when aborted first).
@@ -85,4 +85,37 @@ describe('timeoutFetch', () => {
     ctl.abort(new DOMException('gone', 'AbortError'))
     await settled
   })
+})
+
+// AuthContext leans on this to tell "not restored yet" from "signed out".
+describe('hasStoredSession', () => {
+  const KEY = 'sb-test-auth-token'
+  beforeEach(() => { vi.useRealTimers(); supabase.auth = { storageKey: KEY }; localStorage.clear() })
+  afterEach(() => { delete supabase.auth; localStorage.clear(); vi.restoreAllMocks() })
+
+  test('true while supabase-js still has a session under its storage key', () => {
+    localStorage.setItem(KEY, JSON.stringify({ refresh_token: 'r' }))
+    expect(hasStoredSession()).toBe(true)
+  })
+  test('false once it has been removed (signed out, or the refresh token was refused)', () => {
+    expect(hasStoredSession()).toBe(false)
+  })
+  test('another project\'s session on the same origin does not count', () => {
+    localStorage.setItem('sb-other-auth-token', '{}')
+    expect(hasStoredSession()).toBe(false)
+  })
+  test('blocked storage reads as "nothing stored", never a throw', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError') })
+    expect(hasStoredSession()).toBe(false)
+  })
+})
+
+test('an offline availability write is refused before it can reach fetch', async () => {
+  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+  const send = vi.fn(async () => new Response())
+  vi.stubGlobal('fetch', send)
+  try {
+    await expect(timeoutFetch('https://x.supabase.co/rest/v1/availability', { method: 'POST' })).rejects.toThrow(/offline/i)
+    expect(send).not.toHaveBeenCalled()
+  } finally { vi.restoreAllMocks(); vi.unstubAllGlobals() }
 })

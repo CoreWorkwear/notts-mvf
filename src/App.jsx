@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { MotionConfig, AnimatePresence, motion } from 'framer-motion'
-import { pageTransition } from './lib/motion'
+import { MotionConfig } from 'framer-motion'
 import { breadcrumb } from './lib/breadcrumbs'
 import { safeAppPath } from './lib/navigation'
 import { useAuth } from './context/AuthContext'
+import OfflineDiary from './components/OfflineDiary'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
 import Loader from './components/Loader'
@@ -17,11 +17,13 @@ import Club from './pages/Club'
 import Profile from './pages/Profile'
 import News from './pages/News'
 import SponsorStrip from './components/SponsorStrip'
+import { TrainingNoticeBanner } from './components/TrainingNoticeInbox'
 
 // Admin-only pages are code-split: a player's phone never parses the
 // management suite (it was two-thirds of the routes in one 750 kB chunk).
 // The service worker still precaches every chunk, so an admin's screens are
 // instant and offline-safe after first load.
+const Training = lazy(() => import('./pages/Training'))
 const Manage = lazy(() => import('./pages/Manage'))
 const AdminAvailability = lazy(() => import('./pages/AdminAvailability'))
 const Players = lazy(() => import('./pages/Players'))
@@ -34,10 +36,13 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'))
 const Competitions = lazy(() => import('./pages/Competitions'))
 
 export default function App() {
-  const { loading, isAuthed, isAdmin, profile, passwordRecovery, holding } = useAuth()
+  const { loading, isAuthed, isAdmin, profile, passwordRecovery, reconnecting, holding } = useAuth()
 
   if (loading) return <Loader label="Loading…" />
   if (passwordRecovery) return <SetNewPassword />
+  // Signed in on this phone, but the session could not be refreshed yet (no
+  // signal at the ground). Not the sign-in form: there is nothing to type.
+  if (!isAuthed && reconnecting) return <Reconnect />
   if (!isAuthed) return <Auth />
   // Not signed off yet (or switched off): the database shows this account
   // nothing club-wide, so there is no app to show — no shell, no nav, no data
@@ -57,10 +62,45 @@ export default function App() {
         <ScrollToTop />
         <PushNavigate />
         <Header />
-        <AnimatedRoutes adminOnly={adminOnly} />
+        <OfflineDiary />
+        <AppRoutes adminOnly={adminOnly} />
         <BottomNav />
       </BrowserRouter>
     </MotionConfig>
+  )
+}
+
+// Shown in place of the sign-in form when a stored session is waiting on a
+// token refresh. supabase-js keeps retrying on its own and the app appears the
+// moment one lands; the button is for the player who would rather not wait.
+// How long "Try again" waits before handing the button back. supabase-js can
+// sit in refresh backoff for most of a minute on a dead signal; the attempt
+// carries on underneath and still brings the app up if it lands.
+const RETRY_PATIENCE_MS = 8000
+
+function Reconnect() {
+  const { retryRestore, signInInstead } = useAuth()
+  const [busy, setBusy] = useState(false)
+  async function again() {
+    setBusy(true)
+    let timer
+    try {
+      await Promise.race([
+        Promise.resolve(retryRestore()).catch(() => false),
+        new Promise((r) => { timer = setTimeout(r, RETRY_PATIENCE_MS) }),
+      ])
+    } finally { clearTimeout(timer); setBusy(false) }
+  }
+  return (
+    <div className="page">
+      <OfflineDiary />
+      <div className="empty mt-5" role="alert">
+        <p className="empty-title">Can't reach the club</p>
+        <p>Still signed in. Check your connection.</p>
+        <button className="btn btn-primary mt-3" disabled={busy} onClick={again}>{busy ? 'Trying…' : 'Try again'}</button>
+        <div><button className="btn btn-ghost mt-2" onClick={signInInstead}>Sign in instead</button></div>
+      </div>
+    </div>
   )
 }
 
@@ -103,18 +143,16 @@ function PushNavigate() {
   return null
 }
 
-// Route content crossfades + drifts up on navigation (DESIGN-SYSTEM §5). The
-// header, bottom nav and sponsor strip live outside the transition so only the
-// page body moves. Keyed on pathname so AnimatePresence sees each route swap.
-function AnimatedRoutes({ adminOnly }) {
+function AppRoutes({ adminOnly }) {
   const location = useLocation()
   return (
     <main>
-      <AnimatePresence mode="wait">
-        <motion.div key={location.pathname} {...pageTransition}>
+      {!/^\/training\/?$/.test(location.pathname) && <TrainingNoticeBanner />}
+      <div key={location.pathname}>
           <Suspense fallback={<Loader label="Loading…" />}>
           <Routes location={location}>
             <Route path="/fixtures" element={<Fixtures />} />
+            <Route path="/training" element={<Training />} />
             <Route path="/results" element={<Results />} />
             <Route path="/club" element={<Club />} />
             <Route path="/you" element={<Profile />} />
@@ -132,8 +170,7 @@ function AnimatedRoutes({ adminOnly }) {
             <Route path="*" element={<Navigate to="/fixtures" replace />} />
           </Routes>
           </Suspense>
-        </motion.div>
-      </AnimatePresence>
+        </div>
       <SponsorStrip />
     </main>
   )

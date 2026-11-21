@@ -37,7 +37,7 @@ describe('SponsorStrip', () => {
       { id: '2', name: 'KitCo', tier: 'kit', active: true, logo_url: 'kit.png' },
     ] }
     render(<SponsorStrip />)
-    expect(screen.getByText(/proudly sponsored by/i)).toBeInTheDocument()
+    expect(screen.getByText('Team sponsor')).toBeInTheDocument()
     expect(screen.getByText(/kit sponsor/i)).toBeInTheDocument()
     // main sponsor links out to its (https-normalised) website
     expect(screen.getByRole('link', { name: 'CoreWorkwear' })).toHaveAttribute('href', 'https://coreworkwear.com')

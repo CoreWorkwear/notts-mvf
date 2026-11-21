@@ -85,6 +85,7 @@ export function canSetAvailability(profile) {
 //
 //   'supporter' | 'pending' | 'inactive'  — account-level, same as accountStatus
 //   'other-team'                          — not in the squad that plays this game
+//   'postponed'                           — the game is off; its date is about to change
 //   'kicked-off'                          — the game has started; answers are shut
 //   'unknown'                             — we can't tell yet
 //
@@ -96,27 +97,46 @@ export function respondBlock(profile, myTeamIds, fixture) {
   if (!canSetAvailability(profile)) return accountStatus(profile)
   if (!fixture?.team_id || !fixture?.match_date || !Array.isArray(myTeamIds)) return 'unknown'
   if (!myTeamIds.includes(fixture.team_id)) return 'other-team'
+  // The one reason here that is NOT a database rule: RLS would take an answer
+  // for a postponed game until its old kickoff. But it would be an answer for a
+  // date that is about to change (the fixture row keeps the old one until the
+  // manager re-dates it), so the app does not ask. Before the kickoff check, so
+  // a game called off reads "postponed", never "under way".
+  if (fixture.postponed || fixture.status === 'postponed') return 'postponed'
   if (hasKickedOff(fixture.match_date, fixture.kickoff)) return 'kicked-off'
   return null
 }
 
+// Which upcoming game leads the Fixtures page. A player gets the next one THEY
+// can answer: fixtures are visible club-wide but answered per squad, so "the
+// club's next game" is often one a Community-only player can only watch, and
+// the one-tap control belongs on his own. Nothing answerable (supporter,
+// pending, or simply no game for his squad) falls back to the next game. The
+// manager always sees the club's next game. `fixtures` is in kickoff order.
+export function leadFixture(fixtures, blockFor, { manager = false } = {}) {
+  const list = fixtures ?? []
+  if (manager) return list[0] ?? null
+  return list.find((f) => blockFor(f) === null) ?? list[0] ?? null
+}
+
 // The line we show in place of the In / Maybe / Out buttons. `compact` is the
-// terse version for a fixture strip; the full one gets a sentence.
-export function respondBlockCopy(reason, fixture, { compact = false } = {}) {
-  const squad = fixture?.team?.label ?? 'that'
+// terse version for a fixture strip; the full one adds context.
+export function respondBlockCopy(reason, { compact = false } = {}) {
   switch (reason) {
     case 'supporter':
-      return compact ? 'Supporter' : "You're set up as a supporter — you can follow the fixtures and results, but you won't be picked for the squad."
+      return compact ? 'Supporter' : 'Supporter · View only'
     case 'inactive':
-      return compact ? 'Inactive' : 'Your account is inactive. Have a word with the manager to get back in the squad.'
+      return compact ? 'Inactive' : 'Account inactive'
     case 'pending':
-      return compact ? 'Not signed off yet' : 'Availability opens once the manager signs you off.'
+      return compact ? 'Pending approval' : 'Awaiting manager approval'
     case 'other-team':
-      return compact ? `${squad} squad only` : `${squad} squad only — have a word with the manager if you fancy stepping up.`
+      return null
+    case 'postponed':
+      return compact ? 'Postponed' : 'Postponed · Awaiting new date'
     case 'kicked-off':
-      return compact ? 'Kicked off' : "That one's under way — availability shut at kickoff."
+      return compact ? 'Kicked off' : 'Kicked off · Availability closed'
     default:
-      return compact ? '—' : 'Availability is closed for this one.'
+      return compact ? '—' : 'Availability closed'
   }
 }
 

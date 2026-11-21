@@ -11,12 +11,12 @@ test.use({ serviceWorkers: 'block' })
 
 // Club tables a held account must never request. Its own profile (and, via
 // AuthContext, its own private row and memberships) is fine.
-const CLUB_TABLES = ['fixtures', 'results', 'seasons', 'teams', 'availability', 'lineups', 'announcements', 'sponsors', 'competitions', 'opponents', 'payments']
+const CLUB_TABLES = ['fixtures', 'results', 'seasons', 'teams', 'availability', 'lineups', 'announcements', 'sponsors', 'competitions', 'opponents', 'payments', 'training_sessions', 'training_notices']
 
 for (const [label, profile, headline] of [
-  ['a pending player', { approved: false }, 'NEARLY THERE'],
-  ['a pending supporter', { approved: false, is_player: false }, 'NEARLY THERE'],
-  ['a switched-off player', { active: false }, 'ACCOUNT OFF'],
+  ['a pending player', { approved: false }, 'Awaiting manager sign-off'],
+  ['a pending supporter', { approved: false, is_player: false }, 'Awaiting manager sign-off'],
+  ['a switched-off player', { active: false }, 'Account inactive'],
 ]) {
   test(`${label} gets the holding screen and asks for no club data`, async ({ page }) => {
     const errors = []
@@ -28,7 +28,7 @@ for (const [label, profile, headline] of [
     await expect(page.getByRole('heading', { name: headline })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
     await expect(page.locator('.bottom-nav')).toHaveCount(0)
-    if (profile.is_player === false) await expect(page.getByText('signed up as a supporter')).toBeVisible()
+    if (profile.is_player === false) await expect(page.getByText('Supporter', { exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Check again' }).click()
     await expect(page.getByRole('heading', { name: headline })).toBeVisible()

@@ -15,23 +15,24 @@ export default function UpdatePrompt() {
   if (!ready) return null
   return (
     <div className="sw-update" role="status">
-      <span className="sw-update-txt">New version ready</span>
+      <span className="sw-update-txt">Update ready</span>
       <button className="sw-update-btn" onClick={() => window.__mvfUpdateSW?.()}>Refresh</button>
       <style>{`
         .sw-update {
-          position: fixed; left: 50%; transform: translateX(-50%);
-          bottom: calc(96px + var(--safe-b)); z-index: 150;
-          display: flex; align-items: center; gap: 12px;
+          position: fixed; left: max(var(--gutter), var(--safe-l)); right: max(var(--gutter), var(--safe-r));
+          margin-inline: auto; width: fit-content; max-width: 100%;
+          bottom: calc(var(--nav-height, var(--safe-b)) + var(--space-3)); z-index: 60;
+          display: flex; align-items: center; gap: var(--space-3);
           background: var(--coal); border: 1px solid var(--line-2); border-radius: 999px;
-          padding: 8px 8px 8px 16px; box-shadow: var(--card-shadow);
-          animation: swUpIn var(--t-med) var(--ease);
+          padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); box-shadow: var(--card-shadow);
+          animation: swUpIn var(--t-med);
         }
-        .sw-update-txt { font-size: 13px; font-weight: 600; color: var(--bone); white-space: nowrap; }
+        .sw-update-txt { font-size: var(--type-sm); font-weight: 600; color: var(--bone);  }
         .sw-update-btn {
-          border: none; background: var(--red); color: #fff; font-weight: 700; font-size: 13px;
-          border-radius: 999px; padding: 7px 16px; min-height: 36px;
+          border: none; background: var(--action-fill); color: var(--on-action); font-weight: 700; font-size: var(--type-sm);
+          border-radius: 999px; padding: var(--space-2) var(--space-4); min-height: var(--target);
         }
-        @keyframes swUpIn { from { opacity: 0; transform: translate(-50%, 10px) } to { opacity: 1; transform: translate(-50%, 0) } }
+        @keyframes swUpIn { from { opacity: 0; transform: translateY(var(--space-2)) } to { opacity: 1; transform: none } }
         @media (prefers-reduced-motion: reduce){ .sw-update { animation: none } }
       `}</style>
     </div>

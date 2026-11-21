@@ -1,11 +1,12 @@
+import ClubImage from './ClubImage'
 import { useSponsors, byTier, sponsorWebsite } from '../hooks/useSponsors'
 
 function Logo({ s, size }) {
-  const img = <img src={s.logo_url} alt={s.name} style={{ height: size }} />
+  const img = <ClubImage src={s.logo_url} alt={s.name} width={size * 3} height={size} style={{ width: size * 3 }} />
   const href = sponsorWebsite(s.website)
   return href
-    ? <a className="sp-logo" href={href} target="_blank" rel="noreferrer" title={s.name}>{img}</a>
-    : <span className="sp-logo" title={s.name}>{img}</span>
+    ? <a className="sp-logo" href={href} target="_blank" rel="noreferrer">{img}</a>
+    : <span className="sp-logo">{img}</span>
 }
 
 // Sponsor logo banner carried across the app (rendered app-wide, below the page).
@@ -20,7 +21,7 @@ export default function SponsorStrip() {
     <div className="sponsors-strip">
       {main.length > 0 && (
         <div className="sp-block">
-          <span className="sp-label">Proudly sponsored by</span>
+          <span className="sp-label">Team sponsor</span>
           <div className="sp-logos">{main.map((s) => <Logo key={s.id} s={s} size={40} />)}</div>
         </div>
       )}
@@ -32,15 +33,15 @@ export default function SponsorStrip() {
       )}
 
       <style>{`
-        .sponsors-strip { margin-top: 28px; padding: 18px 16px calc(18px + var(--safe-b, 0px));
-          border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center; }
-        .sp-block { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .sp-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--bone-mute); }
-        .sp-label-sm { font-size: 9px; opacity: .9; }
-        .sp-logos { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; }
+        .sponsors-strip { margin-top: var(--space-6); padding: var(--space-4) var(--space-4) calc(var(--space-4) + var(--safe-b, 0));
+          border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--space-3); align-items: center; text-align: center; }
+        .sp-block { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+        .sp-label { font-family: var(--font-body); font-size: var(--type-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--bone-mute); }
+        .sp-label-sm { font-size: var(--type-xs); opacity: .9; }
+        .sp-logos { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; align-items: center; }
         .sp-logo { display: inline-flex; align-items: center; justify-content: center; background: var(--bone);
-          border-radius: 10px; padding: 8px 12px; }
-        .sp-kit .sp-logo { padding: 6px 10px; border-radius: 8px; opacity: .92; }
+          border-radius: var(--r-card); padding: var(--space-2) var(--space-3); }
+        .sp-kit .sp-logo { padding: var(--space-1) var(--space-2); border-radius: var(--r-input); opacity: .92; }
         .sp-logo img { display: block; width: auto; object-fit: contain; }
       `}</style>
     </div>

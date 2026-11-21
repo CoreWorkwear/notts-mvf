@@ -34,13 +34,13 @@ describe('Diagnostics', () => {
     store.error = { message: 'permission denied', code: '42501' }
     render(<Diagnostics />)
     expect(await screen.findByText(/couldn't load the log/i)).toBeInTheDocument()
-    expect(screen.queryByText(/all quiet/i)).toBeNull()
+    expect(screen.queryByText(/no errors logged/i)).toBeNull()
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
   })
 
   test('an empty log really is all quiet', async () => {
     render(<Diagnostics />)
-    expect(await screen.findByText(/all quiet/i)).toBeInTheDocument()
+    expect(await screen.findByText(/no errors logged/i)).toBeInTheDocument()
   })
 
   test('repeats collapse into one card with a count; tapping it shows each occurrence with its breadcrumbs and build', async () => {
@@ -82,7 +82,7 @@ describe('Diagnostics', () => {
     await screen.findByText('Load failed')
     store.error = { message: 'permission denied', code: '42501' }
     await userEvent.click(screen.getByRole('button', { name: /clear/i }))
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/not allowed/i))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Permission denied.'))
     expect(store.deleted).toBe(1)
   })
 })

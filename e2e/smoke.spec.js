@@ -40,7 +40,7 @@ test('register validation surfaces a VISIBLE, in-viewport error', async ({ page 
   await page.getByRole('tab', { name: /join up/i }).click()
   // Submit with everything empty.
   await page.getByRole('button', { name: /join the squad/i }).click()
-  const err = page.getByText(/first name, surname, email, phone and password are all needed/i)
+  const err = page.getByText(/enter your first name, surname, email, phone and password/i)
   await expect(err).toBeVisible()
   await expect(err).toBeInViewport() // the off-screen-error regression guard
 })
@@ -48,9 +48,10 @@ test('register validation surfaces a VISIBLE, in-viewport error', async ({ page 
 test('a player can switch to "supporter" and the team picker disappears', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('tab', { name: /join up/i }).click()
-  await expect(page.getByText(/which team\(s\)/i)).toBeVisible() // player default
-  await page.getByRole('button', { name: /a supporter/i }).click()
-  await expect(page.getByText(/which team\(s\)/i)).toBeHidden() // supporters pick no team
+  const squads = page.getByRole('group', { name: 'Requested squads' })
+  await expect(squads).toBeVisible()
+  await page.getByRole('button', { name: 'Supporter', exact: true }).click()
+  await expect(squads).toBeHidden()
 })
 
 // playwright.config.js asks for reduced motion so springs and drifts can't leave

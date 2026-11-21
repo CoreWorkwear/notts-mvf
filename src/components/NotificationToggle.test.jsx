@@ -32,7 +32,7 @@ describe('NotificationToggle — on-state is the server truth, not browser state
     store.row = null // pruned, or the sub belongs to a previous user
     render(<NotificationToggle />)
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /turn on match notifications/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Match alerts', pressed: false })).toBeInTheDocument()
     )
   })
 
@@ -41,7 +41,7 @@ describe('NotificationToggle — on-state is the server truth, not browser state
     store.row = { id: 'row1' }
     render(<NotificationToggle />)
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /notifications on/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Match alerts', pressed: true })).toBeInTheDocument()
     )
   })
 })

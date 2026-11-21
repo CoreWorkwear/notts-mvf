@@ -16,7 +16,7 @@ import { loadEnv } from 'vite'
 
 const SUPABASE_URL = loadEnv('production', process.cwd(), 'VITE_').VITE_SUPABASE_URL
 
-const ID = {
+export const ID = {
   player: '00000000-0000-4000-8000-00000000e2e1',
   club: '00000000-0000-4000-8000-00000000c1b1',
   team: '00000000-0000-4000-8000-00000000c0aa',
@@ -52,9 +52,9 @@ const ROWS = {
 
 // supabase-js only checks a stored session's shape and expiry; nothing in the
 // browser verifies the signature.
-function session() {
+function session({ expired = false } = {}) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
-  const exp = Math.floor(Date.now() / 1000) + 3600
+  const exp = Math.floor(Date.now() / 1000) + (expired ? -3600 : 3600)
   return {
     access_token: `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: ID.player, role: 'authenticated', aud: 'authenticated', exp })}.stub`,
     token_type: 'bearer', expires_in: 3600, expires_at: exp, refresh_token: 'stub-refresh-token', user: USER,
@@ -73,14 +73,22 @@ function cors(req) {
   }
 }
 
-async function answer(route, rowsFor = ROWS, seen = []) {
+// `net.authDown` (mutable, read per request) drops the token endpoint the way a
+// phone with no signal does, so a spec can start offline and come back.
+const answer = (net, getRows, rowsFor, seen, rpc) => async (route) => {
   const req = route.request()
   const headers = cors(req)
   const method = req.method()
   const { pathname } = new URL(req.url())
+  if (net.authDown && pathname.startsWith('/auth/v1/token')) return route.abort('internetdisconnected')
   if (method === 'OPTIONS') return route.fulfill({ status: 204, headers })
   if (pathname.startsWith('/auth/v1/user')) return route.fulfill({ headers, json: USER })
   if (pathname.startsWith('/auth/v1/')) return route.fulfill({ headers, json: session() })
+
+  if (rpc && method === 'POST' && pathname.startsWith('/rest/v1/rpc/')) {
+    const data = await rpc(pathname.split('/').pop(), req.postDataJSON())
+    return route.fulfill({ headers, json: data ?? null })
+  }
 
   const table = pathname.match(/^\/rest\/v1\/([^/]+)/)?.[1]
   if (table) seen.push(table)
@@ -88,7 +96,7 @@ async function answer(route, rowsFor = ROWS, seen = []) {
   // functions have nothing to serve.
   if (!table || (method !== 'GET' && method !== 'HEAD')) return route.fulfill({ status: 204, headers })
 
-  const rows = rowsFor[table] ?? []
+  const rows = getRows?.(table, new URL(req.url()).searchParams, rowsFor[table] ?? []) ?? rowsFor[table] ?? []
   // .single() asks for one object, and PostgREST refuses unless there is exactly one.
   if ((req.headers().accept ?? '').includes('vnd.pgrst.object')) {
     return rows.length === 1
@@ -99,18 +107,18 @@ async function answer(route, rowsFor = ROWS, seen = []) {
   return route.fulfill({ headers: { ...headers, 'content-range': range }, json: rows })
 }
 
-// Call before the first page.goto(). `profile` overrides fields on the signed-in
-// player's profile row (e.g. { approved: false } for an account awaiting
-// sign-off). Returns the list of REST tables the app asked for, in order.
-export async function signInAsStubPlayer(page, { profile } = {}) {
+// Call before the first page.goto(). `expired` seeds a session whose access
+// token ran out an hour ago (the app must refresh it before it has a session);
+// `net` is the switch described above.
+export async function signInAsStubPlayer(page, { expired = false, net = {}, getRows, rpc, profile, origin = SUPABASE_URL } = {}) {
   const rowsFor = profile ? { ...ROWS, profiles: [{ ...ROWS.profiles[0], ...profile }] } : ROWS
   const seen = []
-  if (!SUPABASE_URL) throw new Error('VITE_SUPABASE_URL is not set, so the build has no Supabase origin to stub.')
-  const url = new URL(SUPABASE_URL)
+  if (!origin) throw new Error('VITE_SUPABASE_URL is not set, so the build has no Supabase origin to stub.')
+  const url = new URL(origin)
   const storageKey = `sb-${url.hostname.split('.')[0]}-auth-token`
   await page.addInitScript(([key, value]) => {
     try { localStorage.setItem(key, value) } catch { /* storage blocked: the spec will fail loudly at sign-in */ }
-  }, [storageKey, JSON.stringify(session())])
-  await page.route(`${url.origin}/**`, (route) => answer(route, rowsFor, seen))
+  }, [storageKey, JSON.stringify(session({ expired }))])
+  await page.route(`${url.origin}/**`, answer(net, getRows, rowsFor, seen, rpc))
   return seen
 }

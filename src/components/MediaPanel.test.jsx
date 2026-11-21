@@ -54,3 +54,17 @@ describe('MediaPanel — surfaces a failed media write', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+test('a failed gallery fetch offers a retry and never claims the pool is empty', async () => {
+  media = { ...media, photos: [], error: new Error('offline'), refetch: vi.fn() }
+  render(<MediaPanel />)
+  expect(screen.queryByText(/no club photos yet/i)).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /try again/i }))
+  expect(media.refetch).toHaveBeenCalledOnce()
+})
+
+test('opens the original club photo from its gallery thumbnail', async () => {
+  render(<MediaPanel />)
+  await userEvent.click(screen.getByRole('button', { name: /open club photo 1/i }))
+  expect(screen.getByRole('dialog')).toContainElement(screen.getByRole('img', { name: 'Club photo 1' }))
+})

@@ -1,3 +1,4 @@
+import PreferredPosition from '../components/PreferredPosition'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { MIN_PASSWORD, POSITIONS, TEAM_ORDER, TEAMS } from '../lib/constants'
@@ -46,12 +47,12 @@ export default function Auth() {
   async function onReset(e) {
     e.preventDefault()
     setError(null); setNotice(null)
-    if (!email.trim()) { setError('Pop your email in first.'); return }
+    if (!email.trim()) { setError('Enter your email first.'); return }
     setBusy(true)
     const { error } = await sendPasswordReset(email)
     setBusy(false)
     if (error) { setError(error.message); return }
-    setNotice("If that email's registered, a reset link's on its way. Check your inbox.")
+    setNotice('If that email’s registered, check your inbox for a reset link.')
     setTab('login')
   }
 
@@ -60,10 +61,10 @@ export default function Auth() {
     setError(null); setNotice(null)
     // Required: first/last/email/phone/password (mirrors the DB NOT NULLs).
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim() || !password) {
-      setError('First name, surname, email, phone and password are all needed.')
+      setError('Enter your first name, surname, email, phone and password.')
       return
     }
-    if (password.length < MIN_PASSWORD) { setError(`Pick a password of at least ${MIN_PASSWORD} characters.`); return }
+    if (password.length < MIN_PASSWORD) { setError(`Use at least ${MIN_PASSWORD} characters for your password.`); return }
     if (isPlayer && teams.length === 0) { setError('Pick at least one team.'); return }
 
     setBusy(true)
@@ -77,12 +78,12 @@ export default function Auth() {
     if (error) { setError(error.message); return }
     if (!data.session) {
       // Email confirmation is on for this project — tell them, in club voice.
-      setNotice("You're signed up. Check your email to confirm, then sign in.")
+      setNotice('Confirm your email, then sign in.')
       setTab('login')
     } else {
       setNotice(isPlayer
-        ? "You're in — confirm your email, then the manager will sign you off to start marking yourself available."
-        : "You're set up as a supporter. Confirm your email, then the manager will sign you off to let you in.")
+        ? 'Registered. Awaiting manager approval.'
+        : 'Registered as a supporter. Awaiting manager approval.')
     }
   }
 
@@ -90,11 +91,10 @@ export default function Auth() {
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      <div className="page" style={{ paddingTop: 'calc(48px + var(--safe-t))', maxWidth: 460, margin: '0 auto', width: '100%' }}>
+      <div className="page" style={{ paddingTop: 'calc(var(--space-12) + var(--safe-t))', maxWidth: 460, margin: '0 auto', width: '100%' }}>
         <div className="center">
           <Crest size={56} />
-          <h1 className="display mt-3" style={{ fontSize: 34 }}>NOTTS MvF</h1>
-          <p className="kicker mt-2"><span className="kicker-rule">TEAM HUB</span></p>
+          <h1 className="display mt-3" style={{ fontSize: 'var(--type-poster)' }}>Notts MvF</h1>
         </div>
 
         {/* A switch between two forms, not two calls to action. It used to be two
@@ -117,7 +117,7 @@ export default function Auth() {
         <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
         {/* The underline draws in from the left on hover rather than being
             permanently on (.ul-draw, styles/motion.css). */}
-        <style>{`.auth-link{ background:none; border:none; color:var(--bone-mute); font-size:13px; cursor:pointer; align-self:center; padding:4px 2px; }
+        <style>{`.auth-link{ background:none; border:none; color:var(--bone-mute); font-size:var(--type-sm); cursor:pointer; align-self:center; padding:var(--space-1) var(--space-1); }
           .auth-link:hover{ color:var(--bone); }`}</style>
 
         {tab === 'login' ? (
@@ -130,73 +130,75 @@ export default function Auth() {
               <label className="label">Password</label>
               <input className="input" type="password" aria-label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-            <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Hang on…' : 'Sign in'}</button>
+            <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
             <button type="button" className="auth-link ul-draw" onClick={() => { setTab('reset'); setError(null); setNotice(null) }}>Forgot password?</button>
           </form>
         ) : tab === 'reset' ? (
           <form className="col gap-3 mt-4" onSubmit={onReset}>
             <div className="field">
               <label className="label">Email</label>
-              <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="input" type="email" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
-            <button type="button" className="auth-link ul-draw" onClick={() => { setTab('login'); setError(null) }}>← Back to sign in</button>
+            <button type="button" className="auth-link ul-draw" onClick={() => { setTab('login'); setError(null) }}>Back to sign in</button>
           </form>
         ) : (
           <form className="col gap-3 mt-4" onSubmit={onRegister}>
             <div className="row gap-2">
               <div className="field grow">
                 <label className="label">First name</label>
-                <input className="input" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                <input className="input" aria-label="First name" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
               </div>
               <div className="field grow">
                 <label className="label">Surname</label>
-                <input className="input" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                <input className="input" aria-label="Surname" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
               </div>
             </div>
             <div className="field">
               <label className="label">Phone</label>
-              <input className="input" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <input className="input" type="tel" aria-label="Phone" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
             <div className="field">
               <label className="label">Email</label>
-              <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="input" type="email" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="field">
               <label className="label">Password</label>
-              <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input className="input" type="password" aria-label="Password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
 
             <div className="field">
-              <label className="label">Joining as…</label>
-              <div className="row gap-2">
-                <button type="button" className="chip grow" aria-pressed={isPlayer} onClick={() => setIsPlayer(true)}>A player</button>
-                <button type="button" className="chip grow" aria-pressed={!isPlayer} onClick={() => setIsPlayer(false)}>A supporter</button>
+              <span className="label" id="role-label">Joining as</span>
+              <div className="row gap-2" role="group" aria-labelledby="role-label" aria-describedby="role-help">
+                <button type="button" className="chip grow" aria-pressed={isPlayer} onClick={() => setIsPlayer(true)}>Player</button>
+                <button type="button" className="chip grow" aria-pressed={!isPlayer} onClick={() => setIsPlayer(false)}>Supporter</button>
               </div>
-              <span className="dim" style={{ fontSize: 12 }}>
+              <span className="dim" id="role-help" style={{ fontSize: 'var(--type-caption)' }}>
                 {isPlayer
-                  ? 'The manager signs you off before you can mark yourself available.'
-                  : "Follow fixtures & results — you won't be picked for the squad."}
+                  ? 'Manager approval required for availability.'
+                  : 'Fixtures and results access.'}
               </span>
             </div>
 
             {isPlayer && (
               <>
                 <div className="field">
-                  <label className="label">Which team(s) are you after?</label>
-                  <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+                  <span className="label" id="squads-label">Requested squads</span>
+                  <div className="row gap-2" role="group" aria-labelledby="squads-label" aria-describedby="squads-help" style={{ flexWrap: 'wrap' }}>
                     {TEAM_ORDER.map((k) => (
                       <button
                         type="button" key={k}
-                        className={'chip' + (k === 'community' ? ' community' : '')}
+                        className={'chip ' + k}
                         aria-pressed={teams.includes(k)}
                         onClick={() => toggle(teams, setTeams, k)}
                       >{TEAMS[k].label}</button>
                     ))}
                   </div>
-                  <span className="dim" style={{ fontSize: 12 }}>The manager confirms your squad.</span>
+                  <span className="dim" id="squads-help" style={{ fontSize: 'var(--type-caption)' }}>Choose one or both.</span>
                 </div>
 
+                <details className="optional-positions">
+                  <summary>Playing positions (optional)</summary>
                 <div className="field">
                   <label className="label">Positions</label>
                   <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
@@ -210,13 +212,8 @@ export default function Auth() {
                   </div>
                 </div>
 
-                <div className="field">
-                  <label className="label">Preferred position</label>
-                  <select className="select" value={preferred} onChange={(e) => setPreferred(e.target.value)}>
-                    <option value="">—</option>
-                    {preferredOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
+                  <PreferredPosition value={preferred} onChange={setPreferred} options={preferredOptions} />
+                </details>
               </>
             )}
 

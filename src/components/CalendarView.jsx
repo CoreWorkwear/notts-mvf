@@ -51,12 +51,13 @@ export default function CalendarView({ fixtures, onOpen }) {
     <div className="cal">
       <div className="cal-head">
         <button className="btn btn-ghost" onClick={() => step(-1)} aria-label="Previous month">‹</button>
-        <span className="display" style={{ fontSize: 20 }}>{MONTHS_FULL[cursor.m]} {cursor.y}</span>
+        <span className="display" style={{ fontSize: 'var(--type-lg)' }}>{MONTHS_FULL[cursor.m]} {cursor.y}</span>
         <button className="btn btn-ghost" onClick={() => step(1)} aria-label="Next month">›</button>
       </div>
 
-      <div className="cal-grid">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i} className="cal-dow mono">{d}</span>)}
+      <p className="cal-pan muted">Scroll for more days</p>
+      <div className="cal-grid" role="region" tabIndex={0} aria-label={`${MONTHS_FULL[cursor.m]} ${cursor.y} calendar`}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <span key={day} className="cal-dow">{day}</span>)}
         {cells.map((day, i) => {
           if (!day) return <span key={i} />
           const games = byDay[day] ?? []
@@ -64,11 +65,13 @@ export default function CalendarView({ fixtures, onOpen }) {
           return (
             <button key={i}
               className={'cal-cell' + (iso === today ? ' today' : '') + (games.length ? ' has' : '') + (iso === pickedDay ? ' picked' : '')}
+              aria-current={iso === today ? 'date' : undefined}
+              aria-pressed={games.length > 1 ? iso === pickedDay : undefined}
               onClick={() => tapDay(iso, games)} disabled={!games.length}>
               <span className="mono">{day}</span>
               {games.length > 0 && (
                 <span className="cal-dots">
-                  {games.map((f) => <span key={f.id} className={'cal-dot' + (f.team?.key === 'community' ? ' community' : '')} />)}
+                  {games.map((f) => <span key={f.id} className={'cal-dot' + (f.team?.key === 'community' ? ' community' : '') + (f.postponed ? ' off' : '')} />)}
                 </span>
               )}
             </button>
@@ -83,34 +86,55 @@ export default function CalendarView({ fixtures, onOpen }) {
             <button className="chip" onClick={() => setPickedDay(null)}>Whole month</button>
           </div>
         )}
-        {agenda.length === 0 && <p className="muted center">Nothing on this month.</p>}
+        {agenda.length === 0 && <p className="muted center">{pickedDay ? 'No fixtures on this date' : 'No fixtures this month'}</p>}
         {agenda.map((f) => (
           <button key={f.id} className={'card spine cal-agenda' + (f.team?.key === 'community' ? ' community' : '')} onClick={() => onOpen(f)}>
             <span className="mono cal-ag-date">{parseDate(f.match_date).getDate()}</span>
             <span className="grow" style={{ textAlign: 'left' }}>{fixtureMatchup(f)}</span>
-            <span className="mono muted">{fmtKO(f.kickoff)}</span>
+            {/* A game that is off must not read as one that is on. */}
+            {f.postponed
+              ? <span className="mono cal-ppd">P-P</span>
+              : <span className="mono muted">{fmtKO(f.kickoff)}</span>}
           </button>
         ))}
       </div>
 
       <style>{`
-        .cal-head { display: flex; align-items: center; justify-content: space-between; }
-        .cal-head .btn { padding: 6px 14px; }
-        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 14px; }
-        .cal-dow { text-align: center; font-size: 11px; color: var(--bone-dim); padding: 4px 0; }
-        .cal-cell { aspect-ratio: 1; border: 1px solid transparent; background: var(--coal); border-radius: 10px;
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-          color: var(--bone-mute); font-size: 13px; }
+        .cal { container-type: inline-size; }
+        .cal-head { display: grid; grid-template-columns: var(--target) minmax(0,1fr) var(--target); align-items: center; }
+        .cal-head .display { text-align: center; overflow-wrap: anywhere; }
+        .cal-head .btn { padding: var(--space-1) var(--space-3); }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(var(--target), 1fr));
+          gap: var(--space-1); margin-top: var(--space-3); overflow-x: auto; overscroll-behavior-x: contain; }
+        .cal-pan { display: none; }
+        /* Seven 48px targets and six 4px gaps need 360px of content width.
+           Keep the weekday headings on the same scroller as their dates. */
+        @container (width < 360px) {
+          .cal-pan { display: block; font-size: var(--type-caption); margin-top: var(--space-2); }
+        }
+        @container (width < 15em) {
+          .cal-head { row-gap: var(--space-1); }
+          .cal-head .display { grid-column: 1 / -1; grid-row: 1; }
+          .cal-head button:last-child { grid-column: 3; }
+        }
+        .cal-dow { text-align: center; font-size: var(--type-xs); color: var(--bone-dim); padding: var(--space-1) 0; }
+        .cal-cell { aspect-ratio: 1; min-block-size: var(--target); border: 1px solid transparent; background: var(--coal); border-radius: var(--r-card);
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1);
+          color: var(--bone-mute); font-size: var(--type-sm); }
         .cal-cell.today { border-color: var(--line-2); color: var(--bone); }
-        .cal-cell.has { background: var(--slate); color: var(--bone); }
+        .cal-cell.has { border-color: var(--border-strong); border-bottom-width: 3px; background: var(--surface); color: var(--bone); }
         .cal-cell.picked { border-color: var(--bone-mute); }
-        .cal-cell:disabled { opacity: .6; }
-        .cal-dots { display: flex; gap: 3px; }
+        .cal-cell:disabled { color: var(--text-muted); opacity: 1; }
+        .cal-dots { display: flex; gap: var(--space-1); }
         .cal-dot { width: 6px; height: 6px; border-radius: 99px; background: var(--red); }
         .cal-dot.community { background: var(--green); }
-        .cal-agenda { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 18px; border: 1px solid var(--line);
+        .cal-dot.off, .cal-dot.community.off { background: transparent; border: 1px solid var(--bone-mute); }
+        .cal-ppd { font-size: var(--type-xs); font-weight: 600; letter-spacing: .05em; padding: var(--space-1) var(--space-2); border-radius: var(--r-input);
+          background: var(--slate); color: var(--bone-mute); }
+        .cal-agenda { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); border: 1px solid var(--line);
           background: var(--coal); color: var(--bone); }
-        .cal-ag-date { font-size: 18px; font-weight: 600; min-width: 24px; }
+        .cal-ag-date { font-size: var(--type-lead); font-weight: 600; min-width: 24px; }
+        .cal-agenda .grow { min-inline-size: 0; overflow-wrap: anywhere; }
       `}</style>
     </div>
   )
