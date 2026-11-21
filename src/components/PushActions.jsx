@@ -3,11 +3,14 @@ import { useAuth } from '../context/AuthContext'
 import { setAvailability } from '../hooks/useFixtures'
 import { syncPush } from '../lib/push'
 import { logError } from '../lib/logger'
+import { consumeAction } from '../lib/pushAction'
 
 // Applies an availability choice made from a push notification's inline action
 // (HANDOVER §4 / UX-AND-IA §4). Two paths from the service worker:
 //   - app already open → postMessage { type:'mvf-avail', fixtureId, status }
-//   - app opened cold  → URL ?mvf_fixture=…&mvf_avail=in|maybe|out
+//   - app opened cold  → URL ?mvf_action=<nonce>, a random token the service
+//     worker stored in Cache Storage. A plain ?mvf_fixture=…&mvf_avail=… link
+//     is ignored: it would let anyone with a link write someone's availability.
 export default function PushActions() {
   const { user } = useAuth()
 
@@ -27,14 +30,15 @@ export default function PushActions() {
         .catch((e) => logError('write', e ?? 'push action failed', { op: 'pushAction', fixtureId, status }))
 
     const params = new URLSearchParams(window.location.search)
-    const fx = params.get('mvf_fixture')
-    const av = params.get('mvf_avail')
-    if (fx && ['in', 'maybe', 'out'].includes(av)) {
-      apply(fx, av).finally(() => {
-        announce()
-        params.delete('mvf_fixture'); params.delete('mvf_avail')
-        const q = params.toString()
-        window.history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : ''))
+    const nonce = params.get('mvf_action')
+    if (nonce) {
+      // Strip the param straight away: a reload must not replay it, and it is
+      // single-use anyway (consumeAction deletes it).
+      params.delete('mvf_action')
+      const q = params.toString()
+      window.history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : ''))
+      consumeAction(nonce).then((act) => {
+        if (act) apply(act.fixtureId, act.status).finally(announce)
       })
     }
 

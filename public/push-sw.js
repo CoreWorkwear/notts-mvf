@@ -89,6 +89,33 @@ function safePath(url) {
   }
 }
 
+// A cold-opened one-tap answer must not be a forgeable link. The window is
+// opened at `?mvf_action=<nonce>`; the nonce is random, lives only in this
+// browser's Cache Storage for a few minutes, and maps to the {fixtureId,
+// status} the player actually tapped. PushActions looks it up, applies it
+// once, and deletes it - so a hand-built URL (a link in a message, a QR
+// code) can never write anyone's availability. src/lib/pushAction.js reads
+// the other side; keep the cache name and key prefix in step with it.
+var ACTION_CACHE = 'mvf-actions'
+var ACTION_PREFIX = '/__mvf_action/'
+var ACTION_TTL_MS = 10 * 60 * 1000
+
+function newNonce() {
+  var bytes = new Uint8Array(16)
+  self.crypto.getRandomValues(bytes)
+  var out = ''
+  for (var i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2)
+  return out
+}
+
+function stashAction(fixtureId, status) {
+  var nonce = newNonce()
+  var body = JSON.stringify({ fixtureId: fixtureId, status: status, expiresAt: Date.now() + ACTION_TTL_MS })
+  return self.caches.open(ACTION_CACHE).then(function (cache) {
+    return cache.put(ACTION_PREFIX + nonce, new Response(body, { headers: { 'content-type': 'application/json' } }))
+  }).then(function () { return nonce })
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const d = event.notification.data || {}
@@ -96,8 +123,8 @@ self.addEventListener('notificationclick', (event) => {
   const avail = ['in', 'maybe', 'out'].includes(action) ? action : null
   // Anything we can't vouch for falls back to the app root, so a tap still
   // opens the club rather than doing nothing (or going somewhere else).
-  let url = safePath(d.url) || '/'
-  if (avail && d.fixtureId) url = `/fixtures?mvf_fixture=${encodeURIComponent(d.fixtureId)}&mvf_avail=${avail}`
+  const url = safePath(d.url) || '/'
+  const answering = !!(avail && d.fixtureId)
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
@@ -106,12 +133,17 @@ self.addEventListener('notificationclick', (event) => {
           // App is open — tell it to apply the availability without a reload,
           // or to move to the deep link (news / line-up): focusing alone left
           // the player on whatever screen happened to be up.
-          if (avail && d.fixtureId) c.postMessage({ type: 'mvf-avail', fixtureId: d.fixtureId, status: avail })
+          if (answering) c.postMessage({ type: 'mvf-avail', fixtureId: d.fixtureId, status: avail })
           else c.postMessage({ type: 'mvf-navigate', url })
           return c.focus()
         }
       }
-      return self.clients.openWindow(url)
+      if (!answering) return self.clients.openWindow(url)
+      // If the nonce can't be stored the tap is lost, but the app still opens
+      // on the fixtures - never a fallback to a forgeable URL.
+      return stashAction(d.fixtureId, avail)
+        .then((nonce) => self.clients.openWindow('/fixtures?mvf_action=' + nonce))
+        .catch(() => self.clients.openWindow('/fixtures'))
     })
   )
 })

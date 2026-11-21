@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { validatePlayer, diffMemberships, isSelf, isSquadMember, squadIds, squadIdsByTeam, canSetAvailability, accountStatus, respondBlock, respondBlockCopy } from './players'
+import { validatePlayer, diffMemberships, isSelf, isSquadMember, squadIds, squadIdsByTeam, canSetAvailability, accountStatus, holdingStatus, respondBlock, respondBlockCopy } from './players'
 import { MIN_PASSWORD } from './constants'
 
 const ok = { first_name: 'Joe', last_name: 'Morris', email: 'joe@notts.test', phone: '07700900000' }
@@ -119,8 +119,24 @@ describe('accountStatus', () => {
     expect(accountStatus({ is_player: true, active: true, approved: false })).toBe('pending')
     expect(accountStatus({ is_player: false, active: true, approved: true })).toBe('supporter')
     expect(accountStatus({ is_player: true, active: false, approved: true })).toBe('inactive')
-    // supporter takes precedence over pending/inactive
-    expect(accountStatus({ is_player: false, active: false, approved: false })).toBe('supporter')
+    // inactive beats everything; pending beats supporter (supporters are signed off now)
+    expect(accountStatus({ is_player: false, active: false, approved: false })).toBe('inactive')
+    expect(accountStatus({ is_player: false, active: true, approved: false })).toBe('pending')
+    expect(accountStatus({ is_player: false, active: false, approved: true })).toBe('inactive')
+  })
+})
+
+describe('holdingStatus', () => {
+  test('holds pending and inactive accounts, players and supporters alike', () => {
+    expect(holdingStatus({ is_player: true, active: true, approved: false })).toBe('pending')
+    expect(holdingStatus({ is_player: false, active: true, approved: false })).toBe('pending')
+    expect(holdingStatus({ is_player: true, active: false, approved: true })).toBe('inactive')
+  })
+  test('lets signed-off supporters, players and admins through', () => {
+    expect(holdingStatus({ is_player: false, active: true, approved: true })).toBeNull()
+    expect(holdingStatus({ is_player: true, active: true, approved: true })).toBeNull()
+    expect(holdingStatus({ role: 'admin', is_player: false, active: true, approved: false })).toBeNull()
+    expect(holdingStatus(null)).toBeNull()
   })
 })
 

@@ -215,3 +215,13 @@ describe('FixtureDetail — pinning a poster photo', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('FixtureDetail — the map iframe leaks no referrer override', () => {
+  test('renders the map with no referrerPolicy attribute (the site policy applies)', async () => {
+    render(<FixtureDetail open fixture={{ ...fx, venue_lat: 52.95, venue_lng: -1.15 }} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
+    await tick()
+    const map = screen.getByTitle(/map of/i)
+    expect(map.tagName).toBe('IFRAME')
+    expect(map).not.toHaveAttribute('referrerpolicy')
+  })
+})

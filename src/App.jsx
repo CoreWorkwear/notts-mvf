@@ -10,6 +10,7 @@ import BottomNav from './components/BottomNav'
 import Loader from './components/Loader'
 import Auth from './pages/Auth'
 import SetNewPassword from './pages/SetNewPassword'
+import Holding from './pages/Holding'
 import Fixtures from './pages/Fixtures'
 import Results from './pages/Results'
 import Club from './pages/Club'
@@ -33,11 +34,15 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'))
 const Competitions = lazy(() => import('./pages/Competitions'))
 
 export default function App() {
-  const { loading, isAuthed, isAdmin, profile, passwordRecovery } = useAuth()
+  const { loading, isAuthed, isAdmin, profile, passwordRecovery, holding } = useAuth()
 
   if (loading) return <Loader label="Loading…" />
   if (passwordRecovery) return <SetNewPassword />
   if (!isAuthed) return <Auth />
+  // Not signed off yet (or switched off): the database shows this account
+  // nothing club-wide, so there is no app to show — no shell, no nav, no data
+  // hooks. Admins are never held.
+  if (holding) return <Holding status={holding} />
 
   // Admin-only routes fall back to Fixtures for players. Not knowing yet is
   // not "not an admin": while the profile is still loading (a slow signal

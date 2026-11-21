@@ -2,12 +2,19 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { installGlobalErrorLogging } from './lib/logger'
+import { reloadOnceOnPreloadError, clearPreloadReloadFlag } from './lib/preloadReload'
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/motion.css'
 
 // Catch uncaught errors + unhandled promise rejections app-wide.
 installGlobalErrorLogging()
+
+// A lazy chunk that has vanished after a deploy: reload once to pick up the new
+// build (guarded against loops), and say so in the error log.
+window.addEventListener('vite:preloadError', (e) => reloadOnceOnPreloadError(e))
+// Once this load has settled the guard is spent, so a LATER deploy can reload once too.
+window.addEventListener('load', () => setTimeout(clearPreloadReloadFlag, 10_000))
 
 // Keep installed apps current WITHOUT interrupting a launch. An installed Android
 // PWA only re-checks the service worker on navigation/~daily, so we still poll for
