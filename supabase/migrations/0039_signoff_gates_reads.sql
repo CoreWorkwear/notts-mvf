@@ -18,19 +18,21 @@
 -- A pending or removed account can still read its own profile and private row,
 -- so the app can show it a "waiting on the manager" screen.
 --
--- EXISTING SUPPORTERS: every supporter account on live is approved = false
--- (nothing ever approved them), so from this migration they see the holding
--- screen until a manager signs them off in Players. That is deliberate: the
--- point is that a manager has looked at each one. To wave the current ones
--- through instead, run this once, by hand, after reading the list:
+-- EXISTING SUPPORTERS ARE GRANDFATHERED (club decision, Nov 2026). Every
+-- supporter on live is approved = false, because nothing ever approved one.
+-- Section A0 signs off every ACTIVE supporter that exists when this runs, just
+-- before the gate goes on, so none of them is locked out for a moment. The
+-- count is raised as a NOTICE. Pending players are NOT touched; removed
+-- supporters stay removed; anyone who signs up as a supporter from here on
+-- needs a manager's sign-off like a player. To see who was waved through:
 --   select id, first_name, last_name, created_at from profiles
---    where not is_player and active and not approved;
---   update profiles set approved = true where not is_player and active and not approved;
+--    where not is_player and active and approved order by created_at;
 --
 -- STAGING: section J pins image URLs to the live project ref. A staging
 -- project must add its own ref to media_url_ok() or its uploads are refused.
 --
 -- Sections:
+--   A0 grandfather the supporters that exist today (data, runs before the gate)
 --   A  own_club_id(): the caller's club whatever their status (attribution only)
 --   B  current_club_id(): approved-or-manager AND active, the gate for all reads
 --   C  own-row reads for pending/removed accounts (profiles, memberships)
@@ -46,6 +48,21 @@
 --   L  anon: no table privileges, no function execute, now or for new objects
 --   M  housekeeping: one current season per club, fixture indexes, dead indexes
 -- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- A0) Grandfather today's supporters (see the header). Runs as postgres from
+--     the SQL Editor, which protect_profile_columns lets change `approved`.
+--     Supporters only: is_player = false. Pending PLAYERS stay pending.
+-- ---------------------------------------------------------------------------
+do $$
+declare n int;
+begin
+  update public.profiles
+     set approved = true
+   where not is_player and active and not approved;
+  get diagnostics n = row_count;
+  raise notice '0039: % existing supporter account(s) grandfathered (approved)', n;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- A) own_club_id(): the caller's club with no status check. Used ONLY to

@@ -22,10 +22,12 @@ its own profile), and closes the rest of the November 2026 review: push
 endpoints, uploads, the error log, cross-club manager writes, anon privileges.
 Ship it **with** the frontend and Edge Functions from the same commit: the
 app's holding screen is what a pending account sees once it lands, and
-`admin-delete-player` maps its new refusal. Read its header first: existing
-supporters are all unapproved, so each one needs a manager's sign-off (or the
-one-off statement given there). A staging project must add its ref to
-`media_url_ok()`.
+`admin-delete-player` maps its new refusal. Read its header first. It
+grandfathers every active supporter that exists when it runs (signs them off
+before the gate goes on, and prints how many), so nobody already following the
+club is locked out; supporters who sign up afterwards need a manager's
+sign-off. Pending players are not touched. A staging project must add its ref
+to `media_url_ok()`.
 
 Before 0039 the harness could never pass: T26 tripped on a NULL-context bug in
 the error-log policy, so T27–T31 had never actually run (T29's sponsor check
