@@ -54,6 +54,15 @@ describe('scrub — tokens and PII never reach a log line', () => {
 })
 
 describe('scrub of values', () => {
+  // The app's logger shipped the same over-eager rule: an all-digit short sha
+  // turned a build stamp into '[phone]'. Versions, uuids, timestamps are not phones.
+  test('versions, uuids, uuid pieces and timestamps are not mistaken for phone numbers', () => {
+    expect(scrubString('build 0.1.0+9043233')).toBe('build 0.1.0+9043233')
+    expect(scrubString('req 01234567-8901-4abc-9def-012345678901')).toBe('req 01234567-8901-4abc-9def-012345678901')
+    expect(scrubString('at 1732150000000 ms')).toBe('at 1732150000000 ms')
+    expect(scrubString('sent 1234567 of 9876543')).toBe('sent 1234567 of 9876543')
+  })
+
   test('masks emails, JWTs and phone-like digit runs inside strings', () => {
     const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTYifQ.abc_DEF-123'
     expect(scrubString('dup key for jo.bloggs+x@example.co.uk here')).toBe('dup key for [email] here')

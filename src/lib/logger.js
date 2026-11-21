@@ -36,11 +36,14 @@ const EMAIL_RE = /[^\s@"'<>()]+@[^\s@"'<>()]+\.[^\s@"'<>()]+/g
 // phrase on a check/not-null violation. Redact from the open paren to the end
 // of the line — the closing paren may be missing when the text was truncated.
 const FAILING_ROW_RE = /Failing row contains \(.*/g
-// A phone-like run: 7+ digits, optionally with spaces, +, -, brackets between
-// them. Not preceded/followed by a word character or hyphen, so the tail of a
-// UUID or a hex token is left alone.
-const PHONE_RE = /(?<![\w-])\+?\(?\d[\d\s\-()]{5,}\d(?!\w)/g
-const maskPhone = (m) => (m.replace(/\D/g, '').length >= 7 ? '[phone]' : m)
+// A phone number as people write one: starts with +, 0 or (0, holds 10-15
+// digits (spaces, hyphens and brackets allowed between), and isn't glued to a
+// letter, digit, dot, plus or hyphen on either side. "Any 7+ digits" was too
+// greedy: it ate an all-digit git sha in the build stamp (0.1.0+9043233), all-
+// digit pieces of uuids, and millisecond timestamps. Same rule as
+// supabase/functions/_shared/log.js.
+const PHONE_RE = /(?<![\w.+-])(?:\+|\(?0)[\d\s\-()]*\d(?![\w-])/g
+const maskPhone = (m) => { const n = m.replace(/\D/g, '').length; return n >= 10 && n <= 15 ? '[phone]' : m }
 
 function scrubString(str) {
   return str

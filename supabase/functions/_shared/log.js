@@ -18,21 +18,23 @@ const JWT = /eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g
 // Postgres puts the whole offending row (names, emails, phones) in the
 // DETAIL of a constraint error: "Failing row contains (…)".
 const FAILING_ROW = /Failing row contains \(.*\)/g
-const UUID_OR_PHONE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[+(]?\d[\d\s().+-]*\d/gi
-const UUID_ONLY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// A phone number as people write one: starts with +, 0 or (0, holds 10-15
+// digits (spaces, hyphens and brackets allowed between), and isn't glued to a
+// letter, digit, dot, plus or hyphen on either side, so versions, uuids, uuid
+// pieces and timestamps are left alone. Same rule as src/lib/logger.js.
+const PHONE = /(?<![\w.+-])(?:\+|\(?0)[\d\s\-()]*\d(?![\w-])/g
 
 // Mask PII inside a free-text string: failing-row dumps, JWTs, emails and
-// phone-like digit runs (7+ digits, spaces / + / - / brackets allowed).
-// Request ids and other uuids are left alone.
+// phone numbers (see PHONE). Request ids and other uuids are left alone.
 export function scrubString(str) {
   if (typeof str !== 'string') return str
   return str
     .replace(FAILING_ROW, 'Failing row contains ([redacted])')
     .replace(JWT, '[jwt]')
     .replace(EMAIL, '[email]')
-    .replace(UUID_OR_PHONE, (m) => {
-      if (UUID_ONLY.test(m)) return m
-      return (m.match(/\d/g) ?? []).length >= 7 ? '[phone]' : m
+    .replace(PHONE, (m) => {
+      const n = (m.match(/\d/g) ?? []).length
+      return n >= 10 && n <= 15 ? '[phone]' : m
     })
 }
 
