@@ -28,8 +28,8 @@
 --   select id, first_name, last_name, created_at from profiles
 --    where not is_player and active and approved order by created_at;
 --
--- STAGING: section J pins image URLs to the live project ref. A staging
--- project must add its own ref to media_url_ok() or its uploads are refused.
+-- PROJECTS: section J pins image URLs to the live and staging project refs. A
+-- new project must add its ref to media_url_ok() or its uploads are refused.
 --
 -- Sections:
 --   A0 grandfather the supporters that exist today (data, runs before the gate)
@@ -381,7 +381,8 @@ alter table public.profiles add constraint profiles_requested_teams_len
 -- J) Image URLs: THIS project's public media bucket, not any Supabase
 --    project's. With any ref allowed, a member could point photo_url at their
 --    own project and log the IP of everyone who opened the squad list.
---    Staging: add its ref to the alternation below.
+--    Live (vgeosccpwsdosbcnpcve) and staging (mqmvnmbsyvwrxlnlgive); a new
+--    project adds its ref to the alternation below.
 -- ---------------------------------------------------------------------------
 create or replace function public.media_url_ok(u text)
 returns boolean
@@ -389,7 +390,7 @@ language sql immutable
 set search_path = public
 as $$
   select u is null
-      or u ~ '^https://(vgeosccpwsdosbcnpcve)\.supabase\.co/storage/v1/object/public/media/';
+      or u ~ '^https://(vgeosccpwsdosbcnpcve|mqmvnmbsyvwrxlnlgive)\.supabase\.co/storage/v1/object/public/media/';
 $$;
 
 alter table public.profiles      drop constraint if exists profiles_photo_url_check;

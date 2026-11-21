@@ -26,8 +26,8 @@ app's holding screen is what a pending account sees once it lands, and
 grandfathers every active supporter that exists when it runs (signs them off
 before the gate goes on, and prints how many), so nobody already following the
 club is locked out; supporters who sign up afterwards need a manager's
-sign-off. Pending players are not touched. A staging project must add its ref
-to `media_url_ok()`.
+sign-off. Pending players are not touched. Image URLs are pinned to the live
+and staging project refs in `media_url_ok()`; a new project adds its ref there.
 
 Before 0039 the harness could never pass: T26 tripped on a NULL-context bug in
 the error-log policy, so T27–T31 had never actually run (T29's sponsor check
