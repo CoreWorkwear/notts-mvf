@@ -36,3 +36,6 @@ supabase/.temp/
 
 # Vitest coverage output
 /coverage/
+
+# Per-machine Claude Code permissions — never commit.
+.claude/settings.local.json

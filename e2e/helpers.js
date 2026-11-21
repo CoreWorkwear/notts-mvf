@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test'
+import { ciPlaceholder } from './users.js'
 
 // Sign in via the real login form and wait until the app shell is up (the
 // sign-in / join tabs are gone once authenticated).
@@ -15,5 +16,7 @@ export async function signIn(page, email, password) {
 }
 
 // Env-driven creds; specs use these to skip when not provided.
-export const ADMIN = { email: process.env.E2E_ADMIN_EMAIL, password: process.env.E2E_ADMIN_PASSWORD }
-export const PLAYER = { email: process.env.E2E_PLAYER_EMAIL, password: process.env.E2E_PLAYER_PASSWORD }
+// Blank on the CI placeholder build (no project behind it), so the authed specs skip.
+const creds = (e, p) => (ciPlaceholder() ? {} : { email: process.env[e], password: process.env[p] })
+export const ADMIN = creds('E2E_ADMIN_EMAIL', 'E2E_ADMIN_PASSWORD')
+export const PLAYER = creds('E2E_PLAYER_EMAIL', 'E2E_PLAYER_PASSWORD')
