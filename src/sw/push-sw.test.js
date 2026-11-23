@@ -15,7 +15,7 @@ beforeAll(async () => {
   self.registration = registration
   await import('../../public/push-sw.js')
 })
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); clients.matchAll.mockResolvedValue([]) })
 
 // Dispatch an SW-style event: props are spread onto a plain Event, waitUntil
 // captures the promise so the test can await the handler's work.
@@ -39,6 +39,31 @@ const TAB = String.fromCharCode(9)
 const windowClient = () => ({ focus: vi.fn(() => Promise.resolve()), postMessage: vi.fn() })
 
 describe('push → notification', () => {
+  test.each(['xl', 'community'])('a %s line-up uses its team icon and reaches the foreground with its link', async teamKey => {
+    const front = { ...windowClient(), visibilityState: 'visible', focused: true }
+    const hidden = { ...windowClient(), visibilityState: 'hidden' }
+    clients.matchAll.mockResolvedValue([hidden, front])
+    await fire('push', { data: { json: () => ({ title: 'Squad named', kind: 'lineup', teamKey, fixtureId: 'f1' }) } })
+    const url = '/fixtures?mvf_fixture=f1&view=lineup'
+    expect(registration.showNotification).toHaveBeenCalledWith('Squad named', expect.objectContaining({
+      icon: '/push-' + teamKey + '.png', badge: '/push-badge.png', tag: 'lineup-f1', renotify: false, silent: true,
+      actions: [{ action: 'lineup', title: 'View line-up' }],
+    }))
+    expect(front.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'mvf-foreground', title: 'Squad named', teamKey, url }))
+    expect(hidden.postMessage).not.toHaveBeenCalled()
+  })
+  test.each([
+    [{ fixtureId: 'f1', withAvailability: true }, 'avail-f1', true],
+    [{ fixtureId: 'f1' }, 'match-f1', true],
+    [{ fixtureId: 'f1', kind: 'lineup' }, 'lineup-f1', false],
+    [{ tag: 'news-story', url: '/news' }, 'news-story', false],
+  ])('only background reminders re-alert on a repeated tag (%j)', async (payload, tag, reminder) => {
+    await fire('push', { data: { json: () => payload } })
+    expect(registration.showNotification.mock.lastCall[1]).toMatchObject({ tag, renotify: reminder })
+    clients.matchAll.mockResolvedValue([{ ...windowClient(), visibilityState: 'visible' }])
+    await fire('push', { data: { json: () => payload } })
+    expect(registration.showNotification.mock.lastCall[1]).toMatchObject({ tag, renotify: false, silent: true })
+  })
   test('adds Maybe when the platform has room for three actions', async () => {
     vi.stubGlobal('Notification', { maxActions: 3 })
     try {
@@ -68,6 +93,16 @@ describe('push → notification', () => {
 })
 
 describe('notificationclick', () => {
+  test.each(['availability', 'lineup'])('the %s tray button opens the matching sheet on cold and warm launch', async action => {
+    const data = { url: '/fixtures', fixtureId: 'fix-2' }
+    const url = '/fixtures?mvf_fixture=fix-2' + (action === 'lineup' ? '&view=lineup' : '')
+    await fire('notificationclick', { action, notification: { close: vi.fn(), data } })
+    expect(clients.openWindow).toHaveBeenCalledWith(url)
+    const warm = windowClient()
+    clients.matchAll.mockResolvedValue([warm])
+    await fire('notificationclick', { action, notification: { close: vi.fn(), data } })
+    expect(warm.postMessage).toHaveBeenCalledWith({ type: 'mvf-navigate', url })
+  })
   test('tapping the reminder body opens the particular game, including on browsers without tray actions', async () => {
     const data = { url: '/fixtures', fixtureId: 'next-away' }
     const c = windowClient()

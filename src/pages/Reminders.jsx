@@ -40,7 +40,7 @@ export default function Reminders() {
   }
 
   // Only the first load gets the Loader — a post-save refetch keeps the form up.
-  if (loading && !settings) return <Loader label="Loading reminders…" />
+  if (loading && !settings) return <Loader route="reminders" label="Loading reminders…" />
 
   // A failed load is NOT "no settings yet". The form used to render its
   // defaults (both OFF) here, and Save upserted them over the club's real

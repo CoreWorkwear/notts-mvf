@@ -9,6 +9,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 const store = vi.hoisted(() => ({ sub: null, row: null }))
 vi.mock('../lib/push', () => ({
   pushSupported: true,
+  needsHomeScreen: () => false,
   currentSubscription: () => Promise.resolve(store.sub),
   enablePush: vi.fn(),
   disablePush: vi.fn(),

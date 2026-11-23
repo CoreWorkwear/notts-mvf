@@ -13,7 +13,7 @@ import { indicatorTransition } from '../lib/motion'
 // The thumb is one shared layoutId per control, so it travels between segments.
 // `options`: [{ key, label }]. `accent` tints the active label where the choice
 // carries team colour (red = First Team, green = Community).
-export default function Segmented({ options, value, onChange, id, className = '', size = 'md' }) {
+export default function Segmented({ options, value, onChange, id, label, className = '', size = 'md' }) {
   function onKeyDown(e) {
     const i = options.findIndex((o) => o.key === value)
     const next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null
@@ -25,7 +25,7 @@ export default function Segmented({ options, value, onChange, id, className = ''
   }
 
   return (
-    <div className={`seg seg-${size} ${className}`} role="tablist" onKeyDown={onKeyDown}>
+    <div className={`seg seg-${size} ${className}`} role="tablist" aria-label={label} onKeyDown={onKeyDown}>
       {options.map((o) => {
         const on = o.key === value
         return (

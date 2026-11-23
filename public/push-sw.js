@@ -5,38 +5,47 @@ self.addEventListener('push', (event) => {
   let data = {}
   try { data = event.data ? event.data.json() : {} } catch (e) { data = { body: event.data && event.data.text() } }
 
-  const title = data.title || 'Nottinghamshire MvF'
-  const fixtureId = data.fixtureId || null
+  if (!data || typeof data !== 'object') data = {}
+  const title = typeof data.title === 'string' && data.title || 'Nottinghamshire MvF'
+  const body = typeof data.body === 'string' ? data.body : ''
+  const fixtureId = typeof data.fixtureId === 'string' && data.fixtureId || null
+  const teamKey = ['xl', 'community'].includes(data.teamKey) ? data.teamKey : null
+  const kind = data.withAvailability ? 'avail' : data.kind === 'lineup' ? 'lineup' : fixtureId ? 'match' : 'news'
+  const fixtureUrl = fixtureId && '/fixtures?mvf_fixture=' + encodeURIComponent(fixtureId)
+  const url = kind === 'lineup' && fixtureUrl ? fixtureUrl + '&view=lineup' : safePath(data.url) || '/'
+  const target = fixtureUrl && (url === '/' || url === '/fixtures') ? fixtureUrl : url
   // Keep the two decisive answers first on platforms with two tray buttons.
   // Where three fit, Maybe is one tap too. The body always opens the fixture.
-  const actions = data.withAvailability && fixtureId
-    ? [
-        { action: 'in', title: "I'm in" },
-        { action: 'out', title: "Can't make it" },
-      ]
-    : (data.actions || [])
-  if (data.withAvailability && fixtureId && self.Notification?.maxActions >= 3) {
-    actions.push({ action: 'maybe', title: 'Maybe' })
+  let actions = Array.isArray(data.actions) ? data.actions : []
+  if (fixtureId && kind === 'avail') {
+    actions = [{ action: 'in', title: "I'm in" }, { action: 'out', title: "Can't make it" }]
+    if (self.Notification?.maxActions >= 3) actions.push({ action: 'maybe', title: 'Maybe' })
+  } else if (fixtureId && !actions.length) {
+    actions = [{ action: 'lineup', title: 'View line-up' }]
+    if (kind === 'match') actions.push({ action: 'availability', title: 'Confirm availability' })
   }
 
-  // Tag per KIND per fixture: an availability nudge and a match reminder for
-  // the same game must not replace each other (the default offsets collide at
-  // 72h). renotify keeps a replacement audible — without it a same-tag re-push
-  // swaps the tray card with no sound or vibration and nobody notices.
-  const kind = data.withAvailability ? 'avail' : 'match'
+  // Distinct reminder types can fall due together. Only a fresh background
+  // reminder should ring again when it replaces an existing tray card.
   const tag = data.tag || (fixtureId ? kind + '-' + fixtureId : undefined)
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body || '',
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window' }).catch(() => [])
+    const foreground = windows.find(c => c.visibilityState === 'visible' && c.focused)
+      || windows.find(c => c.visibilityState === 'visible')
+    // userVisibleOnly subscriptions require a system notification even with
+    // the app open. Silence the extra sound while the in-app pill is visible.
+    await self.registration.showNotification(title, {
+      body,
+      icon: teamKey ? '/push-' + teamKey + '.png' : '/pwa-192x192.png',
+      badge: '/push-badge.png',
       tag,
-      renotify: !!tag,
-      data: { url: data.url || '/', fixtureId },
+      renotify: !!tag && !foreground && (kind === 'avail' || kind === 'match'),
+      ...(foreground ? { silent: true } : {}),
+      data: { url, fixtureId },
       actions,
     })
-  )
+    foreground?.postMessage({ type: 'mvf-foreground', title, body, teamKey, url: target, kind })
+  })())
 })
 
 // The browser can rotate or expire a push subscription at any time. Without
@@ -98,9 +107,10 @@ self.addEventListener('notificationclick', (event) => {
   // Anything we can't vouch for falls back to the app root, so a tap still
   // opens the club rather than doing nothing (or going somewhere else).
   let url = safePath(d.url) || '/'
-  if (d.fixtureId && (avail || url === '/fixtures' || url === '/')) {
+  if (d.fixtureId && (avail || action === 'lineup' || action === 'availability' || url === '/fixtures' || url === '/')) {
     url = `/fixtures?mvf_fixture=${encodeURIComponent(d.fixtureId)}`
     if (avail) url += `&mvf_avail=${avail}`
+    if (action === 'lineup') url += '&view=lineup'
   }
 
   event.waitUntil(

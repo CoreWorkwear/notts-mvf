@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const save = vi.fn().mockResolvedValue({ error: null })
@@ -88,6 +88,36 @@ describe('LineupBoard — a failed load is not "no line-up"', () => {
 })
 
 describe('LineupBoard', () => {
+  test('a picker row ignores the compatibility click following a cancelled touch', async () => {
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await userEvent.click(screen.getByRole('button', { name: 'Pick the line-up' }))
+    await userEvent.click(screen.getByRole('button', { name: 'GK, pick a player' }))
+    const row = screen.getByRole('button', { name: /Joe Bloggs/ })
+    fireEvent.pointerDown(row)
+    fireEvent.pointerCancel(row)
+    fireEvent.click(row, { detail: 1 })
+    expect(screen.getByRole('group', { name: 'Pick a player' })).toBeVisible()
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '0')
+    fireEvent.click(row, { detail: 0 }) // Keyboard activation works afterwards.
+    expect(screen.getByRole('button', { name: 'GK, Joe Bloggs' })).toBeVisible()
+  })
+
+  test('promoting a sub swaps the starter onto the bench and keeps readiness honest', async () => {
+    mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: ['p2'] } }
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await userEvent.click(screen.getByRole('button', { name: 'Edit the line-up' }))
+    await userEvent.click(screen.getByRole('button', { name: 'GK, Joe Bloggs' }))
+    await userEvent.click(screen.getByRole('button', { name: /Sam Lee.*On the bench/ }))
+    expect(screen.getByRole('button', { name: 'GK, Sam Lee' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Remove Joe Bloggs from the bench' })).toBeVisible()
+    expect(screen.getByRole('meter', { name: 'Starting XI picked' })).toHaveAttribute('aria-valuenow', '1')
+    expect(screen.getByText('1 confirmed · 1 maybe')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Save line-up' }))
+    expect(save.mock.calls[0][0]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ profile_id: 'p2', role: 'start', slot: 0 }),
+      expect.objectContaining({ profile_id: 'p1', role: 'sub' }),
+    ]))
+  })
   test('shows the submitted pitch immediately and retains the picks to retry a failed write', async () => {
     let rejectSave
     save.mockImplementationOnce(() => new Promise((_, reject) => { rejectSave = reject }))
@@ -139,7 +169,7 @@ describe('LineupBoard', () => {
 
   test('a manager can push the picked line-up to exactly the named players', async () => {
     mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: ['p2'] } }
-    const fixture = { id: 'f1', team: { match_name: 'Nottingham' }, opponent: { name: 'Boston' }, home_away: 'Home' }
+    const fixture = { id: 'f1', team: { key: 'xl', match_name: 'Nottingham' }, opponent: { name: 'Boston' }, home_away: 'Home' }
     render(<LineupBoard fixture={fixture} isAdmin open />)
 
     await userEvent.click(screen.getByRole('button', { name: /send line-up to squad/i }))
@@ -147,6 +177,7 @@ describe('LineupBoard', () => {
     const [fn, opts] = invoke.mock.calls[0]
     expect(fn).toBe('send-push')
     expect(opts.body.profileIds.sort()).toEqual(['p1', 'p2'])
+    expect(opts.body).toMatchObject({ fixtureId: 'f1', teamKey: 'xl', kind: 'lineup', url: '/fixtures?mvf_fixture=f1&view=lineup' })
     expect(opts.body.title).toBe('Nottingham v Boston')
     expect(opts.body.body).toBe("You're in the squad. View line-up.")
   })

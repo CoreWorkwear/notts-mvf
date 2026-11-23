@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef } from 'react'
 import { animate, motion, useMotionValue, useReducedMotion } from 'framer-motion'
 import { useSheetBack } from '../hooks/useSheetBack'
 import { SPRING_SHEET } from '../lib/motion'
+import Overlay from './Overlay'
 
 const tabbable = 'a[href],button:not(:disabled),input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),[tabindex]'
 
@@ -9,6 +10,7 @@ export default function Sheet({ open, onClose, children, 'aria-label': label }) 
   useSheetBack(open, onClose)
   const panel = useRef(null)
   const trigger = useRef(null)
+  const pressedBackdrop = useRef(false)
   const titleId = useId()
   const close = useRef(onClose)
   close.current = onClose
@@ -94,9 +96,14 @@ export default function Sheet({ open, onClose, children, 'aria-label': label }) 
   }, [open, label, titleId])
   if (!open) return null
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <SheetPanel panel={panel} label={label} onClose={() => close.current()}>{children}</SheetPanel>
-    </div>
+    <Overlay>
+      <div className="sheet-backdrop"
+        onPointerDown={event => { pressedBackdrop.current = event.target === event.currentTarget }}
+        onPointerCancel={() => { pressedBackdrop.current = false }}
+        onClick={event => { if (pressedBackdrop.current && event.target === event.currentTarget) onClose() }}>
+        <SheetPanel panel={panel} label={label} onClose={() => close.current()}>{children}</SheetPanel>
+      </div>
+    </Overlay>
   )
 }
 

@@ -93,4 +93,23 @@ describe('PitchView drag-and-drop', () => {
     expect(onSwap).not.toHaveBeenCalled()
     expect(onTapSlot).not.toHaveBeenCalled()
   })
+
+  test('swiping a touch across a filled shirt before the hold delay leaves both positions alone', () => {
+    const { container, onSwap, onTapSlot } = renderEditor()
+    const source = slot(container, 0)
+    document.elementFromPoint = () => slot(container, 5)
+    // jsdom has no native PointerEvent constructor. Provide touch identity
+    // and mouse coordinates on the actual DOM events React will receive.
+    function finger(type, x, y) {
+      const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y })
+      Object.assign(event, { pointerId: 1, pointerType: 'touch', isPrimary: true })
+      fireEvent(source, event)
+    }
+    finger('pointerdown', 40, 100)
+    finger('pointermove', 41, 45)
+    finger('pointerup', 41, 45)
+    fireEvent.click(source, { detail: 1 })
+    expect(onSwap).not.toHaveBeenCalled()
+    expect(onTapSlot).not.toHaveBeenCalled()
+  })
 })

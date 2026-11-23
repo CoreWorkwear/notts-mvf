@@ -38,6 +38,27 @@ describe('haptic', () => {
     expect(haptic('tap')).toBe(false)
   })
 
+  test.each(['absent', 'refused', 'throws'])('gives the target a visual pulse when vibration is %s', mode => {
+    if (mode === 'absent') delete navigator.vibrate
+    else withVibrate(() => { if (mode === 'throws') throw new Error('blocked'); return false })
+    const button = document.createElement('button')
+    document.body.append(button)
+    button.animate = vi.fn()
+    try {
+      haptic('tap', button)
+      expect(button.animate).toHaveBeenCalledTimes(1)
+      setHapticsEnabled(false)
+      haptic('tap', button)
+      expect(button.animate).toHaveBeenCalledTimes(1)
+      setHapticsEnabled(true)
+      const motion = vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true })
+      try {
+        haptic('tap', button)
+        expect(button.animate).toHaveBeenCalledTimes(1)
+      } finally { motion.mockRestore() }
+    } finally { button.remove() }
+  })
+
   test('respects the opt-out', () => {
     setHapticsEnabled(false)
     expect(hapticsEnabled()).toBe(false)
@@ -64,11 +85,22 @@ describe('preference storage', () => {
     const spy = vi.spyOn(window.localStorage.__proto__, 'setItem')
       .mockImplementation(() => { throw new Error('QuotaExceededError') })
     expect(() => setHapticsEnabled(false)).not.toThrow()
+    expect(hapticsEnabled()).toBe(false)
     spy.mockRestore()
+    setHapticsEnabled(true)
   })
 })
 
 describe('hapticsAvailable', () => {
+  test('offers the opt-out when local visual feedback is available without vibration', () => {
+    delete navigator.vibrate
+    const original = Element.prototype.animate
+    Element.prototype.animate = vi.fn()
+    try { expect(hapticsAvailable()).toBe(true) } finally {
+      if (original) Element.prototype.animate = original
+      else delete Element.prototype.animate
+    }
+  })
   test('gates whether the toggle is worth showing at all', () => {
     expect(hapticsAvailable()).toBe(true)
     delete navigator.vibrate

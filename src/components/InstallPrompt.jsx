@@ -20,10 +20,7 @@ function subscribe(fn) {
 export default function InstallPrompt() {
   const prompt = useSyncExternalStore(subscribe, () => deferred)
   if (window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone) return null
-  if (!prompt) {
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-    return ios ? <p className="muted mt-3">For match alerts, tap Share, then Add to Home Screen. Open Notts MvF there.</p> : null
-  }
+  if (!prompt) return null
   async function install() {
     deferred = null
     window.dispatchEvent(new Event(changed))

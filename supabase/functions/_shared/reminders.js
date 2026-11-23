@@ -83,14 +83,14 @@ export function matchupTitle(f) {
   return f?.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
 }
 export function availabilityPayload(f) {
-  return { title: matchupTitle(f), body: 'Coming up — are you in? Tap to set your availability.', fixtureId: f.id, withAvailability: true, url: '/fixtures' }
+  return { title: matchupTitle(f), body: 'Coming up — are you in? Tap to set your availability.', fixtureId: f.id, teamKey: f.team?.key, withAvailability: true, url: '/fixtures' }
 }
 export function matchPayload(f) {
   const where = f.venue && f.venue !== 'TBC' ? ` at ${f.venue}` : ''
   return {
     title: matchupTitle(f),
     body: `${fmtDate(f.match_date)}, ${String(f.kickoff ?? '').slice(0, 5)} KO${where}. You're down to play 👊`,
-    fixtureId: f.id, withAvailability: false, url: '/fixtures',
+    fixtureId: f.id, teamKey: f.team?.key, withAvailability: false, url: '/fixtures',
   }
 }
 export function payloadFor(kind, f) {

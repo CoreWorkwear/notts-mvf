@@ -137,7 +137,10 @@ Deno.serve(async (req) => {
       return json({ error: 'could not read push subscriptions', requestId: log.id }, 500)
     }
 
-    const payload = JSON.stringify({ title, body, fixtureId: fx.value, withAvailability, url })
+    const teamKey = b?.teamKey === 'community' || b?.teamKey === 'xl' ? b.teamKey : undefined
+    const kind = fx.value && b?.kind === 'lineup' ? 'lineup' : undefined
+    const tag = !fx.value && typeof b?.tag === 'string' && /^news-[\w-]{1,64}$/.test(b.tag) ? b.tag : undefined
+    const payload = JSON.stringify({ title, body, fixtureId: fx.value, withAvailability, url, teamKey, kind, tag })
     const res = await pushToTokens(tokens ?? [], payload, {
       send: (sub: unknown, data: string) => webpush.sendNotification(sub as any, data),
       prune: async (id: string) => {

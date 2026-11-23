@@ -24,6 +24,15 @@ beforeEach(() => {
 })
 
 describe('News — a failed load is not an empty diary', () => {
+  test('announcements keep authored paragraphs and the London publication date', () => {
+    state.items = [{ ...POST, created_at: '2026-05-01T23:30:00Z', body: 'Doors at seven.\n\nBring your family.' }]
+    render(<News />)
+    const article = screen.getByRole('article', { name: 'Presentation night' })
+    expect(article.querySelector('time')).toHaveTextContent(/2 May/)
+    expect(article.querySelector('time')).toHaveAttribute('datetime', state.items[0].created_at)
+    expect(screen.getByText('Bring your family.', { selector: 'p' })).toBeVisible()
+  })
+
   test('first load failed → error + Try again (calls refetch), no empty state', async () => {
     state.error = { message: 'boom' }
     render(<News />)

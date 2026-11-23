@@ -27,8 +27,8 @@ export default function Results() {
   const [justSaved, setJustSaved] = useState(false)
 
   if (!seasonId && seasonError) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
-  if (!seasonId && seasonLoading) return <Loader label="Loading results…" />
-  if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader label="Loading results…" />
+  if (!seasonId && seasonLoading) return <Loader route="results" label="Loading results…" />
+  if (loading && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return <Loader route="results" label="Loading results…" />
 
   // A failed first load (flaky connection) gets a retry, not "no games played".
   if (error && played.length === 0 && needsResult.length === 0 && postponed.length === 0) return (

@@ -50,7 +50,7 @@ export function useNews() {
       // functions.invoke resolves { error } rather than throwing (a network-level
       // failure comes back as a FunctionsFetchError in `error` too).
       let pushErr = null
-      try { ({ error: pushErr } = await supabase.functions.invoke('send-push', { body: { title: t, body: b, url: '/news' } })) }
+      try { ({ error: pushErr } = await supabase.functions.invoke('send-push', { body: { title: t, body: b, url: '/news', tag: 'news-' + data.id } })) }
       catch (e) { pushErr = e ?? new Error('push failed') }
       if (pushErr) {
         pushFailed = true

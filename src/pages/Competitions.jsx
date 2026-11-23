@@ -26,7 +26,7 @@ export default function Competitions() {
   // competition refetches with none listed yet.
   const firstLoad = !loaded && competitions.length === 0
   if (seasonError && !seasonId) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
-  if (loading && firstLoad) return <Loader label="Loading competitions…" />
+  if (loading && firstLoad) return <Loader route="competitions" label="Loading competitions…" />
 
   // A failed first load is not "No competitions yet": say so and offer a retry.
   if (error && firstLoad) return (

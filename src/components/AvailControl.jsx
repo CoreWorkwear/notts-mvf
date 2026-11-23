@@ -35,9 +35,9 @@ export default function AvailControl({ value, pending = false, onChange, compact
   const animate = !compact && !reduced
   const Button = animate ? motion.button : 'button'
 
-  async function pick(key) {
+  async function pick(key, button) {
     if (busy) return
-    haptic('tap')
+    haptic('tap', button)
     clearTimeout(timer.current)
     setFeedback(null)
     setSaving(key)
@@ -45,8 +45,8 @@ export default function AvailControl({ value, pending = false, onChange, compact
     try { saved = (await onChange(key)) !== false }
     catch { saved = false }
 
-    if (!saved) haptic('warn')
-    else if (key === 'in') haptic('confirm')
+    if (!saved) haptic('warn', button)
+    else if (key === 'in') haptic('confirm', button)
     if (!mounted.current) return
     setSaving(null)
     setFeedback(saved ? 'Saved ✓' : 'Not saved')
@@ -70,7 +70,7 @@ export default function AvailControl({ value, pending = false, onChange, compact
             aria-pressed={value === o.key}
             data-sheet-focus={focusAnswer && !busy && (value || 'in') === o.key ? '' : undefined}
             disabled={busy}
-            onClick={() => pick(o.key)}
+            onClick={event => pick(o.key, event.currentTarget)}
             {...(animate ? { whileTap: tap, transition: SPRING_SNAPPY } : {})}
           >
             <span className="av-label">

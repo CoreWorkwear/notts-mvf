@@ -32,7 +32,7 @@ export default function Pressable({
       style={{ touchAction: 'manipulation' }}
       whileTap={{ scale }}
       transition={SPRING_SNAPPY}
-      onTapStart={() => { if (feedback) haptic(feedback) }}
+      onTapStart={event => { if (feedback) haptic(feedback, event.target) }}
       {...rest}
     >
       {children}

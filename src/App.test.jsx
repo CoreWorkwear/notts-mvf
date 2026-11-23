@@ -7,6 +7,7 @@ import { render, screen, act } from '@testing-library/react'
 // so Back couldn't recover it. Not knowing yet is not "not an admin".
 const auth = vi.hoisted(() => ({ state: {} }))
 vi.mock('./context/AuthContext', () => ({ useAuth: () => auth.state }))
+vi.mock('./context/SeasonContext', () => ({ useSeason: () => ({ seasonId: 'current', loading: false }) }))
 vi.mock('./components/Header', () => ({ default: () => null }))
 vi.mock('./components/BottomNav', () => ({ default: () => null }))
 vi.mock('./components/SponsorStrip', () => ({ default: () => null }))

@@ -32,6 +32,19 @@ const answered = (id, first, last, over = {}) => ({
 beforeEach(() => { store.lineups = []; store.availability = []; store.failed = null })
 
 describe('MatchCentre line-up', () => {
+  test('opens the award photograph in its own labelled sheet and returns focus to the report', async () => {
+    const user = userEvent.setup()
+    const fixture = { ...FIXTURE, result: { ...FIXTURE.result, motm_photo_url: '/award.jpg' } }
+    render(<MatchCentre open onClose={() => {}} fixture={fixture} />)
+    const opener = screen.getByRole('button', { name: "Enlarge Joe Bloggs's photo" })
+    await user.click(opener)
+    expect(screen.getByRole('dialog', { name: 'Joe Bloggs photo' })).toContainElement(screen.getByRole('img', { name: 'Joe Bloggs' }))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Joe Bloggs photo' })).toBeNull()
+    expect(opener).toHaveFocus()
+    expect(screen.getByRole('list', { name: 'Goal timeline' })).toHaveTextContent('10′')
+  })
+
   test.each([[0, 'No goals'], [1, 'No scorers recorded']])('keeps the goals status accurate with %i goals in a loss', async (us, status) => {
     const fixture = { ...FIXTURE, goals: [], result: { ...FIXTURE.result, us, them: 2 } }
     render(<MatchCentre open onClose={() => {}} fixture={fixture} />)
@@ -43,11 +56,11 @@ describe('MatchCentre line-up', () => {
     store.failed = table
     render(<MatchCentre open onClose={() => {}} fixture={FIXTURE} />)
     expect(await screen.findByRole('alert')).toHaveTextContent(/line-up/i)
-    expect(screen.queryByText('THE SQUAD')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'The squad' })).toBeNull()
     expect(screen.getByText(/HT 1–0/)).toBeVisible()
     store.failed = null
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText('THE SQUAD')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'The squad' })).toBeVisible()
   })
   test('shows the named line-up on a pitch with a goal badge, plus subs', async () => {
     store.lineups = [
@@ -56,7 +69,7 @@ describe('MatchCentre line-up', () => {
     ]
     render(<MatchCentre open onClose={() => {}} fixture={FIXTURE} isAdmin={false} />)
 
-    await waitFor(() => expect(screen.getByText('LINE-UP')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Line-up' })).toBeInTheDocument())
     expect(screen.getByText('JB')).toBeInTheDocument()   // keeper's initials on the pitch
     expect(screen.getByText('⚽1')).toBeInTheDocument()   // goal badge on the scorer
     expect(screen.getByText('Sam Lee')).toBeInTheDocument() // named sub
@@ -66,8 +79,8 @@ describe('MatchCentre line-up', () => {
     store.lineups = []
     render(<MatchCentre open onClose={() => {}} fixture={FIXTURE} isAdmin={false} />)
     // No line-up → the old squad heading (scorer shows as a guest in the tally)
-    await waitFor(() => expect(screen.getByText('THE SQUAD')).toBeInTheDocument())
-    expect(screen.queryByText('LINE-UP')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'The squad' })).toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: 'Line-up' })).not.toBeInTheDocument()
   })
 
   test('the availability fallback lists squad members only, not supporters, pending signups or removed players', async () => {
@@ -80,7 +93,7 @@ describe('MatchCentre line-up', () => {
     ]
     render(<MatchCentre open onClose={() => {}} fixture={FIXTURE} isAdmin={false} />)
 
-    await waitFor(() => expect(screen.getByText('THE SQUAD')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'The squad' })).toBeInTheDocument())
     expect(screen.getByText('Sam Lee')).toBeInTheDocument()
     expect(screen.queryByText('Sue Supporter')).not.toBeInTheDocument()
     expect(screen.queryByText('Pat Pending')).not.toBeInTheDocument()

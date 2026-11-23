@@ -4,7 +4,9 @@ import { setAvailability } from '../hooks/useFixtures'
 import { syncPush } from '../lib/push'
 import { logError } from '../lib/logger'
 import { friendlyError } from '../lib/errors'
+import { safeAppPath } from '../lib/navigation'
 import Toast from './Toast'
+import ForegroundAlert from './ForegroundAlert'
 
 // Applies an availability choice made from a push notification's inline action
 // (HANDOVER §4 / UX-AND-IA §4). Two paths from the service worker:
@@ -13,6 +15,7 @@ import Toast from './Toast'
 export default function PushActions() {
   const { user } = useAuth()
   const [notice, setNotice] = useState(null)
+  const [incoming, setIncoming] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -57,7 +60,13 @@ export default function PushActions() {
       } else if (d && d.type === 'mvf-navigate' && typeof d.url === 'string') {
         // A tapped news / line-up notification with the app open. This
         // component sits outside the router, so re-broadcast for App to route.
+        setIncoming(null)
         window.dispatchEvent(new CustomEvent('mvf-navigate', { detail: { url: d.url } }))
+      } else if (d?.type === 'mvf-foreground' && typeof d.title === 'string' && document.visibilityState === 'visible') {
+        setIncoming({
+          owner: user.id, title: d.title, body: typeof d.body === 'string' ? d.body : '',
+          teamKey: d.teamKey, kind: d.kind, url: safeAppPath(d.url) ?? '/fixtures',
+        })
       }
     }
     navigator.serviceWorker?.addEventListener('message', onMsg)
@@ -77,5 +86,12 @@ export default function PushActions() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
-  return <Toast message={notice?.text} tone={notice?.tone} onDismiss={() => setNotice(null)} />
+  return <>
+    <Toast message={notice?.text} tone={notice?.tone} onDismiss={() => setNotice(null)} />
+    <ForegroundAlert alert={user && incoming?.owner === user.id ? incoming : null}
+      onDismiss={() => setIncoming(current => current === incoming ? null : current)} onOpen={url => {
+        setIncoming(null)
+        window.dispatchEvent(new CustomEvent('mvf-navigate', { detail: { url } }))
+      }} />
+  </>
 }

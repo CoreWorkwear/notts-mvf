@@ -23,6 +23,7 @@ export const PATTERNS = {
 }
 
 const STORE_KEY = 'mvf-haptics'
+let sessionPreference
 
 // Feature-detected once. Guarded because a locked-down browser can throw on
 // touching navigator.vibrate rather than simply not having it.
@@ -37,6 +38,7 @@ function supported() {
 // Opt-out, remembered per device. Storage can throw (private mode, blocked site
 // data) and must never take the app down over a buzz, so failure reads as "on".
 export function hapticsEnabled() {
+  if (sessionPreference !== undefined) return sessionPreference
   try {
     return window.localStorage.getItem(STORE_KEY) !== 'off'
   } catch {
@@ -47,27 +49,37 @@ export function hapticsEnabled() {
 export function setHapticsEnabled(on) {
   try {
     window.localStorage.setItem(STORE_KEY, on ? 'on' : 'off')
+    sessionPreference = undefined
   } catch {
-    // A device that cannot remember the preference still honours it this session
-    // — the setting simply doesn't persist. Not worth surfacing.
+    sessionPreference = on
   }
 }
 
 // Whether the toggle is worth showing at all. No point offering a switch for
 // something the device cannot do.
 export function hapticsAvailable() {
-  return supported()
+  return supported() || (typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function')
 }
 
 // Fire a named pattern. Unknown names are ignored rather than guessed at, so a
 // typo goes quiet instead of buzzing something random. Never throws: vibrate()
 // rejects outside a user gesture on some builds, and that must not surface.
-export function haptic(name) {
-  if (!supported() || !hapticsEnabled()) return false
+export function haptic(name, target) {
+  if (!hapticsEnabled()) return false
   const pattern = PATTERNS[name]
   if (pattern == null) return false
   try {
-    return navigator.vibrate(pattern) === true
+    if (supported() && navigator.vibrate(pattern)) return true
+  } catch { /* Some devices expose vibration but decline it. */ }
+
+  // Pulse just the control that received the action. Individual scale composes
+  // with the transform used for shared-element movement and causes no reflow.
+  try {
+    if (!target?.isConnected || typeof target.animate !== 'function' ||
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false
+    target.animate([{ scale: '1' }, { scale: '.975' }, { scale: '1' }],
+      { duration: 140, easing: 'ease-out' })
+    return true
   } catch {
     return false
   }

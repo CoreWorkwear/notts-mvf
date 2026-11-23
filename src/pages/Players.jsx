@@ -67,7 +67,7 @@ export default function Players() {
 
   // Only the FIRST load gets the Loader: a refetch after a save flips loading
   // true too, and swapping the page out would unmount the open PlayerForm sheet.
-  if (loading && players.length === 0) return <Loader label="Loading players…" />
+  if (loading && players.length === 0) return <Loader route="players" label="Loading players…" />
 
   // A failed first load is not an empty squad: say so and offer a retry.
   if (error && players.length === 0) return (

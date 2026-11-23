@@ -1,4 +1,5 @@
 import InstallPrompt from '../components/InstallPrompt'
+import Loader from '../components/Loader'
 import ClubImage from '../components/ClubImage'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -42,7 +43,7 @@ export default function Profile() {
       .catch((e) => { if (on) { setPrivReady(false); logError('fetch', e ?? 'profile_private load failed', { op: 'profilePrivate' }) } })
     return () => { on = false }
   }, [profile?.id, editing, attempt])
-  if (!profile) return null
+  if (!profile) return <Loader route="you" label="Loading your profile…" />
   const full = { ...profile, ...(priv ?? {}) }
   const openEdit = () => {
     if (privReady) { setEditing(true); return }

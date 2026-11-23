@@ -1,6 +1,14 @@
 /* Fixed sheets and toasts must escape the page to cover its navigation. */
 main { position: relative; }
 
+@keyframes route-enter {
+  from { transform: translateY(4px); opacity: .94; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .route-frame[data-entering] { animation: route-enter var(--t-fast); will-change: transform, opacity; }
+}
+
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .page-title { min-width: 0; font-size: var(--type-poster); overflow-wrap: anywhere; text-wrap: balance; }
 .ph-aside { max-width: 100%; }
@@ -16,7 +24,7 @@ main { position: relative; }
 .tab:focus-visible { outline-offset: -2px; }
 .tab-count { font-size: var(--type-xs); background: var(--surface-input); padding: var(--space-1); border-radius: var(--r-input); }
 .tab-rule { position: absolute; inset: auto var(--space-2) 0; height: 2px; }
-.bottom-nav .nav-item { position: relative; isolation: isolate; }
+.bottom-nav .nav-item { position: relative; isolation: isolate; -webkit-tap-highlight-color: transparent; }
 .nav-rule {
   position: absolute; inset: 0; z-index: -1; border-radius: var(--r-pill);
   background: var(--surface-subtle); pointer-events: none;
@@ -37,8 +45,3 @@ html { scroll-padding-top: calc(var(--header-min) + var(--space-3) + var(--safe-
 body { overscroll-behavior-x: none; }
 .sheet, .tabbar, .table-scroll { -webkit-overflow-scrolling: touch; }
 :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-@media (prefers-reduced-motion: no-preference) {
-  /* Transition the route's heading without trapping its fixed sheets or toasts. */
-  main .page > :is(.page-head, h1, .row:has(h1)) { animation: route-arrive var(--t-fast); }
-  @keyframes route-arrive { from { opacity: .72; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-}

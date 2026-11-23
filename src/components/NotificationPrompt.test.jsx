@@ -4,14 +4,14 @@ import userEvent from '@testing-library/user-event'
 
 const enablePush = vi.hoisted(() => vi.fn())
 let supported
-vi.mock('../lib/push', () => ({ get pushSupported() { return supported }, enablePush }))
+vi.mock('../lib/push', () => ({ get pushSupported() { return supported }, enablePush, needsHomeScreen: () => false }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }))
 
 import NotificationPrompt from './NotificationPrompt'
 
 const setPermission = (p) => Object.defineProperty(window, 'Notification', { value: { permission: p }, configurable: true })
 
-beforeEach(() => { enablePush.mockReset(); enablePush.mockResolvedValue(); supported = true; setPermission('default') })
+beforeEach(() => { sessionStorage.clear(); enablePush.mockReset(); enablePush.mockResolvedValue(); supported = true; setPermission('default') })
 
 describe('NotificationPrompt (§3.6)', () => {
   test('shows while permission is default', () => {
@@ -27,9 +27,12 @@ describe('NotificationPrompt (§3.6)', () => {
     expect(screen.queryByRole('region', { name: /turn on notifications/i })).not.toBeInTheDocument()
   })
 
-  test('"Turn on" enables push', async () => {
+  test('only the explicit action in the benefits sheet requests native permission', async () => {
     render(<NotificationPrompt />)
     await userEvent.click(screen.getByRole('button', { name: /turn on/i }))
+    expect(enablePush).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Match alerts' })).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Enable match alerts' }))
     await waitFor(() => expect(enablePush).toHaveBeenCalledWith('u1'))
   })
 

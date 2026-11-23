@@ -1,8 +1,10 @@
 import ClubImage from './ClubImage'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, useMotionValue } from 'framer-motion'
+import { motion, useMotionValue, useReducedMotion } from 'framer-motion'
 import { formationSlots } from '../lib/lineup'
+import { SPRING_SNAPPY } from '../lib/motion'
+import { haptic } from '../lib/haptics'
 
 export const initials = (name) => (name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
 
@@ -15,6 +17,7 @@ function nameLines(name) {
 }
 
 const DRAG_THRESHOLD = 8 // px before a press becomes a drag (vs a tap)
+const TOUCH_HOLD_MS = 240
 
 // A formation pitch: lines from attack (top) to keeper (bottom), each slot a
 // shirt with the player's headshot (initials fallback) and first name + surname.
@@ -30,48 +33,82 @@ export default function PitchView({ teamKey, formation, slots, starters, names, 
   }, [formation, slots])
 
   const editor = !!onTapSlot
+  const reduced = useReducedMotion()
+  const canSwap = !!onSwap
+  const animated = canSwap && !reduced
+  const pitch = useRef(null)
   const press = useRef(null) // { slot, x0, y0, filled, moved }
   const skipClick = useRef(false)
   const [drag, setDrag] = useState(null)
   const x = useMotionValue(0)
   const y = useMotionValue(0)
 
-  function slotAt(x, y) {
+  // Scrolling always wins a quick swipe. Only a deliberate hold on a filled
+  // shirt claims touchmove, before the browser hands the gesture to the sheet.
+  useEffect(() => {
+    if (!canSwap) return
+    const node = pitch.current
+    function touchMove(event) {
+      const p = press.current
+      if (event.touches.length === 1 && p?.filled && !p.scrolling &&
+          event.timeStamp - p.started >= TOUCH_HOLD_MS && event.cancelable) event.preventDefault()
+    }
+    node.addEventListener('touchmove', touchMove, { passive: false })
+    return () => node.removeEventListener('touchmove', touchMove)
+  }, [canSwap])
+
+  function shirtAt(x, y) {
     const el = document.elementFromPoint(x, y)?.closest('[data-slot]')
-    return el ? Number(el.getAttribute('data-slot')) : null
+    return el && pitch.current.contains(el) ? el : null
   }
 
   function onPointerDown(e, slot) {
-    if (!editor) return
+    if (!editor || e.button > 0) return
+    if (e.isPrimary === false || (press.current && press.current.id !== e.pointerId)) {
+      press.current = null
+      skipClick.current = true
+      setDrag(null)
+      return
+    }
     skipClick.current = false
-    press.current = { slot, x0: e.clientX, y0: e.clientY, filled: starters[slot] != null, moved: false }
+    press.current = { slot, id: e.pointerId, x0: e.clientX, y0: e.clientY, started: e.timeStamp,
+      touch: e.pointerType === 'touch', filled: starters[slot] != null, moved: false, scrolling: false }
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* not supported */ }
   }
   function onPointerMove(e) {
     const p = press.current
-    if (!p) return
+    if (!p || p.id !== e.pointerId || p.scrolling) return
     if (!p.moved && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < DRAG_THRESHOLD) return
     p.moved = true
+    if (p.touch && e.timeStamp - p.started < TOUCH_HOLD_MS) {
+      p.scrolling = true
+      return
+    }
     if (p.filled && onSwap) {
       x.set(e.clientX)
       y.set(e.clientY)
-      const over = slotAt(e.clientX, e.clientY)
+      const shirt = shirtAt(e.clientX, e.clientY)
+      const over = shirt ? Number(shirt.dataset.slot) : null
       setDrag(current => current?.from === p.slot && current.over === over ? current : { from: p.slot, over })
     }
   }
   function onPointerUp(e) {
     const p = press.current
+    if (!p || p.id !== e.pointerId) return
     press.current = null
     setDrag(null)
-    if (!p) return
-    skipClick.current = p.moved
-    if (p.filled && p.moved && onSwap) {
-      const target = slotAt(e.clientX, e.clientY)
-      if (target != null && target !== p.slot) onSwap(p.slot, target)
+    skipClick.current = p.moved || Math.hypot(e.clientX - p.x0, e.clientY - p.y0) >= DRAG_THRESHOLD
+    if (p.filled && p.moved && !p.scrolling && onSwap) {
+      const shirt = shirtAt(e.clientX, e.clientY)
+      if (shirt && Number(shirt.dataset.slot) !== p.slot) {
+        haptic('tap', shirt)
+        onSwap(p.slot, Number(shirt.dataset.slot))
+      }
     }
   }
   // A cancelled gesture (e.g. the OS taking over) must clear state cleanly.
-  function onPointerCancel() {
+  function onPointerCancel(event) {
+    if (!press.current || press.current.id !== event.pointerId) return
     press.current = null
     skipClick.current = true
     setDrag(null)
@@ -80,13 +117,14 @@ export default function PitchView({ teamKey, formation, slots, starters, names, 
   const dragName = drag ? names[starters[drag.from]] : ''
 
   return (
-    <div data-team={teamKey} className={'pitch' + (editor ? ' editing' : '') + (drag ? ' dragging' : '')}>
+    <div ref={pitch} data-team={teamKey} className={'pitch' + (editor ? ' editing' : '') + (drag ? ' dragging' : '')}>
       {lines.map((line, i) => (
         <div className="pitch-line" key={i}>
           {line.map((s) => {
             const id = starters[s.slot]
             const on = activeSlot === s.slot
             const Tag = editor ? 'button' : 'div'
+            const Badge = animated && id ? motion.span : 'span'
             const extra = id && badge ? badge(id) : null
             const { first, surname } = nameLines(names[id])
             return (
@@ -102,14 +140,17 @@ export default function PitchView({ teamKey, formation, slots, starters, names, 
                   if (!skipClick.current || e.detail === 0) onTapSlot(s.slot, e.currentTarget)
                 } : undefined}
                 aria-label={editor ? `${s.pos}, ${id ? names[id] || 'Selected player' : 'pick a player'}` : undefined}
+                onLostPointerCapture={editor ? onPointerCancel : undefined}
                 onPointerCancel={editor ? onPointerCancel : undefined}>
                 <span className="shirt-pos mono">{s.pos}</span>
-                <span className="shirt-badge">
+                <Badge key={id ?? 'vacant'} className="shirt-badge"
+                  {...(animated && id ? { layoutId: 'player-' + id, initial: { scale: .88 },
+                    animate: { scale: 1 }, transition: SPRING_SNAPPY } : {})}>
                   {id
                     ? (photos[id] ? <ClubImage sizes="40px" className="shirt-photo" src={photos[id]} alt="" draggable={false} /> : initials(names[id]))
                     : '+'}
                   {extra ? <span className="shirt-tag">{extra}</span> : null}
-                </span>
+                </Badge>
                 <span className="shirt-name">
                   {id && first && <span className="shirt-first">{first}</span>}
                   {id && <span className="shirt-surname">{surname}</span>}
@@ -137,9 +178,7 @@ export default function PitchView({ teamKey, formation, slots, starters, names, 
         .pitch-line { display: flex; justify-content: space-around; gap: var(--space-1); }
         .shirt { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
           color: var(--bone); padding: 0; min-width: 60px; max-width: 72px; }
-        /* In the editor the shirts must own the touch gesture from the FIRST move,
-           or a phone scrolls the page instead of starting the drag. */
-        .pitch.editing .shirt { touch-action: none; -webkit-user-select: none; user-select: none; }
+        .pitch.editing .shirt { touch-action: pan-y pinch-zoom; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         .shirt-pos { font-size: var(--type-xs); color: var(--bone-dim); letter-spacing: .04em; }
         .shirt-badge { position: relative; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
           overflow: hidden; background: var(--slate); border: 1.5px dashed var(--line-2); font-size: var(--type-sm); font-weight: 700; color: var(--bone-mute);

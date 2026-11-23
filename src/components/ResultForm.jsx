@@ -28,6 +28,7 @@ const RESULT_FIELDS = ['us', 'them', 'ht_us', 'ht_them', 'motm_profile_id', 'mot
 // that the row this form was opened from did not know about — so it can refetch.
 export default function ResultForm({ open, onClose, onSaved, onStale, fixture, squad, everyone }) {
   const formId = useId()
+  const heading = useRef(null)
   const existing = fixture?.result
   const [usScore, setUsScore] = useState(0)
   const [themScore, setThemScore] = useState(0)
@@ -149,7 +150,7 @@ export default function ResultForm({ open, onClose, onSaved, onStale, fixture, s
         })
       const submitted = { ...fixture, result: row, goals: rows }
       setPending(all => ({ ...all, [fixture.id]: submitted }))
-      haptic('tap')
+      haptic('tap', heading.current)
       // Replacing a result is only safe when this form was opened WITH it — the
       // fields above were then prefilled from the stored row. A fixture handed
       // over without a result is not proof none exists (the Fixtures calendar
@@ -183,7 +184,7 @@ export default function ResultForm({ open, onClose, onSaved, onStale, fixture, s
           ))
           && (anyGoal.data ?? []).length === 0
         if (!ours) {
-          haptic('warn')
+          haptic('warn', current() ? heading.current : null)
           if (current()) setError('Result already logged. Edit in Results.')
           onStale?.() // the list behind is stale: refresh it so the game moves to played
           return
@@ -204,11 +205,11 @@ export default function ResultForm({ open, onClose, onSaved, onStale, fixture, s
 
       // Full time confirmed — one of the three moments DESIGN-SYSTEM §5 names as
       // worth a haptic. Fires after every write landed, never on submit.
-      haptic('success')
+      haptic('success', current() ? heading.current : null)
       onSaved(submitted)
       if (current()) onClose()
     } catch (err) {
-      haptic('warn')
+      haptic('warn', current() ? heading.current : null)
       if (current()) {
         wroteResult.current = scoreWritten
         setError(friendlyError(err, "Couldn't save the result. Try again."))
@@ -241,7 +242,7 @@ export default function ResultForm({ open, onClose, onSaved, onStale, fixture, s
       <Toast message={error} onDismiss={() => setError(null)} />
 
       {!submitted && <p className="kicker"><span className="kicker-rule">{existing ? 'EDIT RESULT' : 'LOG RESULT'}</span></p>}
-      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{submitted ? 'Full time' : `${teamMatchName(fixture.team)} v ${them}`}</h2>
+      <h2 ref={heading} className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{submitted ? 'Full time' : `${teamMatchName(fixture.team)} v ${them}`}</h2>
 
       {submitted && (
         <div className="result-preview mt-4" role="status" aria-label="Saving result">

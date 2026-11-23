@@ -105,7 +105,7 @@ export default function Diagnostics() {
       </div>
     </div>
   )
-  if (!rows) return <Loader label="Loading the logs…" />
+  if (!rows) return <Loader route="diagnostics" label="Loading the logs…" />
 
   const kinds = kindsOf(rows)
   const visible = kind === 'all' ? rows : rows.filter((r) => r.kind === kind)

@@ -70,6 +70,11 @@ describe('targets + payloads', () => {
     expect(availabilityPayload(fixture).title).toBe('Carlton Town v 1st Team')
     expect(matchPayload(fixture).title).toBe('Carlton Town v 1st Team')
   })
+  test.each(['xl', 'community'])('both reminder payloads carry the %s team icon key', key => {
+    const fixture = { ...f, team: { ...f.team, key } }
+    expect(availabilityPayload(fixture).teamKey).toBe(key)
+    expect(matchPayload(fixture).teamKey).toBe(key)
+  })
   test.each(['XL', 'xl 11S', ' First Team '])('renames the historical alias %s stored as a match name', match_name => {
     expect(matchupTitle({ ...f, team: { key: 'xl', match_name } })).toBe('Carlton Town v 1st Team')
   })

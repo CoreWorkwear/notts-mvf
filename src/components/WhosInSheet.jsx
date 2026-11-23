@@ -150,7 +150,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     try {
       const { data, error } = await supabase.functions.invoke('send-push', {
         body: {
-          fixtureId: f.id, withAvailability: true,
+          fixtureId: f.id, teamKey: f.team?.key, withAvailability: true,
           title: fixtureMatchup(f),
           body: `${fmtDateLong(f.match_date)} · ${fmtKO(f.kickoff)} KO · Confirm availability`,
         },

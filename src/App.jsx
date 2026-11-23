@@ -4,10 +4,12 @@ import { MotionConfig } from 'framer-motion'
 import { breadcrumb } from './lib/breadcrumbs'
 import { safeAppPath } from './lib/navigation'
 import { useAuth } from './context/AuthContext'
+import { useSeason } from './context/SeasonContext'
 import OfflineDiary from './components/OfflineDiary'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
 import Loader from './components/Loader'
+import { OverlayTarget } from './components/Overlay'
 import Auth from './pages/Auth'
 import SetNewPassword from './pages/SetNewPassword'
 import Fixtures from './pages/Fixtures'
@@ -35,7 +37,7 @@ const Competitions = lazy(() => import('./pages/Competitions'))
 export default function App() {
   const { loading, isAuthed, isAdmin, profile, passwordRecovery, reconnecting } = useAuth()
 
-  if (loading) return <Loader label="Loading…" />
+  if (loading) return <Loader route={window.location.pathname} label="Loading…" />
   if (passwordRecovery) return <SetNewPassword />
   // Signed in on this phone, but the session could not be refreshed yet (no
   // signal at the ground). Not the sign-in form: there is nothing to type.
@@ -46,7 +48,7 @@ export default function App() {
   // not "not an admin": while the profile is still loading (a slow signal
   // after the safety timer lifted the splash) hold the screen rather than
   // <Navigate replace> a manager off /players on every cold start.
-  const adminOnly = (el) => (isAdmin ? el : profile ? <Navigate to="/fixtures" replace /> : <Loader label="Loading…" />)
+  const adminOnly = (el) => (isAdmin ? el : profile ? <Navigate to="/fixtures" replace /> : <Loader route={window.location.pathname} label="Loading…" />)
 
   return (
     <MotionConfig reducedMotion="user">
@@ -174,32 +176,47 @@ function PushNavigate() {
   return null
 }
 
+// Give the browser one incoming surface. The compositor hint and entrance
+// share a lifetime, independent of Suspense or data settling in the children.
+function RouteFrame({ children }) {
+  const [entering, setEntering] = useState(true)
+  return <div className="route-frame" data-entering={entering || undefined}
+    onAnimationEnd={event => { if (event.target === event.currentTarget) setEntering(false) }}>
+    {children}
+  </div>
+}
+
 function AppRoutes({ adminOnly }) {
   const location = useLocation()
+  const { loading, seasonId } = useSeason()
+  const fallback = <Loader route={location.pathname} label="Loading…" />
+  const seasonPage = element => loading && !seasonId ? fallback : element
   return (
     <main>
-      <div key={location.pathname}>
-          <Suspense fallback={<Loader label="Loading…" />}>
-          <Routes location={location}>
-            <Route path="/fixtures" element={<Fixtures />} />
-            <Route path="/results" element={<Results />} />
-            <Route path="/club" element={<Club />} />
-            <Route path="/you" element={<Profile />} />
-            <Route path="/news" element={<News />} />
-            <Route path="/manage" element={adminOnly(<Manage />)} />
-            <Route path="/whos-in" element={adminOnly(<AdminAvailability />)} />
-            <Route path="/players" element={adminOnly(<Players />)} />
-            <Route path="/opponents" element={adminOnly(<Opponents />)} />
-            <Route path="/seasons" element={adminOnly(<Seasons />)} />
-            <Route path="/media" element={adminOnly(<Media />)} />
-            <Route path="/reminders" element={adminOnly(<Reminders />)} />
-            <Route path="/sponsors" element={adminOnly(<Sponsors />)} />
-            <Route path="/diagnostics" element={adminOnly(<Diagnostics />)} />
-            <Route path="/competitions" element={adminOnly(<Competitions />)} />
-            <Route path="*" element={<Navigate to="/fixtures" replace />} />
-          </Routes>
+      <OverlayTarget.Provider value={document.body}>
+        <RouteFrame key={location.pathname}>
+          <Suspense fallback={fallback}>
+            <Routes location={location}>
+              <Route path="/fixtures" element={seasonPage(<Fixtures />)} />
+              <Route path="/results" element={seasonPage(<Results />)} />
+              <Route path="/club" element={seasonPage(<Club />)} />
+              <Route path="/you" element={<Profile />} />
+              <Route path="/news" element={<News />} />
+              <Route path="/manage" element={adminOnly(<Manage />)} />
+              <Route path="/whos-in" element={adminOnly(seasonPage(<AdminAvailability />))} />
+              <Route path="/players" element={adminOnly(<Players />)} />
+              <Route path="/opponents" element={adminOnly(<Opponents />)} />
+              <Route path="/seasons" element={adminOnly(<Seasons />)} />
+              <Route path="/media" element={adminOnly(<Media />)} />
+              <Route path="/reminders" element={adminOnly(<Reminders />)} />
+              <Route path="/sponsors" element={adminOnly(<Sponsors />)} />
+              <Route path="/diagnostics" element={adminOnly(<Diagnostics />)} />
+              <Route path="/competitions" element={adminOnly(seasonPage(<Competitions />))} />
+              <Route path="*" element={<Navigate to="/fixtures" replace />} />
+            </Routes>
           </Suspense>
-        </div>
+        </RouteFrame>
+      </OverlayTarget.Provider>
       <SponsorStrip />
     </main>
   )

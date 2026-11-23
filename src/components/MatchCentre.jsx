@@ -11,7 +11,9 @@ import { rowsToState } from '../lib/lineup'
 import { isSquadMember } from '../lib/players'
 import { fmtDateLong } from '../lib/format'
 import { heroBackground } from '../lib/media'
-import { halfTimeScore } from '../lib/teams'
+import { fixtureMatchup, halfTimeScore } from '../lib/teams'
+import { IconCompetitions } from './Icons'
+import '../styles/editorial.css'
 
 // Match centre (HANDOVER §5): big FT score + HT, MOTM with a star, the goal
 // timeline, and who actually played — the manager's selected line-up (pitch +
@@ -116,132 +118,106 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   }
 
   return (
-    <Sheet open={open} onClose={onClose}>
-      <div className="mc-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }), backgroundSize: 'cover', backgroundPosition: 'center' }}>
-        <div className="row spread">
-          <span className="kicker poster-plate">Full time · {f.fixture_type}</span>
-          {isAdmin && <button className="btn btn-ghost mc-edit" onClick={onEdit}>Edit</button>}
-        </div>
-        <div className="mt-3"><ScoreBug fixture={f} size="lg" /></div>
-        <p className="mono center mt-3" style={{ color: 'var(--on-photo-muted)', fontSize: 'var(--type-caption)' }}>
-          {halfTimeScore(r) ? `HT ${halfTimeScore(r)} · ` : ''}{fmtDateLong(f.match_date)}
-        </p>
-      </div>
-
-      {motm && (
-        <div className="mc-motm mt-4">
-          {r.motm_photo_url ? (
-            <button type="button" className="mc-motm-thumb" onClick={() => setZoom(true)}
-              aria-label={motm ? `Enlarge ${motm}'s photo` : 'Enlarge man of the match photo'}>
-              <ClubImage sizes="64px" src={r.motm_photo_url} alt="" />
-            </button>
-          ) : (
-            <span className="mc-star">★</span>
-          )}
-          <div className="grow">
-            <span className="kicker">MAN OF THE MATCH</span>
-            <div style={{ fontWeight: 600 }}>{motm}</div>
-            {motmSponsor && (
-              <div className="mc-motm-sponsor">
-                sponsored by {motmSponsor.name}
-                {motmSponsor.logo_url && <ClubImage sizes="64px" src={motmSponsor.logo_url} alt={motmSponsor.name} />}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {zoom && r.motm_photo_url && (
-        <div className="mc-motm-zoom" role="dialog" aria-modal="true" onClick={() => setZoom(false)}>
-          <img src={r.motm_photo_url} alt={motm ? `${motm} — man of the match` : 'Man of the match'} />
-        </div>
-      )}
-
-      <p className="kicker mt-5"><span className="kicker-rule">GOALS</span></p>
-      {f.goals.length === 0 ? (
-        <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>{r.us === 0 ? 'No goals' : 'No scorers recorded'}</p>
-      ) : (
-        <div className="mc-timeline mt-3">
-          {f.goals.map((g, index) => {
-            const scorer = resolveName(sb, g.scorer_profile_id, g.scorer_name) || 'Unknown'
-            const assist = resolveName(sb, g.assist_profile_id, g.assist_name)
-            return (
-              <div key={g.id ?? index} className="mc-goal">
-                <span className="mc-min mono">{g.minute != null ? `${g.minute}'` : '⚽'}</span>
-                <span className="mc-dot" />
-                <div>
-                  <div style={{ fontWeight: 600 }}>{scorer}</div>
-                  {assist && <div className="muted" style={{ fontSize: 'var(--type-sm)' }}>assist · {assist}</div>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {squadState === 'error' ? <LoadIssue subject="the line-up" retry={() => setAttempt(n => n + 1)} />
-        : squadState === 'loading' ? <p className="mt-3 muted" role="status">Loading the line-up…</p>
-        : lineup ? (
-        <>
-          <p className="kicker mt-5"><span className="kicker-rule">LINE-UP</span></p>
-          <div className="mt-3">
-            <PitchView teamKey={f.team?.key} formation={lineup.formation} starters={lineup.starters} names={lineNames} photos={linePhotos}
-              badge={(id) => (goalsById[id] ? `⚽${goalsById[id]}` : null)} />
-          </div>
-          {lineup.subs.length > 0 && (
-            <div className="mt-3">
-              <p className="kicker" style={{ color: 'var(--bone-mute)' }}>SUBS · {lineup.subs.length}</p>
-              <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
-                {lineup.subs.map((id) => <span key={id} className="chip">{lineNames[id] || '—'}{gaSuffix(id)}</span>)}
-              </div>
+    <>
+      <Sheet open={open} onClose={onClose} aria-label={`${fixtureMatchup(f)} match report`}>
+        <article className="match-report" data-team={f.team?.key}>
+          <header className="mc-hero" style={{ backgroundImage: heroBackground({ pinnedUrl: f.pinnedUrl, pool, seed: f.id, gradient: grad }) }}>
+            <div className="row spread">
+              <span className="kicker poster-plate">Full time · {f.fixture_type}</span>
+              {isAdmin && <button className="btn btn-ghost mc-edit" onClick={onEdit}>Edit</button>}
             </div>
-          )}
-        </>
-      ) : names.size > 0 ? (
-        <>
-          <p className="kicker mt-5"><span className="kicker-rule">THE SQUAD</span></p>
-          <div className="mc-squad mt-3">
-            {[...names].sort().map((n) => {
-              const t = tally[n]
-              return (
-                <div key={n} className="mc-player">
-                  <span>{n}</span>
-                  {t && <span className="mono mc-ga">{t.g ? `${t.g}G` : ''}{t.g && t.a ? ' · ' : ''}{t.a ? `${t.a}A` : ''}</span>}
-                </div>
-              )
-            })}
-          </div>
-        </>
-      ) : null}
+            <div className="mt-3"><ScoreBug fixture={f} size="lg" /></div>
+            <p className="report-dateline">
+              {halfTimeScore(r) && <span>HT {halfTimeScore(r)}</span>}
+              <time dateTime={f.match_date}>{fmtDateLong(f.match_date)}</time>
+            </p>
+          </header>
 
-      <style>{`
-        .mc-hero { border-radius: var(--r-card); padding: var(--space-4); position: relative; }
-        .mc-edit { padding: var(--space-1) var(--space-3); font-size: var(--type-sm); background: var(--photo-overlay); color: var(--on-photo); border-color: var(--photo-edge); }
-        .mc-motm { display: flex; align-items: center; gap: var(--space-3); background: var(--slate);
-          border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--space-3) var(--space-3); }
-        .mc-star { color: var(--gold); font-size: var(--type-title); }
-        /* MOTM photo as a small avatar in the row; tap to enlarge. */
-        .mc-motm-thumb { flex: none; width: 56px; height: 56px; border-radius: var(--r-card); padding: 0;
-          overflow: hidden; border: 1.5px solid var(--gold); background: var(--slate); cursor: zoom-in; }
-        .mc-motm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .mc-motm-zoom { position: fixed; inset: 0; z-index: 210; background: var(--shadow-deep);
-          display: flex; align-items: center; justify-content: center; padding: var(--space-6); cursor: zoom-out;
-          animation: fade var(--t-fast); }
-        .mc-motm-zoom img { max-width: 100%; max-height: 100%; border-radius: var(--r-card); object-fit: contain;
-          box-shadow: var(--shadow-float, var(--shadow-deep)); }
-        .mc-motm-sponsor { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1);
-          font-size: var(--type-xs); color: var(--bone-dim); }
-        .mc-motm-sponsor img { height: 18px; width: auto; background: var(--bone); border-radius: var(--r-input); padding: var(--space-1) var(--space-1); }
-        .mc-timeline { display: flex; flex-direction: column; }
-        .mc-goal { display: grid; grid-template-columns: 40px 16px 1fr; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; }
-        .mc-min { color: var(--bone-mute); font-size: var(--type-sm); }
-        .mc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); justify-self: center; }
-        .mc-squad { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1) var(--space-4); }
-        .mc-player { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) 0;
-          border-bottom: 1px solid var(--line); font-size: var(--type-sm); }
-        .mc-ga { color: var(--gold); font-size: var(--type-caption); }
-        @media (max-width: 480px){ .mc-squad { grid-template-columns: 1fr; } }
-      `}</style>
-    </Sheet>
+          {motm && (
+            <section className="mc-motm">
+              <div>
+                <h2><IconCompetitions aria-hidden="true" />Man of the match</h2>
+                <p className="report-award-name">{motm}</p>
+                {motmSponsor && (
+                  <div className="mc-motm-sponsor">
+                    Sponsored by {motmSponsor.name}
+                    {motmSponsor.logo_url && <ClubImage sizes="72px" src={motmSponsor.logo_url} alt="" />}
+                  </div>
+                )}
+              </div>
+              {r.motm_photo_url && (
+                <button type="button" className="mc-motm-thumb" onClick={() => setZoom(true)}
+                  aria-label={`Enlarge ${motm}'s photo`}>
+                  <ClubImage sizes="144px" src={r.motm_photo_url} alt="" />
+                </button>
+              )}
+            </section>
+          )}
+
+          <h2 className="report-heading">Goals</h2>
+          {f.goals.length === 0 ? (
+            <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>{r.us === 0 ? 'No goals' : 'No scorers recorded'}</p>
+          ) : (
+            <ol className="mc-timeline" aria-label="Goal timeline">
+              {f.goals.map((g, index) => {
+                const scorer = resolveName(sb, g.scorer_profile_id, g.scorer_name) || 'Unknown'
+                const assist = resolveName(sb, g.assist_profile_id, g.assist_name)
+                return (
+                  <li key={g.id ?? index} className="mc-goal">
+                    <span className="mc-min mono">{g.minute != null ? `${g.minute}′` : '—'}</span>
+                    <div className="mc-scorer">
+                      <strong>{scorer}</strong>
+                      {assist && <p>Assist · {assist}</p>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+
+          {squadState === 'error' ? <LoadIssue subject="the line-up" retry={() => setAttempt(n => n + 1)} />
+            : squadState === 'loading' ? <p className="mt-3 muted" role="status">Loading the line-up…</p>
+            : lineup ? (
+            <>
+              <h2 className="report-heading">Line-up</h2>
+              <div className="mt-3">
+                <PitchView teamKey={f.team?.key} formation={lineup.formation} starters={lineup.starters} names={lineNames} photos={linePhotos}
+                  badge={(id) => (goalsById[id] ? `⚽${goalsById[id]}` : null)} />
+              </div>
+              {lineup.subs.length > 0 && (
+                <div className="mt-3">
+                  <h3 className="report-subs">Subs · {lineup.subs.length}</h3>
+                  <ul className="mc-squad">
+                    {lineup.subs.map((id) => <li key={id} className="mc-player">{lineNames[id] || '—'}{gaSuffix(id)}</li>)}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : names.size > 0 ? (
+            <>
+              <h2 className="report-heading">The squad</h2>
+              <ul className="mc-squad">
+                {[...names].sort().map((n) => {
+                  const t = tally[n]
+                  return (
+                    <li key={n} className="mc-player">
+                      <span>{n}</span>
+                      {t && <span className="mono mc-ga">{t.g ? `${t.g}G` : ''}{t.g && t.a ? ' · ' : ''}{t.a ? `${t.a}A` : ''}</span>}
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          ) : null}
+
+        </article>
+      </Sheet>
+      <Sheet open={Boolean(open && zoom && r.motm_photo_url)} onClose={() => setZoom(false)} aria-label={`${motm} photo`}>
+        <figure className="report-photo">
+          <ClubImage className="photo-viewer" sizes="(max-width: 780px) 100vw, 780px" src={r.motm_photo_url} alt={motm} />
+          <figcaption>{motm} · Man of the match</figcaption>
+        </figure>
+      </Sheet>
+    </>
   )
 }

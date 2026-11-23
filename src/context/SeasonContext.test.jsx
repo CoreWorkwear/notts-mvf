@@ -27,6 +27,19 @@ beforeEach(() => {
 })
 
 describe('SeasonProvider', () => {
+  test('a fresh sign-in waits for its own season before exposing an empty diary', async () => {
+    auth.isAuthed = false
+    const { result, rerender } = renderHook(() => useSeason(), { wrapper: SeasonProvider })
+    expect(result.current.loading).toBe(false)
+    auth.isAuthed = true
+    rerender()
+    expect(result.current.loading).toBe(true)
+    await waitFor(() => expect(store.pending).toHaveLength(1))
+    await act(async () => { store.pending[0].resolve() })
+    expect(result.current.seasonId).toBe('s1')
+    expect(result.current.loading).toBe(false)
+  })
+
   test('seeds seasonId from the current season once signed in', async () => {
     const { result } = renderHook(() => useSeason(), { wrapper: SeasonProvider })
     await waitFor(() => expect(store.pending).toHaveLength(1))

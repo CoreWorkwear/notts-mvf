@@ -11,7 +11,7 @@ export function SeasonProvider({ children }) {
   const { isAuthed } = useAuth()
   const [seasons, setSeasons] = useState([])
   const [seasonId, setSeasonId] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [initialised, setInitialised] = useState(false)
   const [error, setError] = useState(null)
   // Latest wins: a seasons fetch still in flight when the user signs out (or a
   // newer refresh starts) must not land afterwards and re-seed the season.
@@ -44,11 +44,11 @@ export function SeasonProvider({ children }) {
   useEffect(() => {
     if (!isAuthed) {
       reqRef.current++ // void any fetch still in flight — a signed-out app carries no season
-      setSeasons([]); setSeasonId(null); setLoading(false); setError(null)
+      setSeasons([]); setSeasonId(null); setInitialised(false); setError(null)
       return
     }
     let active = true
-    refreshSeasons().finally(() => { if (active) setLoading(false) })
+    refreshSeasons().finally(() => { if (active) setInitialised(true) })
     return () => { active = false }
   }, [isAuthed, refreshSeasons])
 
@@ -60,7 +60,7 @@ export function SeasonProvider({ children }) {
 
   const season = seasons.find((s) => s.id === seasonId) ?? null
   return (
-    <SeasonContext.Provider value={{ seasons, season, seasonId, setSeasonId, loading, error, refreshSeasons }}>
+    <SeasonContext.Provider value={{ seasons, season, seasonId, setSeasonId, loading: isAuthed && !initialised, error, refreshSeasons }}>
       {children}
     </SeasonContext.Provider>
   )

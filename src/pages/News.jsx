@@ -4,8 +4,13 @@ import { useNews } from '../hooks/useNews'
 import NewsForm from '../components/NewsForm'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
-import { fmtDate } from '../lib/format'
 import PageHead from '../components/PageHead'
+import { IconBell } from '../components/Icons'
+import '../styles/editorial.css'
+
+const publishedDate = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London',
+})
 
 // Club news / notifications — everyone reads; admins post (and optionally push).
 export default function News() {
@@ -25,7 +30,7 @@ export default function News() {
   // is the hook's `loaded`, not an empty list: the first-ever post refetches
   // with nothing listed yet.
   const firstLoad = !loaded && items.length === 0
-  if (loading && firstLoad) return <Loader label="Loading news…" />
+  if (loading && firstLoad) return <Loader route="news" label="Loading news…" />
 
   // A failed first load is not an empty diary: say so and offer a retry.
   if (error && firstLoad) return (
@@ -40,46 +45,40 @@ export default function News() {
   return (
     <div className="page">
       <Toast message={toast} onDismiss={() => setToast(null)} />
-      <PageHead kicker="CLUB NEWS" title="What's on" />
+      <PageHead title="Club news" aside={isAdmin &&
+        <button className="btn btn-ghost news-post" onClick={() => setComposing(true)}>Post news</button>} />
       {error && <p className="dim mt-2" role="status" style={{ fontSize: 'var(--type-sm)' }}>Couldn't refresh. Showing saved posts.</p>}
-
-      {isAdmin && (
-        <button className="btn btn-primary btn-block mt-3" onClick={() => setComposing(true)}>+ Post news</button>
-      )}
 
       {items.length === 0 ? (
         <div className="empty mt-5">
           <p className="empty-title">No club news</p>
         </div>
       ) : (
-        <div className="col gap-3 mt-4">
+        <div className="news-feed">
           {items.map((n) => (
-            <div key={n.id} className="card news-card">
-              <div className="row spread">
-                <span className="news-title">{n.title}</span>
-                {n.pushed && <span className="member-tag">Sent to phones</span>}
-              </div>
-              <p className="news-body mt-2">{n.body}</p>
-              <div className="row spread mt-2">
-                <span className="news-meta">
-                  <span className="mono">{fmtDate(n.created_at.slice(0, 10))}</span>{n.author ? ` · ${n.author.first_name} ${(n.author.last_name ?? '').slice(0, 1)}` : ''}
-                </span>
-                {isAdmin && <button className="news-del" onClick={() => onDelete(n.id)}>Delete</button>}
-              </div>
-            </div>
+            <article key={n.id} className="news-story" id={`news-${n.id}`} aria-labelledby={`headline-${n.id}`}>
+              <header>
+                <div className="story-byline">
+                  <time dateTime={n.created_at}>{publishedDate.format(new Date(n.created_at))}</time>
+                  {n.author?.first_name && <span>By {n.author.first_name} {(n.author.last_name ?? '').slice(0, 1)}</span>}
+                </div>
+                <h2 id={`headline-${n.id}`}>{n.title}</h2>
+              </header>
+              <div className="story-copy">{(n.body ?? '').split(/(?:\r?\n[ \t]*){2,}/).filter(Boolean).map((paragraph, i) =>
+                <p key={i}>{paragraph}</p>
+              )}</div>
+              {(n.pushed || isAdmin) && <footer>
+                {n.pushed && <span className="story-delivery">
+                  <IconBell aria-hidden="true" />Sent to phones
+                </span>}
+                {isAdmin && <button className="news-del" aria-label={`Delete ${n.title}`} onClick={() => onDelete(n.id)}>Delete</button>}
+              </footer>}
+            </article>
           ))}
         </div>
       )}
 
       {isAdmin && <NewsForm open={composing} onClose={() => setComposing(false)} onPost={post} />}
-
-      <style>{`
-        .news-card { padding: var(--space-4); background: var(--coal); border: 1px solid var(--line); }
-        .news-title { font-family: var(--font-display); font-weight: 600; font-size: var(--type-lead); line-height: 1.1; }
-        .news-body { color: var(--bone); font-size: var(--type-body); line-height: 1.5; white-space: pre-wrap; }
-        .news-meta { font-size: var(--type-caption); color: var(--bone-mute); }
-        .news-del { min-height: var(--target); padding-inline: var(--space-2); background: none; border: none; color: var(--red-bright); font-size: var(--type-sm); }
-      `}</style>
     </div>
   )
 }

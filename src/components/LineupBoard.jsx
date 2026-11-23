@@ -1,5 +1,6 @@
 import ClubImage from './ClubImage'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { LayoutGroup, motion, useReducedMotion } from 'framer-motion'
 import { useLineup } from '../hooks/useLineup'
 import { FORMATION_NAMES, stateToRows, filledCount, swapStarters } from '../lib/lineup'
 import { fixtureMatchup } from '../lib/teams'
@@ -8,6 +9,7 @@ import PitchView, { initials } from './PitchView'
 import Toast from './Toast'
 import { haptic } from '../lib/haptics'
 import { friendlyError } from '../lib/errors'
+import { SPRING_SNAPPY, tap } from '../lib/motion'
 
 // Match-details line-up. Players see the picked XI + subs on a pitch; managers
 // tap a slot to assign a player, choose a formation, and name the subs. The pool
@@ -36,7 +38,12 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   const [pushMsg, setPushMsg] = useState(null)
   const [justSaved, setJustSaved] = useState(false)
   const picker = useRef(null)
+  const pickerPress = useRef(null)
   const slotButton = useRef(null)
+  const readinessMeter = useRef(null)
+  const benchButton = useRef(null)
+  const pitchGroup = useId()
+  const reduced = useReducedMotion()
 
   // Push the named line-up to the picked players (starters + subs). Uses the
   // admin-gated send-push function; fails gracefully if it's unavailable.
@@ -48,6 +55,9 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
       const { data, error } = await supabase.functions.invoke('send-push', {
         body: {
           profileIds: ids,
+          fixtureId: fixture.id,
+          teamKey: fixture.team?.key,
+          kind: 'lineup',
           title: fixtureMatchup(fixture),
           body: "You're in the squad. View line-up.",
           url: `/fixtures?mvf_fixture=${encodeURIComponent(fixture.id)}&view=lineup`,
@@ -71,7 +81,11 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   }, [saved, editing])
 
   const placed = useMemo(() => new Set([...Object.values(starters).filter(Boolean), ...subs]), [starters, subs])
-  const remaining = pool.filter((p) => !placed.has(p.id))
+  const remaining = pool.filter((p) => !placed.has(p.id) || (typeof active === 'number' && subs.includes(p.id)))
+  const picked = filledCount(starters)
+  const confirmed = pool.filter(p => placed.has(p.id) && p.status === 'in').length
+  const maybe = pool.filter(p => placed.has(p.id) && p.status === 'maybe').length
+  const unconfirmed = placed.size - confirmed - maybe
 
   useEffect(() => {
     if (active == null) return
@@ -81,7 +95,17 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
   function openPicker(slot, button) {
     slotButton.current = button
+    pickerPress.current = null
     setActive(slot)
+  }
+  function trackPickerPointer(event) {
+    const press = pickerPress.current
+    if (event.type === 'pointerdown') {
+      pickerPress.current = { x: event.clientX, y: event.clientY, moved: event.isPrimary === false }
+    } else if (press && (event.type === 'pointercancel' ||
+        Math.hypot(event.clientX - press.x, event.clientY - press.y) >= 8)) {
+      press.moved = true
+    }
   }
   function closePicker() {
     setActive(null)
@@ -89,13 +113,18 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     slotButton.current?.scrollIntoView?.({ block: 'nearest', behavior: 'instant' })
   }
   function assign(id) {
-    haptic('tap')
+    haptic('tap', slotButton.current)
     if (active === 'sub') setSubs((s) => [...s, id])
-    else setStarters((st) => ({ ...st, [active]: id }))
+    else {
+      // Promoting a sub onto an occupied shirt exchanges their places.
+      if (subs.includes(id)) setSubs(s => s.map(sub => sub === id ? starters[active] : sub).filter(Boolean))
+      setStarters((st) => ({ ...st, [active]: id }))
+    }
     closePicker()
   }
-  function clearSlot(slot) {
-    haptic('tap')
+  function clearSlot(slot, toBench = false) {
+    haptic('tap', slotButton.current)
+    if (toBench) setSubs(s => [...s, starters[slot]])
     setStarters((current) => {
       const next = { ...current }
       delete next[slot]
@@ -104,13 +133,12 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     closePicker()
   }
   function removeSub(id) {
-    haptic('tap')
+    haptic('tap', benchButton.current)
     setSubs((s) => s.filter((x) => x !== id))
   }
 
   // Drag-and-drop: swap two filled slots, or move a player into an empty one.
   function swapSlots(from, to) {
-    haptic('tap')
     setActive(null)
     setStarters((st) => swapStarters(st, from, to))
   }
@@ -125,11 +153,11 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     try {
       const { error } = await save(rows)
       if (error) throw error
-      haptic('success')
+      haptic('success', readinessMeter.current)
       setJustSaved(true)
       setEditing(false)
     } catch (err) {
-      haptic('warn')
+      haptic('warn', readinessMeter.current)
       setError(friendlyError(err, "Couldn't save the line-up. Try again."))
     } finally {
       setBusy(false)
@@ -163,6 +191,19 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     )
   }
 
+  const readiness = (
+    <div className="lineup-readiness">
+      <div className="row spread gap-2">
+        <strong><span className="mono">{picked}/11</span> starters picked</strong>
+        <span>{confirmed} confirmed · {maybe} maybe{unconfirmed > 0 && ` · ${unconfirmed} unconfirmed`}</span>
+      </div>
+      <div ref={readinessMeter} role="meter" aria-label="Starting XI picked" aria-valuemin={0} aria-valuemax={11}
+        aria-valuenow={picked} aria-valuetext={`${picked} of 11 starters picked`} className="lineup-meter">
+        <span style={{ transform: `scaleX(${picked / 11})` }} />
+      </div>
+    </div>
+  )
+
   // ---- read-only (players, or admin not editing) ----
   if (!isAdmin || !editing || busy) {
     const showPitch = busy ? placed.size > 0 : hasLineup
@@ -174,6 +215,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
           <div className="empty"><p className="empty-title">Line-up not picked yet</p></div>
         ) : (
           <>
+            {isAdmin && readiness}
             <PitchView teamKey={fixture.team?.key} formation={formation} starters={starters} names={names} photos={photos} />
             {subs.length > 0 && (
               <div className="mt-3">
@@ -216,7 +258,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
   // ---- editor (admin) ----
   return (
-    <>
+    <LayoutGroup id={pitchGroup}>
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
 
       <p className="kicker mt-3"><span className="kicker-rule">FORMATION</span></p>
@@ -226,32 +268,48 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         ))}
       </div>
 
-      <p className="dim mt-3" style={{ fontSize: 'var(--type-sm)' }}>{filledCount(starters)}/11 picked · Tap a shirt to pick · Drag to swap</p>
+      {readiness}
+      <p className="lineup-hint">Tap a shirt to pick. Hold and drag to swap.</p>
       <PitchView teamKey={fixture.team?.key} formation={formation} starters={starters} names={names} photos={photos} onTapSlot={openPicker} onSwap={swapSlots} activeSlot={active} />
 
       <div className="mt-4">
         <div className="row spread" style={{ alignItems: 'center' }}>
           <p className="kicker"><span className="kicker-rule">SUBS · {subs.length}</span></p>
-          <button type="button" className="chip" onClick={e => openPicker('sub', e.currentTarget)}>+ Add sub</button>
+          <button ref={benchButton} type="button" className="chip" onClick={e => openPicker('sub', e.currentTarget)}>+ Add sub</button>
         </div>
         <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
           {subs.length === 0 ? <span className="dim" style={{ fontSize: 'var(--type-sm)' }}>No subs named.</span>
             : subs.map((id) => (
-              <button key={id} type="button" className="chip" onClick={() => removeSub(id)}>{names[id] || '—'} ✕</button>
+              <motion.button key={id} type="button" className="chip bench-player" aria-label={`Remove ${names[id]} from the bench`}
+                layout={reduced ? false : 'position'} whileTap={reduced ? undefined : tap}
+                transition={SPRING_SNAPPY} onClick={() => removeSub(id)}>
+                <motion.span className="sub-av" layoutId={reduced ? undefined : 'player-' + id}
+                  initial={reduced ? false : { scale: .88 }} animate={{ scale: 1 }} transition={SPRING_SNAPPY}>
+                  {photos[id] ? <ClubImage sizes="30px" src={photos[id]} alt="" /> : initials(names[id])}
+                </motion.span>
+                {names[id] || '—'} <span aria-hidden="true">×</span>
+              </motion.button>
             ))}
         </div>
       </div>
 
       {/* Picker — the pool not already placed: in/maybe, or the whole squad from kickoff. */}
       {active != null && (
-        <div className="picker mt-4" ref={picker} tabIndex={-1} role="group" aria-label={active === 'sub' ? 'Pick a sub' : 'Pick a player'}>
+        <div className="picker mt-4" ref={picker} tabIndex={-1} role="group" aria-label={active === 'sub' ? 'Pick a sub' : 'Pick a player'}
+          onPointerDownCapture={trackPickerPointer} onPointerMoveCapture={trackPickerPointer} onPointerUpCapture={trackPickerPointer}
+          onPointerCancelCapture={trackPickerPointer} onClickCapture={event => {
+            if (event.detail > 0 && pickerPress.current?.moved) event.stopPropagation()
+            pickerPress.current = null
+          }}>
           <div className="row spread" style={{ alignItems: 'center' }}>
             <p className="kicker"><span className="kicker-rule">{active === 'sub' ? 'PICK A SUB' : 'PICK A PLAYER'}</span></p>
             <button type="button" className="chip" onClick={closePicker}>Close</button>
           </div>
           {typeof active === 'number' && starters[active] && (
-            <button type="button" className="btn btn-ghost btn-block mt-2" onClick={() => clearSlot(active)}
-              style={{ color: 'var(--red-bright)' }}>Clear this slot</button>
+            <div className="row gap-2 mt-2 lineup-slot-actions">
+              <button type="button" className="btn btn-ghost grow" onClick={() => clearSlot(active, true)}>Move to bench</button>
+              <button type="button" className="btn btn-ghost grow" onClick={() => clearSlot(active)}>Clear this slot</button>
+            </div>
           )}
           {wholeSquad && <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>Whole squad · After kick-off</p>}
           {remaining.length === 0 ? (
@@ -259,11 +317,14 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
           ) : (
             <div className="col gap-2 mt-2">
               {remaining.map((p) => (
-                <button key={p.id} type="button" className="card pick-row" onClick={() => assign(p.id)}>
+                <motion.button key={p.id} type="button" className="card pick-row" onClick={() => assign(p.id)}
+                  whileTap={reduced ? undefined : tap} transition={SPRING_SNAPPY}>
                   {p.photo_url ? <ClubImage sizes="40px" className="pick-av" src={p.photo_url} alt="" /> : <span className="pick-av mono">{initials(p.name)}</span>}
-                  <span className="grow" style={{ textAlign: 'left' }}>{p.name}</span>
+                  <span className="grow" style={{ textAlign: 'left' }}>{p.name}
+                    {subs.includes(p.id) && <small>{starters[active] ? `On the bench · Swap with ${names[starters[active]]}` : 'On the bench'}</small>}
+                  </span>
                   <span className={'tag ' + (ANSWER_TAG[p.status] ?? ANSWER_TAG.none).cls}><span className="status-light" aria-hidden="true" />{(ANSWER_TAG[p.status] ?? ANSWER_TAG.none).label}</span>
-                </button>
+                </motion.button>
               ))}
             </div>
           )}
@@ -287,6 +348,6 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         .tag-maybe { color: var(--amber); border-color: var(--amber); }
         .tag-out { color: var(--red-bright); border-color: var(--red); }
       `}</style>
-    </>
+    </LayoutGroup>
   )
 }

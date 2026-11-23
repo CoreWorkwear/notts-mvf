@@ -1,38 +1,39 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { pushSupported, enablePush } from '../lib/push'
-import Toast from './Toast'
+import { pushSupported, needsHomeScreen } from '../lib/push'
+import NotificationSheet from './NotificationSheet'
 
 // Low-friction opt-in nudge (§3.6). Shows only while the browser permission is
 // still 'default' — never once granted or denied — so it re-asks on each app
 // open. Not a blocking modal; "Not now" hides it for the rest of this session.
 export default function NotificationPrompt() {
   const { user } = useAuth()
-  const [dismissed, setDismissed] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
+  const key = 'mvf:alert-nudge:' + user?.id
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(key) === 'later' } catch { return false }
+  })
+  const [open, setOpen] = useState(false)
+  const canAsk = needsHomeScreen() || (pushSupported && window.Notification?.permission === 'default')
+  if (!user || (!canAsk && !open) || dismissed) return null
 
-  const canAsk = pushSupported && typeof Notification !== 'undefined' && Notification.permission === 'default'
-  if (!user || !canAsk || dismissed) return null
-
-  async function enable() {
-    setBusy(true); setError(null)
-    try { await enablePush(user.id); setDismissed(true) }
-    catch (e) { setError(e.message) } finally { setBusy(false) }
+  function later() {
+    setOpen(false)
+    setDismissed(true)
+    try { sessionStorage.setItem(key, 'later') } catch { /* The nudge is still dismissed on this screen. */ }
   }
 
   return (
     <>
-      <Toast message={error} onDismiss={() => setError(null)} />
       <div className="notif-prompt" role="region" aria-label="Turn on notifications">
         <div className="np-text">
           <strong>Match alerts</strong>
         </div>
         <div className="np-actions">
-          <button className="btn btn-ghost np-later" onClick={() => setDismissed(true)}>Not now</button>
-          <button className="btn btn-primary np-on" disabled={busy} onClick={enable}>{busy ? '…' : 'Turn on'}</button>
+          <button className="btn btn-ghost np-later" onClick={later}>Not now</button>
+          <button className="btn btn-primary np-on" onClick={() => setOpen(true)}>Turn on</button>
         </div>
       </div>
+      <NotificationSheet open={open} onClose={later} onEnabled={later} profileId={user.id} />
       <style>{`
         .notif-prompt {
           display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3);

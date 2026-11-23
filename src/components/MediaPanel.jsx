@@ -33,7 +33,7 @@ export default function MediaPanel() {
     if (error) setToast(`Couldn't remove that photo. ${friendlyError(error, 'Try again.')}`)
   }
 
-  if (loading && !photos.length) return <Loader label="Loading media…" />
+  if (loading && !photos.length) return <Loader layout="gallery" label="Loading media…" />
 
   return (
     <div className="mt-4 col gap-5">

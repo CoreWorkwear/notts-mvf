@@ -30,7 +30,7 @@ export default function AdminAvailability() {
     .sort((a, b) => (a.match_date < b.match_date ? 1 : a.match_date > b.match_date ? -1 : (b.kickoff ?? '').localeCompare(a.kickoff ?? '')))
 
   if (!seasonId && seasonError) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
-  if ((!seasonId && seasonLoading) || (loading && fixtures.length === 0)) return <Loader label="Loading availability…" />
+  if ((!seasonId && seasonLoading) || (loading && fixtures.length === 0)) return <Loader route="whos-in" label="Loading availability…" />
 
   // A failed first load is not "no games to chase" — say so and offer a retry
   // (same shape as Fixtures). With fixtures already on screen, keep them.

@@ -25,7 +25,7 @@ export default function Sponsors() {
   // "First" is the hook's `loaded`, not an empty list: saving the first-ever
   // sponsor refetches with none listed yet.
   const firstLoad = !loaded && sponsors.length === 0
-  if (loading && firstLoad) return <Loader label="Loading sponsors…" />
+  if (loading && firstLoad) return <Loader route="sponsors" label="Loading sponsors…" />
 
   // A failed first load is not "None yet." under every tier: say so, offer a retry.
   if (error && firstLoad) return (

@@ -6,6 +6,12 @@ import { supabase } from './supabase'
 export const pushSupported =
   typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
 
+export function needsHomeScreen() {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  return ios && !navigator.standalone && !window.matchMedia?.('(display-mode: standalone)').matches
+}
+
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY
 
 // VAPID public key (base64url) → Uint8Array for applicationServerKey.
@@ -35,8 +41,9 @@ export async function currentSubscription() {
 export async function enablePush(profileId) {
   if (!pushSupported) throw new Error("This device doesn't support push.")
   if (!VAPID_PUBLIC) throw new Error('Match alerts are unavailable.')
-  const perm = await Notification.requestPermission()
-  if (perm !== 'granted') throw new Error('Notifications were blocked.')
+  const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
+  if (perm === 'denied') throw new Error('Notifications are blocked. Allow them in your notification settings.')
+  if (perm !== 'granted') throw new Error('Match alerts are still off. You can try again when you’re ready.')
 
   const reg = await navigator.serviceWorker.ready
   const sub =

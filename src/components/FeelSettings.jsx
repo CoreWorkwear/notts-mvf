@@ -18,12 +18,12 @@ export default function FeelSettings() {
   const showTilt = tiltSupported()
   if (!showHaptics && !showTilt) return null
 
-  function toggleHaptics() {
+  function toggleHaptics(event) {
     const next = !haptics
     setHaptics(next)
     setHapticsEnabled(next)
     // Demonstrate the thing being switched on, with the thing itself.
-    if (next) haptic('confirm')
+    if (next) haptic('confirm', event.currentTarget)
   }
 
   async function toggleTilt() {

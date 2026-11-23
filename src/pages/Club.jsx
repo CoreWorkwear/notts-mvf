@@ -34,7 +34,7 @@ export default function Club() {
   // is edited) flips loading too, and swapping the page out unmounted the panel
   // and any sheet it had open.
   if (seasonError && !seasonId) return <div className="page"><LoadIssue subject="the seasons" retry={refreshSeasons} /></div>
-  if (loading && empty) return <Loader label="Loading the club…" />
+  if (loading && empty) return <Loader route="club" title={club?.name} label="Loading the club…" />
 
   // A failed first load (flaky connection) gets a retry, not a blank club.
   if (error && empty) return (
@@ -57,7 +57,7 @@ export default function Club() {
       <div className="mt-4">
         {view === 'table' && competitionError && <LoadIssue subject="the competitions" retry={reloadCompetitions} stale={!!competitions.length} />}
         {view === 'table' && !competitions.length && competitionError ? null
-          : view === 'table' && !competitions.length && loadingCompetitions ? <Loader label="Loading competitions…" />
+          : view === 'table' && !competitions.length && loadingCompetitions ? <Loader layout="table" label="Loading competitions…" />
           : view === 'table' ? <LeagueTablePanel table={table} competitions={competitions} teams={teams} seasonId={seasonId} onSaved={refetch} />
           : view === 'squad' ? <SquadList />
           : view === 'stats' ? <StatsPanel stats={stats} />

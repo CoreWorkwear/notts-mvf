@@ -10,6 +10,7 @@ import { usePhotoPool } from '../hooks/useMedia'
 import { logError } from '../lib/logger'
 import { todayISO, fmtDate, hasKickedOff, addDaysISO, parseDate } from '../lib/format'
 import FixtureHero from '../components/FixtureHero'
+import Loader from '../components/Loader'
 import FixtureStrip from '../components/FixtureStrip'
 import FixtureDetail from '../components/FixtureDetail'
 import WhosInSheet from '../components/WhosInSheet'
@@ -179,14 +180,7 @@ export default function Fixtures() {
   // form, which came back blank.
   const firstLoad = !loaded && fixtures.length === 0
   if (firstLoad && navigator.onLine === false) return null // OfflineDiary above the route holds the saved match list.
-  if ((loading || (!seasonId && seasonLoading)) && firstLoad) return (
-    <div className="page fixture-loading" role="status" aria-label="Loading fixtures…">
-      <span className="sr-only">Loading fixtures…</span>
-      <div className="fixture-placeholder-head" aria-hidden="true" />
-      <div className="fixture-placeholder-hero" aria-hidden="true" />
-      <div className="fixture-placeholder-row" aria-hidden="true" />
-    </div>
-  )
+  if ((loading || (!seasonId && seasonLoading)) && firstLoad) return <Loader route="fixtures" label="Loading fixtures…" />
 
   // A first load that failed on the network: don't pretend the diary is empty,
   // and don't hang. Say what happened and let them have another go. A failed
