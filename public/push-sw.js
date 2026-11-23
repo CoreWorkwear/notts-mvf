@@ -1,70 +1,120 @@
-/* Web-push handlers, imported into the generated service worker (vite-plugin-pwa
-   workbox.importScripts). Plain SW code — no modules. */
+/* Web-push handlers imported by the generated Workbox service worker. */
 
-self.addEventListener('push', (event) => {
-  let data = {}
-  try { data = event.data ? event.data.json() : {} } catch (e) { data = { body: event.data && event.data.text() } }
+function nonempty(value) {
+  return typeof value === 'string' && value.trim() ? value : null
+}
 
-  if (!data || typeof data !== 'object') data = {}
-  const title = typeof data.title === 'string' && data.title || 'Nottinghamshire MvF'
-  const body = typeof data.body === 'string' ? data.body : ''
-  const fixtureId = typeof data.fixtureId === 'string' && data.fixtureId || null
-  const teamKey = ['xl', 'community'].includes(data.teamKey) ? data.teamKey : null
-  const kind = data.withAvailability ? 'avail' : data.kind === 'lineup' ? 'lineup' : fixtureId ? 'match' : 'news'
-  const fixtureUrl = fixtureId && '/fixtures?mvf_fixture=' + encodeURIComponent(fixtureId)
-  const url = kind === 'lineup' && fixtureUrl ? fixtureUrl + '&view=lineup' : safePath(data.url) || '/'
-  const target = fixtureUrl && (url === '/' || url === '/fixtures') ? fixtureUrl : url
-  // Keep the two decisive answers first on platforms with two tray buttons.
-  // Where three fit, Maybe is one tap too. The body always opens the fixture.
-  let actions = Array.isArray(data.actions) ? data.actions : []
+function readPayload(message) {
+  let payload
+  try {
+    payload = message?.json()
+  } catch {
+    try { payload = message?.text() } catch { /* A bodyless push still opens the club. */ }
+  }
+  if (typeof payload === 'string') return { body: payload }
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
+}
+
+function destination(data) {
+  return safePath(data?.url) || safePath(data?.data?.url) || safePath(data)
+}
+
+// Direct Web Push senders can also supply an absolute URL for this exact app
+// origin. Older admin payloads use root-relative paths on every deployment.
+function imagePath(value) {
+  if (typeof value !== 'string') return null
+  const origin = self.location.origin
+  const relative = value.startsWith(origin + '/') ? value.slice(origin.length) : value
+  const path = safePath(relative)
+  return path && /\.(?:avif|gif|ico|jpe?g|png|svg|webp)$/i.test(path.split(/[?#]/)[0]) ? path : null
+}
+
+function fixturePath(fixtureId) {
+  return '/fixtures?' + new URLSearchParams({ mvf_fixture: fixtureId })
+}
+
+function trayActions(data, kind, fixtureId) {
+  if (kind === 'training') return []
+  const max = self.Notification?.maxActions
+  let actions = []
   if (fixtureId && kind === 'avail') {
     actions = [{ action: 'in', title: "I'm in" }, { action: 'out', title: "Can't make it" }]
-    if (self.Notification?.maxActions >= 3) actions.push({ action: 'maybe', title: 'Maybe' })
-  } else if (fixtureId && !actions.length) {
-    actions = [{ action: 'lineup', title: 'View line-up' }]
-    if (kind === 'match') actions.push({ action: 'availability', title: 'Confirm availability' })
+    if (max >= 3) actions.push({ action: 'maybe', title: 'Maybe' })
+  } else {
+    for (const item of Array.isArray(data.actions) ? data.actions : []) {
+      if (!nonempty(item?.action) || !nonempty(item.title)) continue
+      const icon = imagePath(item.icon)
+      actions.push({ action: item.action, title: item.title, ...(icon ? { icon } : {}) })
+    }
+    if (fixtureId && !actions.length) {
+      actions.push({ action: 'lineup', title: 'View line-up' })
+      if (kind === 'match') actions.push({ action: 'availability', title: 'Confirm availability' })
+    }
   }
+  return Number.isInteger(max) && max >= 0 ? actions.slice(0, max) : actions
+}
 
-  // Distinct reminder types can fall due together. Only a fresh background
-  // reminder should ring again when it replaces an existing tray card.
-  const tag = data.tag || (fixtureId ? kind + '-' + fixtureId : undefined)
+async function windowClients(includeUncontrolled = false) {
+  try { return await self.clients.matchAll({ type: 'window', includeUncontrolled }) || [] }
+  catch { return [] }
+}
+
+self.addEventListener('push', (event) => {
+  const data = readPayload(event.data)
+  const title = nonempty(data.title) || 'Nottinghamshire MvF'
+  const body = typeof data.body === 'string' ? data.body : ''
+  const link = destination(data)
+  const parsed = link && new URL(link, self.location.origin)
+  // Training notices and cancellations link to their session. A stale fixture
+  // field or custom action can never turn a training tap into an RSVP write.
+  const training = data.kind === 'training' || parsed?.pathname === '/training'
+  const fixtureId = training ? null : nonempty(data.fixtureId)
+  const teamKey = ['xl', 'community'].includes(data.teamKey) ? data.teamKey : null
+  const legacyLineup = parsed?.pathname === '/fixtures' && parsed.searchParams.get('view') === 'lineup'
+  let kind = fixtureId ? 'match' : 'news'
+  if (training) kind = 'training'
+  else if (fixtureId && (data.withAvailability === true || data.withAvailability === 'true')) kind = 'avail'
+  else if (data.kind === 'lineup' || legacyLineup) kind = 'lineup'
+  const url = kind === 'lineup' && fixtureId ? fixturePath(fixtureId) + '&view=lineup' : link || (training ? '/training' : '/')
+  const target = fixtureId && (url === '/' || url === '/fixtures') ? fixturePath(fixtureId) : url
+  const actions = trayActions(data, kind, fixtureId)
+  const tag = nonempty(data.tag) || (fixtureId ? kind + '-' + fixtureId : undefined)
   event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({ type: 'window' }).catch(() => [])
-    const foreground = windows.find(c => c.visibilityState === 'visible' && c.focused)
-      || windows.find(c => c.visibilityState === 'visible')
-    // userVisibleOnly subscriptions require a system notification even with
-    // the app open. Silence the extra sound while the in-app pill is visible.
-    await self.registration.showNotification(title, {
-      body,
-      icon: teamKey ? '/push-' + teamKey + '.png' : '/pwa-192x192.png',
-      badge: '/push-badge.png',
-      tag,
-      renotify: !!tag && !foreground && (kind === 'avail' || kind === 'match'),
+    const windows = await windowClients()
+    const visible = windows.filter(c => c?.visibilityState === 'visible' && typeof c.postMessage === 'function')
+    const foreground = visible.find(c => c.focused) || visible[0]
+    const options = {
+      body, data: { url, fixtureId },
+      icon: imagePath(data.icon) || (teamKey ? '/push-' + teamKey + '.png' : '/pwa-192x192.png'),
+      badge: imagePath(data.badge) || '/push-badge.png',
+      tag, actions,
+      // A background training change keeps its deployed re-alert behaviour.
+      renotify: !!tag && !foreground && ['avail', 'match', 'training'].includes(kind),
       ...(foreground ? { silent: true } : {}),
-      data: { url, fixtureId },
-      actions,
-    })
-    foreground?.postMessage({ type: 'mvf-foreground', title, body, teamKey, url: target, kind })
+    }
+    // A userVisibleOnly subscription always gets a system notification. Some
+    // implementations reject optional NotificationOptions instead of ignoring them.
+    try {
+      await self.registration.showNotification(title, options)
+    } catch (error) {
+      if (!['TypeError', 'NotSupportedError'].includes(error?.name)) throw error
+      await self.registration.showNotification(title, { body, data: options.data })
+    }
+    try { foreground?.postMessage({ type: 'mvf-foreground', title, body, teamKey, url: target, kind }) }
+    catch { /* The page may have closed. The notification is already in the tray. */ }
   })())
 })
 
-// The browser can rotate or expire a push subscription at any time. Without
-// this handler that death is silent: the server's next send 404/410s, the
-// token row is pruned, and the player never gets a reminder again. Re-cover
-// delivery here with the same key; the app upserts the fresh subscription to
-// push_tokens on its next open (syncPush in src/lib/push.js).
+// The app upserts a rotated subscription at its next open. Some browsers
+// supply a replacement themselves or expose subscription changes without a key.
 self.addEventListener('pushsubscriptionchange', (event) => {
-  // Some browsers hand us the replacement already made — nothing to do but
-  // let the app store it on its next open. Without an old key we can't
-  // re-subscribe here at all (the VAPID key lives in the app), so the same
-  // app-open heal covers that case too.
   if (event.newSubscription) return
-  const key = event.oldSubscription && event.oldSubscription.options &&
-    event.oldSubscription.options.applicationServerKey
-  if (!key) return
-  event.waitUntil(
-    self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }).catch(function () {})
-  )
+  const key = event.oldSubscription?.options?.applicationServerKey
+  if (!key || !self.registration.pushManager?.subscribe) return
+  event.waitUntil((async () => {
+    try { await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) }
+    catch { /* syncPush retries when the signed-in player next opens the app. */ }
+  })())
 })
 
 // Is this deep link one of OUR paths? A push payload's `url` is data, not a
@@ -92,40 +142,75 @@ function safePath(url) {
   if (url.charAt(0) !== '/' || url.slice(0, 2) === '//') return null
   try {
     var resolved = new URL(url, self.location.origin)
-    if (resolved.origin !== self.location.origin) return null
+    if (resolved.origin !== self.location.origin || resolved.pathname.startsWith('//')) return null
     return resolved.pathname + resolved.search + resolved.hash
   } catch (e) {
     return null
   }
 }
 
+// A cold-opened one-tap answer must not be a forgeable link. The window is
+// opened at `?mvf_action=<nonce>`; the nonce is random, lives only in this
+// browser's Cache Storage for a few minutes, and maps to the {fixtureId,
+// status} the player actually tapped. PushActions looks it up, applies it
+// once, and deletes it - so a hand-built URL (a link in a message, a QR
+// code) can never write anyone's availability. src/lib/pushAction.js reads
+// the other side; keep the cache name and key prefix in step with it.
+var ACTION_CACHE = 'mvf-actions'
+var ACTION_PREFIX = '/__mvf_action/'
+var ACTION_TTL_MS = 10 * 60 * 1000
+
+function newNonce() {
+  var bytes = new Uint8Array(16)
+  self.crypto.getRandomValues(bytes)
+  var out = ''
+  for (var i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2)
+  return out
+}
+
+function stashAction(fixtureId, status) {
+  var nonce = newNonce()
+  var body = JSON.stringify({ fixtureId: fixtureId, status: status, expiresAt: Date.now() + ACTION_TTL_MS })
+  return self.caches.open(ACTION_CACHE).then(function (cache) {
+    return cache.put(ACTION_PREFIX + nonce, new Response(body, { headers: { 'content-type': 'application/json' } }))
+  }).then(function () { return nonce })
+}
+
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close()
-  const d = event.notification.data || {}
-  const action = event.action // '', 'in', 'maybe', 'out'
-  const avail = ['in', 'maybe', 'out'].includes(action) ? action : null
-  // Anything we can't vouch for falls back to the app root, so a tap still
-  // opens the club rather than doing nothing (or going somewhere else).
-  let url = safePath(d.url) || '/'
-  if (d.fixtureId && (avail || action === 'lineup' || action === 'availability' || url === '/fixtures' || url === '/')) {
-    url = `/fixtures?mvf_fixture=${encodeURIComponent(d.fixtureId)}`
-    if (avail) url += `&mvf_avail=${avail}`
+  event.notification?.close?.()
+  const data = event.notification?.data
+  const path = destination(data) || (data?.kind === 'training' ? '/training' : '/')
+  const training = data?.kind === 'training' || new URL(path, self.location.origin).pathname === '/training'
+  const fixtureId = training ? null : nonempty(data?.fixtureId)
+  const action = event.action
+  const answer = fixtureId && ['in', 'maybe', 'out'].includes(action)
+  let url = path
+  if (fixtureId && (answer || action === 'lineup' || action === 'availability' || path === '/fixtures' || path === '/')) {
+    url = fixturePath(fixtureId)
     if (action === 'lineup') url += '&view=lineup'
   }
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const c of list) {
-        if ('focus' in c) {
-          // App is open — tell it to apply the availability without a reload,
-          // or to move to the deep link (news / line-up): focusing alone left
-          // the player on whatever screen happened to be up.
-          if (avail && d.fixtureId) c.postMessage({ type: 'mvf-avail', fixtureId: d.fixtureId, status: avail })
-          else c.postMessage({ type: 'mvf-navigate', url })
-          return c.focus()
-        }
-      }
-      return self.clients.openWindow(url)
-    })
-  )
+  event.waitUntil((async () => {
+    const windows = await windowClients(true)
+    const message = answer ? { type: 'mvf-avail', fixtureId, status: action } : { type: 'mvf-navigate', url }
+    for (const client of windows) {
+      if (typeof client?.focus !== 'function' || typeof client.postMessage !== 'function') continue
+      try {
+        await client.focus()
+        client.postMessage(message)
+        return
+      } catch { /* The window closed or navigated while the player tapped. */ }
+    }
+    if (answer) {
+      try { url = '/fixtures?mvf_action=' + await stashAction(fixtureId, action) }
+      catch { /* Storage unavailable: open the addressed fixture for a manual answer. */ }
+    }
+    const existing = windows.find(client => typeof client?.navigate === 'function')
+    if (typeof self.clients.openWindow === 'function') {
+      try { return await self.clients.openWindow(url) }
+      catch (error) { if (!existing) throw error }
+    }
+    if (existing) return existing.navigate(url)
+    throw new Error('Unable to open the notification destination')
+  })())
 })

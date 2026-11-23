@@ -272,3 +272,11 @@ describe('FixtureDetail — pinning a poster photo', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+test('the venue map inherits the site referrer policy', async () => {
+  render(<FixtureDetail open fixture={{ ...fx, venue_lat: 52.95, venue_lng: -1.15 }} isAdmin={false} onSetAvail={vi.fn()} onClose={() => {}} />)
+  await tick()
+  const map = screen.getByTitle(/map of/i)
+  expect(map.tagName).toBe('IFRAME')
+  expect(map).not.toHaveAttribute('referrerpolicy')
+})

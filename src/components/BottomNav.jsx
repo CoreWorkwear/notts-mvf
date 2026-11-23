@@ -4,16 +4,15 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { SPRING_SNAPPY } from '../lib/motion'
 import {
-  IconFixtures, IconResults, IconClub, IconManage, IconYou,
+  IconFixtures, IconTraining, IconResults, IconClub, IconManage, IconYou,
 } from './Icons'
 
 // Role-gated bottom nav (HANDOVER §5). Admin/config screens live behind a single
 // "Manage" hub rather than crowding the bar with extra tabs.
-// Player: Fixtures · Results · Club · You
-// Admin:  Fixtures · Results · Club · Manage · You
 
 const PLAYER_TABS = [
   { to: '/fixtures', label: 'Fixtures', Icon: IconFixtures },
+  { to: '/training', label: 'Training', Icon: IconTraining },
   { to: '/results',  label: 'Results',  Icon: IconResults },
   { to: '/club',     label: 'Club',     Icon: IconClub },
   { to: '/you',      label: 'You',      Icon: IconYou },
@@ -50,7 +49,7 @@ export default function BottomNav() {
     }
   }, [pathname, isAdmin])
   const tabs = isAdmin
-    ? [...PLAYER_TABS.slice(0, 3), MANAGE_TAB, PLAYER_TABS[3]]
+    ? [...PLAYER_TABS.slice(0, -1), MANAGE_TAB, PLAYER_TABS.at(-1)]
     : PLAYER_TABS
 
   return (

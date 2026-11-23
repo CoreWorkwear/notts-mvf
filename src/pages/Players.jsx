@@ -46,9 +46,9 @@ export default function Players() {
   }, [players, q])
 
   // Sign-off queue first, then the squad, supporters, and removed players.
-  // The queue is EVERY unapproved account, supporters too: the sign-up trigger
-  // lands them all pending, and approval is what lets a supporter get news
-  // pushes and add a photo. Gated on is_player, they could never be signed off.
+  // Supporters are signed off like players now (a pending account sees nothing
+  // club-wide), so the queue holds both; once approved a supporter moves to
+  // the Supporters list.
   const pendingList = filtered.filter((p) => p.active && !p.approved)
   const squadList = filtered.filter((p) => p.active && p.is_player && p.approved)
   const supporterList = filtered.filter((p) => p.active && !p.is_player && p.approved)
@@ -57,8 +57,9 @@ export default function Players() {
   const openAdd = () => { setEditing(null); setFormOpen(true) }
   const openEdit = (p) => { setEditing(p); setFormOpen(true) }
 
-  // One-tap manager sign-off. RLS lets an admin set approved; the protect trigger
-  // blocks everyone else.
+  // One-tap manager sign-off, for players and supporters alike: it only flips
+  // `approved` (no squad membership is added — squads are granted in the form).
+  // RLS lets an admin set approved; the protect trigger blocks everyone else.
   async function approve(id) {
     const { error } = await supabase.from('profiles').update({ approved: true }).eq('id', id)
     if (error) { setToast("Sign-off failed. Try again."); return }
@@ -135,6 +136,7 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
                   <span className="pl-name">{p.first_name} {p.last_name}{p.id === meId ? ' · you' : ''}</span>
                   <span className="pl-tags" id={`pl-tags-${p.id}`}>
                     {!p.is_player && <span className="tag tag-supporter">Supporter</span>}
+                    {p.is_player && !p.approved && <span className="tag tag-player">Player</span>}
                     {!p.approved && <span className="tag tag-pending">Pending</span>}
                     {p.teamKeys.includes('xl') && <span className="tag tag-xl">{TEAMS.xl.label}</span>}
                     {p.teamKeys.includes('community') && <span className="tag tag-co">{TEAMS.community.label}</span>}
@@ -174,6 +176,7 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
         .tag-co { color: var(--green-bright); border-color: var(--green); }
         .tag-admin { color: var(--text-secondary); border-color: var(--border-strong); }
         .tag-pending { color: var(--amber); border-color: var(--amber); }
+        .tag-player { color: var(--bone); border-color: var(--line-2); }
         .tag-supporter { color: var(--bone-mute); border-color: var(--line-2); }
         /* Solid fill + dark text so the action is unmistakable (was bright-on-dim, ~1.6:1). */
         .pl-approve { position: relative; z-index: 1; flex: none; min-width: var(--target); font-size: var(--type-sm); font-weight: 700; color: var(--on-action);

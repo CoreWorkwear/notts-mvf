@@ -148,3 +148,45 @@ describe('Players — a supporter can be signed off too', () => {
     expect(screen.queryByText(/supporters · /i)).toBeNull()
   })
 })
+
+describe('Players — supporters are signed off like players', () => {
+  const SUP = { id: 'p2', first_name: 'Sue', last_name: 'Fan', active: true, approved: false, is_player: false, role: 'player', teamKeys: [], teamIds: [] }
+  const NEWBIE = { id: 'p3', first_name: 'Nat', last_name: 'New', active: true, approved: false, is_player: true, role: 'player', teamKeys: [], teamIds: [] }
+  const APPROVED_SUP = { ...SUP, id: 'p4', first_name: 'Ann', last_name: 'Approved', approved: true }
+
+  test('an unapproved supporter is in the sign-off queue, tagged Supporter; an unapproved player is tagged Player', async () => {
+    playersState.players = [JOE, SUP, NEWBIE, APPROVED_SUP]
+    render(<Players />)
+    await settle()
+    expect(screen.getByText(/awaiting sign-off · 2/i)).toBeInTheDocument()
+    const sue = screen.getByText(/Sue Fan/).closest('.pl-row')
+    expect(sue).toHaveTextContent('Supporter')
+    expect(sue).toHaveTextContent('Pending')
+    expect(sue).toHaveTextContent('Sign off')
+    const nat = screen.getByText(/Nat New/).closest('button')
+    expect(nat).toHaveTextContent('Player')
+    expect(nat).toHaveTextContent('Pending')
+  })
+
+  test('an approved supporter is in Supporters, not the queue, with no Sign off button', async () => {
+    playersState.players = [APPROVED_SUP]
+    render(<Players />)
+    await settle()
+    expect(screen.queryByText(/awaiting sign-off/i)).toBeNull()
+    expect(screen.getByText(/supporters · 1/i)).toBeInTheDocument()
+    expect(screen.getByText(/Ann Approved/).closest('button')).not.toHaveTextContent('Sign off')
+  })
+
+  test('signing off a supporter sets approved=true on their profile and nothing else', async () => {
+    playersState.players = [SUP]
+    render(<Players />)
+    await settle()
+    sb.mock.reset({ teams: TEAMS })
+    await userEvent.click(screen.getByText('Sign off'))
+    const writes = sb.mock.calls.filter((c) => c.table !== 'teams')
+    expect(writes.length).toBeGreaterThan(0)
+    expect(writes.every((c) => c.table === 'profiles')).toBe(true)
+    expect(JSON.stringify(writes)).toContain('"approved":true')
+    expect(playersState.refetch).toHaveBeenCalled()
+  })
+})

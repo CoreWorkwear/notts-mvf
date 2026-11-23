@@ -8,7 +8,13 @@ const SeasonContext = createContext(null)
 // Scopes the whole app to a season. Defaults to the club's current season;
 // the header picker changes it. New fixtures default to the current season.
 export function SeasonProvider({ children }) {
-  const { isAuthed } = useAuth()
+  const { isAuthed, holding, loading: authLoading } = useAuth()
+  // A signed-in account still awaiting sign-off (or switched off) can read
+  // nothing club-wide, so there is nothing to fetch: stay quiet rather than
+  // ask for seasons the database will answer with an empty list. And wait for
+  // auth to finish loading: until the profile is known, holding reads null for
+  // everyone, so a pending account would slip one fetch through.
+  const canRead = isAuthed && !authLoading && !holding
   const [seasons, setSeasons] = useState([])
   const [seasonId, setSeasonId] = useState(null)
   const [initialised, setInitialised] = useState(false)
@@ -42,7 +48,7 @@ export function SeasonProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    if (!isAuthed) {
+    if (!canRead) {
       reqRef.current++ // void any fetch still in flight — a signed-out app carries no season
       setSeasons([]); setSeasonId(null); setInitialised(false); setError(null)
       return
@@ -50,17 +56,17 @@ export function SeasonProvider({ children }) {
     let active = true
     refreshSeasons().finally(() => { if (active) setInitialised(true) })
     return () => { active = false }
-  }, [isAuthed, refreshSeasons])
+  }, [canRead, refreshSeasons])
 
   useEffect(() => {
-    if (!isAuthed) return
+    if (!canRead) return
     window.addEventListener('online', refreshSeasons)
     return () => window.removeEventListener('online', refreshSeasons)
-  }, [isAuthed, refreshSeasons])
+  }, [canRead, refreshSeasons])
 
   const season = seasons.find((s) => s.id === seasonId) ?? null
   return (
-    <SeasonContext.Provider value={{ seasons, season, seasonId, setSeasonId, loading: isAuthed && !initialised, error, refreshSeasons }}>
+    <SeasonContext.Provider value={{ seasons, season, seasonId, setSeasonId, loading: canRead && !initialised, error, refreshSeasons }}>
       {children}
     </SeasonContext.Provider>
   )

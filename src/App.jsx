@@ -11,6 +11,8 @@ import BottomNav from './components/BottomNav'
 import Loader from './components/Loader'
 import { OverlayTarget } from './components/Overlay'
 import Auth from './pages/Auth'
+import Holding from './pages/Holding'
+import { TrainingNoticeBanner } from './components/TrainingNoticeInbox'
 import SetNewPassword from './pages/SetNewPassword'
 import Fixtures from './pages/Fixtures'
 import Results from './pages/Results'
@@ -23,6 +25,7 @@ import SponsorStrip from './components/SponsorStrip'
 // management suite (it was two-thirds of the routes in one 750 kB chunk).
 // The service worker still precaches every chunk, so an admin's screens are
 // instant and offline-safe after first load.
+const Training = lazy(() => import('./pages/Training'))
 const Manage = lazy(() => import('./pages/Manage'))
 const AdminAvailability = lazy(() => import('./pages/AdminAvailability'))
 const Players = lazy(() => import('./pages/Players'))
@@ -35,7 +38,7 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'))
 const Competitions = lazy(() => import('./pages/Competitions'))
 
 export default function App() {
-  const { loading, isAuthed, isAdmin, profile, passwordRecovery, reconnecting } = useAuth()
+  const { loading, isAuthed, isAdmin, profile, passwordRecovery, reconnecting, holding } = useAuth()
 
   if (loading) return <Loader route={window.location.pathname} label="Loading…" />
   if (passwordRecovery) return <SetNewPassword />
@@ -43,6 +46,7 @@ export default function App() {
   // signal at the ground). Not the sign-in form: there is nothing to type.
   if (!isAuthed && reconnecting) return <Reconnect />
   if (!isAuthed) return <Auth />
+  if (holding) return <Holding status={holding} />
 
   // Admin-only routes fall back to Fixtures for players. Not knowing yet is
   // not "not an admin": while the profile is still loading (a slow signal
@@ -193,12 +197,14 @@ function AppRoutes({ adminOnly }) {
   const seasonPage = element => loading && !seasonId ? fallback : element
   return (
     <main>
+      {!/^\/training\/?$/.test(location.pathname) && <TrainingNoticeBanner />}
       <OverlayTarget.Provider value={document.body}>
         <RouteFrame key={location.pathname}>
           <Suspense fallback={fallback}>
             <Routes location={location}>
               <Route path="/fixtures" element={seasonPage(<Fixtures />)} />
               <Route path="/results" element={seasonPage(<Results />)} />
+              <Route path="/training" element={<Training />} />
               <Route path="/club" element={seasonPage(<Club />)} />
               <Route path="/you" element={<Profile />} />
               <Route path="/news" element={<News />} />

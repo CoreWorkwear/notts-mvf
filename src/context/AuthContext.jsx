@@ -1,11 +1,19 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase, hasStoredSession } from '../lib/supabase'
-import { canSetAvailability, accountStatus, respondBlock } from '../lib/players'
+import { canSetAvailability, accountStatus, holdingStatus, respondBlock } from '../lib/players'
 import { forgetDiary } from '../lib/fixtureDiary'
 import { disablePush } from '../lib/push'
-import { logError } from '../lib/logger'
+import { logError, resetLogState } from '../lib/logger'
 
 export const AuthContext = createContext(null)
+
+// The line shown for a failed auth link, by error_code. Anything we don't
+// recognise gets the generic line — never the URL's own text.
+export function authNoticeFor(code) {
+  return code === 'otp_expired'
+    ? 'That link has expired or been used already. Ask for a fresh one.'
+    : 'Something went wrong with that link — try again.'
+}
 
 const MANAGER_VIEW_KEY = 'mvf:managerView'
 // Session-scoped: recovery must survive a reload / iOS tab discard between
@@ -92,10 +100,10 @@ export function AuthProvider({ children }) {
     try {
       const h = new URLSearchParams((window.location.hash || '').replace(/^#/, ''))
       if (h.get('error') || h.get('error_code')) {
-        const code = `${h.get('error_code') || ''} ${h.get('error') || ''}`
-        setAuthNotice(/otp_expired|access_denied/.test(code)
-          ? 'Reset link expired or already used. Request a new link.'
-          : ((h.get('error_description') || '').replace(/\+/g, ' ') || 'Link unavailable. Try again.'))
+        // Fixed copy chosen by error_code ONLY. error_description is attacker-
+        // controlled text on our own domain (anyone can craft the link), so it
+        // is never shown.
+        setAuthNotice(authNoticeFor(h.get('error_code')))
         window.history.replaceState(null, '', window.location.pathname + window.location.search)
       }
     } catch { /* hash parsing is best-effort */ }
@@ -159,6 +167,9 @@ export function AuthProvider({ children }) {
       // flag it so the app shows the set-new-password screen, not the app.
       if (event === 'SIGNED_OUT') forgetDiary()
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      // The next person on this device must not inherit this user's error
+      // queue or breadcrumb trail.
+      if (event === 'SIGNED_OUT') resetLogState()
       setSession(s)
       if (s || event === 'SIGNED_OUT') choseSignIn.current = false
       // A session in hand ends any wait for one. With none, it depends on
@@ -180,7 +191,7 @@ export function AuthProvider({ children }) {
       setTimeout(() => { if (active) loadThenRelease(s.user?.id, 'profileLoad') }, 0)
     })
     return () => { active = false; clearTimeout(safety); sub.subscription.unsubscribe() }
-  }, [loadProfile, setPasswordRecovery, setReconnecting])
+  }, [loadProfile, setReconnecting, setPasswordRecovery])
 
   // "Try again" on the reconnect screen. A refresh that gets through also fires
   // TOKEN_REFRESHED (handled above); this covers the answers that fire nothing.
@@ -240,6 +251,7 @@ export function AuthProvider({ children }) {
     // regardless; the server-side refresh token just expires on its own.
     const { error } = await supabase.auth.signOut()
     if (error) await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+    resetLogState()
     return { error: null }
   }
 
@@ -279,7 +291,10 @@ export function AuthProvider({ children }) {
     approved: !!profile?.approved,
     isPlayer: profile?.is_player !== false,
     canRespond: canSetAvailability(profile),   // approved + active + a player
-    accountStatus: accountStatus(profile),     // 'pending' | 'supporter' | 'inactive' | 'active'
+    accountStatus: accountStatus(profile),     // 'inactive' | 'pending' | 'supporter' | 'active'
+    // 'pending' | 'inactive' | null — a non-admin in either gets the holding
+    // screen instead of the app (the database shows them nothing club-wide).
+    holding: holdingStatus(profile),
     // Per-FIXTURE gate (0034): account state AND being in that game's squad AND
     // the game not having kicked off. null = they can answer. The account-level
     // canRespond above still drives the page banner; this drives the buttons.

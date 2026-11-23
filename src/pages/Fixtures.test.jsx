@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 
 // The landing surface. Three things it must not lie about:
 //  - a profile that hasn't loaded yet is NOT a player awaiting sign-off;
@@ -45,6 +45,7 @@ vi.mock('../components/CalendarView', () => ({ default: ({ fixtures, onOpen }) =
 vi.mock('../components/ResultForm', () => ({ default: (props) => { resultForm.props = props; return props.open ? <div>RESULT-FORM-OPEN</div> : null } }))
 
 import Fixtures from './Fixtures'
+import { saveFixtureAnswer } from '../hooks/useFixtures'
 
 const fixture = (id, key, over = {}) => ({
   id, match_date: '2030-05-03', kickoff: '14:00:00', home_away: 'Home', fixture_type: 'League', venue: 'X',
@@ -85,6 +86,26 @@ test('a reminder opens the addressed fixture and requests focus on its answer, e
   render(<MemoryRouter initialEntries={['/fixtures?mvf_fixture=second']}><Fixtures /></MemoryRouter>)
   await waitFor(() => expect(detailProps.last?.fixture?.id).toBe('second'))
   expect(detailProps.last.focusAnswer).toBe(true)
+})
+
+test.each([
+  ['&mvf_avail=in', 'me', true],
+  ['&view=lineup', 'line', false],
+])('a reminder with %s opens for viewing and consumes only its own parameters', async (query, tab, focus) => {
+  const games = [fixture('second', 'community')]
+  fx.state = { ...fx.state, loaded: true, fixtures: games, upcoming: games }
+  function Location() {
+    const { search, hash } = useLocation()
+    return <output aria-label="Location">{search + hash}</output>
+  }
+  render(<MemoryRouter initialEntries={['/fixtures?from=club&mvf_fixture=second' + query + '#diary']}>
+    <Fixtures /><Location />
+  </MemoryRouter>)
+  await waitFor(() => expect(detailProps.last?.fixture?.id).toBe('second'))
+  expect(detailProps.last.initialTab).toBe(tab)
+  expect(detailProps.last.focusAnswer).toBe(focus)
+  expect(screen.getByLabelText('Location')).toHaveTextContent('?from=club#diary')
+  expect(saveFixtureAnswer).not.toHaveBeenCalled()
 })
 
 describe('Fixtures — no phantom "sign you off" banner before the profile has loaded', () => {

@@ -1,7 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { registerSW } from 'virtual:pwa-register'
+import { registerForUpdates } from './lib/pwaUpdate'
 import { installGlobalErrorLogging } from './lib/logger'
+import { reloadOnceOnPreloadError, clearPreloadReloadFlag } from './lib/preloadReload'
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/motion.css'
@@ -10,28 +11,13 @@ import './styles/club-tools.css'
 // Catch uncaught errors + unhandled promise rejections app-wide.
 installGlobalErrorLogging()
 
-// Keep installed apps current WITHOUT interrupting a launch. An installed Android
-// PWA only re-checks the service worker on navigation/~daily, so we still poll for
-// a new build hourly AND whenever the app returns to the foreground — but with
-// registerType:'prompt' a found update is NOT auto-applied (that reloaded the page
-// mid-startup = the cold-start hang). Instead onNeedRefresh surfaces a quiet
-// "Refresh" prompt (UpdatePrompt) the user taps when it suits them.
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    window.__mvfUpdateSW = () => updateSW(true) // applies the update + reloads, on tap
-    window.dispatchEvent(new Event('mvf-sw-update'))
-  },
-  onRegisteredSW(_swUrl, r) {
-    if (!r) return
-    // update() rejects whenever the phone happens to be offline — expected on
-    // a background poll, so swallow it (it was ~80% of the client error log).
-    setInterval(() => r.update().catch(() => {}), 60 * 60 * 1000)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') r.update().catch(() => {})
-    })
-  },
-})
+// A lazy chunk that has vanished after a deploy: reload once to pick up the new
+// build (guarded against loops), and say so in the error log.
+window.addEventListener('vite:preloadError', (e) => reloadOnceOnPreloadError(e))
+// Once this load has settled the guard is spent, so a LATER deploy can reload once too.
+window.addEventListener('load', () => setTimeout(clearPreloadReloadFlag, 10_000))
+
+if (import.meta.env.PROD) registerForUpdates()
 import App from './App'
 import UpdatePrompt from './components/UpdatePrompt'
 import PushActions from './components/PushActions'

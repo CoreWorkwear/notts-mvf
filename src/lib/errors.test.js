@@ -1,6 +1,13 @@
 import { describe, test, expect } from 'vitest'
 import { describeError, friendlyError, isNetworkError, isAuthStale, isClockSkew, isPermissionDenied } from './errors'
 
+describe('describeError — stack cap', () => {
+  test('a huge stack is capped so the row stays under the DB context check', () => {
+    const e = new Error('boom'); e.stack = 'x'.repeat(20000)
+    expect(describeError(e).stack.length).toBeLessThanOrEqual(4000)
+  })
+})
+
 describe('describeError — one shape for every error we meet', () => {
   test('a thrown Error keeps name, message and stack', () => {
     const d = describeError(new TypeError('Load failed'))

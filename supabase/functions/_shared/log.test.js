@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest'
-import { mkLog, scrub, newRequestId } from './log.js'
+import { mkLog, scrub, scrubString, internalErrorBody, newRequestId } from './log.js'
 
 function sink() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn() }
@@ -50,5 +50,54 @@ describe('scrub — tokens and PII never reach a log line', () => {
     const rec = lastJson(s.log)
     expect(rec.token).toBeUndefined()
     expect(rec.count).toBe(1)
+  })
+})
+
+describe('scrub of values', () => {
+  // The app's logger shipped the same over-eager rule: an all-digit short sha
+  // turned a build stamp into '[phone]'. Versions, uuids, timestamps are not phones.
+  test('versions, uuids, uuid pieces and timestamps are not mistaken for phone numbers', () => {
+    expect(scrubString('build 0.1.0+9043233')).toBe('build 0.1.0+9043233')
+    expect(scrubString('req 01234567-8901-4abc-9def-012345678901')).toBe('req 01234567-8901-4abc-9def-012345678901')
+    expect(scrubString('at 1732150000000 ms')).toBe('at 1732150000000 ms')
+    expect(scrubString('sent 1234567 of 9876543')).toBe('sent 1234567 of 9876543')
+  })
+
+  test('masks emails, JWTs and phone-like digit runs inside strings', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTYifQ.abc_DEF-123'
+    expect(scrubString('dup key for jo.bloggs+x@example.co.uk here')).toBe('dup key for [email] here')
+    expect(scrubString(`Bearer ${jwt} bad`)).toBe('Bearer [jwt] bad')
+    expect(scrubString('call 07700 900 123 now')).toBe('call [phone] now')
+    expect(scrubString('call +44 (0)7700-900123')).toBe('call [phone]')
+    expect(scrubString('only 123456 digits')).toBe('only 123456 digits')
+  })
+  test('replaces a Failing row dump wholesale', () => {
+    const msg = 'new row violates check constraint "x"\nDETAIL: Failing row contains (a1, Jo, Bloggs, jo@x.com, 07700900123).'
+    const out = scrubString(msg)
+    expect(out).toContain('Failing row contains ([redacted])')
+    expect(out).not.toMatch(/Bloggs|jo@x|0770/)
+  })
+  test('leaves uuids (request ids) alone', () => {
+    const id = '12345678-1234-1234-1234-123456789012'
+    expect(scrubString(`target ${id}`)).toBe(`target ${id}`)
+  })
+  test('scrubs nested objects and arrays, and drops PII keys at depth', () => {
+    const out = scrub({ a: { b: ['x@y.com', { email: 'q', note: 'ring 07700 900123' }] }, n: 3, ok: true })
+    expect(out).toEqual({ a: { b: ['[email]', { note: 'ring [phone]' }] }, n: 3, ok: true })
+  })
+  test('an Error value is logged as its scrubbed message', () => {
+    expect(scrub({ e: new Error('bad row a@b.co') })).toEqual({ e: 'bad row [email]' })
+  })
+  test('the emitted line is scrubbed', () => {
+    const s = sink()
+    mkLog('f', null, s).error('x', { message: 'Failing row contains (Jo, 07700900123)' })
+    expect(lastJson(s.error).message).toBe('Failing row contains ([redacted])')
+  })
+})
+
+describe('internalErrorBody', () => {
+  test('is generic, carries the reference, and holds no exception text', () => {
+    const b = internalErrorBody('req-1')
+    expect(b).toEqual({ error: 'Something went wrong on our side. Quote this reference: req-1', requestId: 'req-1' })
   })
 })

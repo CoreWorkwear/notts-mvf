@@ -57,15 +57,17 @@ export default function Fixtures() {
   }
 
   // A reminder body opens the named game, even if the header last selected a
-  // different season. The tray action itself is consumed by PushActions.
+  // different season. A legacy tray link can open the same view, but its URL
+  // never supplies an answer. New tray actions use a receipt in PushActions.
   useEffect(() => {
     const params = new URLSearchParams(search)
     const id = params.get('mvf_fixture')
-    if (!id || params.has('mvf_avail') || !loaded || error || !seasonId) return
+    if (!id || !loaded || error || !seasonId) return
     let active = true
     const tab = params.get('view') === 'lineup' ? 'line' : 'me'
     const consume = () => {
       params.delete('mvf_fixture')
+      params.delete('mvf_avail')
       params.delete('view')
       navigate({ pathname, search: params.toString(), hash }, { replace: true, preventScrollReset: true })
     }

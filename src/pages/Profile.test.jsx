@@ -20,22 +20,39 @@ vi.mock('../lib/supabase', () => {
   return { supabase: { from: () => q } }
 })
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
-const who = vi.hoisted(() => ({ account: { approved: true, active: true } }))
+const who = vi.hoisted(() => ({ account: { approved: true, active: true }, isRealAdmin: false }))
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
     profile: { id: 'me', first_name: 'Joe', last_name: 'Bloggs', positions: [], preferred: null, photo_url: null, ...who.account },
     teamKeys: [],
-    isRealAdmin: false,
+    isRealAdmin: who.isRealAdmin,
     refreshProfile: vi.fn(),
   }),
 }))
 vi.mock('../components/NotificationToggle', () => ({ default: () => null }))
-vi.mock('../components/ImageUpload', () => ({ default: ({ label }) => <button>{label}</button> }))
+const upload = vi.hoisted(() => ({ props: null }))
+vi.mock('../components/ImageUpload', () => ({ default: (props) => { upload.props = props; return <button>{props.label}</button> } }))
 vi.mock('../components/ProfileEdit', () => ({ default: ({ open }) => (open ? <div data-testid="edit-sheet" /> : null) }))
 
 import Profile from './Profile'
 
-beforeEach(() => { store.privErr = null; who.account = { approved: true, active: true } })
+beforeEach(() => { store.privErr = null; who.account = { approved: true, active: true }; who.isRealAdmin = false; upload.props = null })
+
+describe('Profile — avatar uploads go to the per-user folder (media policy: players/<uid>/…)', () => {
+  test('ImageUpload is given players/<profile id>, not the shared players folder', async () => {
+    render(<Profile />)
+    expect(upload.props.folder).toBe('players/me')
+  })
+
+  test('a bootstrapped manager can upload to their own folder without a player approval flag', async () => {
+    who.account = { approved: false, active: true }
+    who.isRealAdmin = true
+    render(<Profile />)
+    await waitFor(() => expect(screen.getByText('joe@x.com')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /add your photo/i })).toBeInTheDocument()
+    expect(upload.props.folder).toBe('players/me')
+  })
+})
 
 describe('Profile — the edit sheet is gated on the private row (data-loss guard)', () => {
   test('when the private-row fetch failed, Edit pops a toast and does NOT open the sheet', async () => {

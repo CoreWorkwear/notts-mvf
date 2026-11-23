@@ -7,14 +7,14 @@ import NotificationSheet from './NotificationSheet'
 // still 'default' — never once granted or denied — so it re-asks on each app
 // open. Not a blocking modal; "Not now" hides it for the rest of this session.
 export default function NotificationPrompt() {
-  const { user } = useAuth()
+  const { user, holding } = useAuth()
   const key = 'mvf:alert-nudge:' + user?.id
   const [dismissed, setDismissed] = useState(() => {
     try { return sessionStorage.getItem(key) === 'later' } catch { return false }
   })
   const [open, setOpen] = useState(false)
   const canAsk = needsHomeScreen() || (pushSupported && window.Notification?.permission === 'default')
-  if (!user || (!canAsk && !open) || dismissed) return null
+  if (!user || holding || (!canAsk && !open) || dismissed) return null
 
   function later() {
     setOpen(false)

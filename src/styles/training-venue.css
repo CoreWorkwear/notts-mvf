@@ -1,0 +1,35 @@
+.training-session-card {
+  grid-column: 2;
+  min-width: 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+}
+.training-session-card .training-session {
+  border: 0;
+  background: transparent;
+}
+.training-session-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  margin-inline: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.training-session-tools .wx { flex-wrap: wrap; padding-block: var(--space-1); }
+.training-direction, .training-venue-details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  color: var(--text);
+  font-size: var(--type-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+}
+.training-venue-details p { margin-block: var(--space-1); overflow-wrap: anywhere; }
+.training-venue-links { display: flex; flex-wrap: wrap; gap: 0 var(--space-4); }
+.training-venue-details summary { display: list-item; align-content: center; cursor: pointer; }
+.training-venue-details iframe { width: 100%; height: 11rem; border: 1px solid var(--border); border-radius: var(--r-input); }

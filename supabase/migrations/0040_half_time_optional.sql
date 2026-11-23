@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 0039: half time is optional
+-- Migration 0040: half time is optional
 -- Idempotent. Schema only: no row is changed.
 --
 -- results.ht_us / ht_them were NOT NULL DEFAULT 0, and the result form

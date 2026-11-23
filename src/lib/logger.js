@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
-import { breadcrumb, getBreadcrumbs, sinceLoadMs } from './breadcrumbs'
-import { describeError, isNetworkError } from './errors'
+import { breadcrumb, clearBreadcrumbs, getBreadcrumbs, sinceLoadMs } from './breadcrumbs'
+import { describeError, isNetworkError, isPermissionDenied } from './errors'
 
 // Self-hosted client error logging. logError() is best-effort: it must NEVER
 // throw (or it could loop), it's rate-limited per session so a misbehaving
@@ -32,10 +32,30 @@ const queue = []         // rows we couldn't deliver (offline / dropped) — ret
 const SENSITIVE_KEY = /pass|token|secret|authori|cookie|email|phone|\bdob\b|ec_name|ec_phone|apikey|api_key|address|postcode/i
 const JWT_RE = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g
 const EMAIL_RE = /[^\s@"'<>()]+@[^\s@"'<>()]+\.[^\s@"'<>()]+/g
+// Postgres echoes the whole offending row (names, phone, dob…) after this
+// phrase on a check/not-null violation. Redact from the open paren to the end
+// of the line — the closing paren may be missing when the text was truncated.
+const FAILING_ROW_RE = /Failing row contains \(.*/g
+// A phone number as people write one: starts with +, 0 or (0, holds 10-15
+// digits (spaces, hyphens and brackets allowed between), and isn't glued to a
+// letter, digit, dot, plus or hyphen on either side. "Any 7+ digits" was too
+// greedy: it ate an all-digit git sha in the build stamp (0.1.0+9043233), all-
+// digit pieces of uuids, and millisecond timestamps. Same rule as
+// supabase/functions/_shared/log.js.
+const PHONE_RE = /(?<![\w.+-])(?:\+|\(?0)[\d\s\-()]*\d(?![\w-])/g
+const maskPhone = (m) => { const n = m.replace(/\D/g, '').length; return n >= 10 && n <= 15 ? '[phone]' : m }
+
+function scrubString(str) {
+  return str
+    .replace(JWT_RE, '[jwt]')
+    .replace(EMAIL_RE, '[email]')
+    .replace(FAILING_ROW_RE, 'Failing row contains ([redacted])')
+    .replace(PHONE_RE, maskPhone)
+}
 
 export function scrub(value, depth = 0, seen = new WeakSet()) {
   if (depth > 6) return '[deep]'
-  if (typeof value === 'string') return value.replace(JWT_RE, '[jwt]').replace(EMAIL_RE, '[email]')
+  if (typeof value === 'string') return scrubString(value)
   if (Array.isArray(value)) {
     if (seen.has(value)) return '[circular]'
     seen.add(value)
@@ -129,6 +149,21 @@ export function takeBudget(now = Date.now()) {
 export function _resetLogBudget() { sentAt.length = 0; recent.clear(); queue.length = 0 }
 export function _queuedRows() { return queue.slice() }
 
+// Sign-out hygiene: the offline queue and the breadcrumb trail belong to the
+// person who just left. The next user on this device must not have their rows
+// carry (or flush) the previous user's trail.
+export function resetLogState() { queue.length = 0; clearBreadcrumbs() }
+
+// The database looked at this row and refused it (a 4xx, an RLS denial, a
+// check violation). Retrying can never change the answer, so flushQueue drops
+// it instead of stalling every row behind it for ever.
+export function isRejectedByDb(e) {
+  const d = describeError(e)
+  if (isNetworkError(e)) return false
+  if (isPermissionDenied(e) || d.code === '23514') return true
+  return d.status != null && d.status >= 400 && d.status < 500 && d.status !== 408 && d.status !== 429
+}
+
 async function deliver(row) {
   const { error } = await supabase.from('client_errors').insert(row)
   if (error) throw error
@@ -140,10 +175,16 @@ function enqueue(row) {
 }
 
 // Retry anything that couldn't be delivered (called on the 'online' event).
-// Stops at the first failure so a still-dead link doesn't churn.
+// Stops at the first NETWORK failure so a still-dead link doesn't churn; a row
+// the database itself rejects is dropped (not re-logged) so it can't block the
+// rows behind it.
 export async function flushQueue() {
   while (queue.length) {
-    try { await deliver(queue[0]); queue.shift() } catch { break }
+    const row = queue[0]
+    try { await deliver(row); queue.shift() } catch (e) {
+      if (isRejectedByDb(e)) { if (queue[0] === row) queue.shift(); continue }
+      break
+    }
   }
 }
 

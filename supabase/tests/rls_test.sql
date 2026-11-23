@@ -771,6 +771,10 @@ end $$;
 -- logs every member's IP, a data: URL. CHECK constraints are not role-scoped,
 -- so this runs as postgres — if the constraint holds here it holds for admins.
 reset role;
+-- A sponsor row to aim at: with none, the update below touched nothing and the
+-- sponsors check could never pass. (It never ran either: T26 stopped the
+-- harness on the NULL-context bug until 0039.)
+insert into sponsors (club_id, name) values ('11111111-1111-1111-1111-111111111111', 'Harness Sponsor');
 do $$
 declare
   hostile text := 'https://evil.example/beacon.png';
@@ -863,8 +867,369 @@ do $$ begin
   raise notice 'T31 PASS: availability_delete cannot cross a club boundary';
 end $$;
 
--- T32 — half time is optional (0039). NULL means "not recorded", and it is
--- both sides or neither. Fails by name while 0039 has not been run.
+-- 0039 (sign-off gates reads, Nov 2026 review) — T32…T45
+-- ============================================================================
+-- Extra actors, created here so nothing above changes shape:
+--   uS  a0000017  a SUPPORTER, not yet signed off
+--   uI  a0000018  a removed (inactive) player, previously approved
+--   uU  a0000019  a manager whose approved flag was never set (the hand-made
+--                 first admin's shape on a real project)
+reset role;
+insert into auth.users
+  (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
+values
+  ('00000000-0000-0000-0000-000000000000','a0000017-0000-0000-0000-000000000017','authenticated','authenticated',
+   'supporter@test.notts', crypt('p7', gen_salt('bf')), now(), now(), now(),
+   '{"provider":"email","providers":["email"]}',
+   '{"first_name":"Sam","last_name":"Stand","phone":"07700900007","is_player":false}'),
+  ('00000000-0000-0000-0000-000000000000','a0000018-0000-0000-0000-000000000018','authenticated','authenticated',
+   'removed@test.notts', crypt('p8', gen_salt('bf')), now(), now(), now(),
+   '{"provider":"email","providers":["email"]}',
+   '{"first_name":"Ray","last_name":"Gone","phone":"07700900008","teams":["community"]}'),
+  ('00000000-0000-0000-0000-000000000000','a0000019-0000-0000-0000-000000000019','authenticated','authenticated',
+   'unflagged@test.notts', crypt('p9', gen_salt('bf')), now(), now(), now(),
+   '{"provider":"email","providers":["email"]}',
+   '{"first_name":"Una","last_name":"Flag","phone":"07700900009","teams":["community"]}');
+update profiles set approved = true, active = false where id = 'a0000018-0000-0000-0000-000000000018';
+update profiles set role = 'admin' where id = 'a0000019-0000-0000-0000-000000000019';   -- approved stays false
+
+-- Data for every read below to aim at, written as postgres so a 0 can only be RLS.
+insert into availability (fixture_id, profile_id, status)
+values ('d0000002-0000-0000-0000-000000000002','a0000002-0000-0000-0000-000000000002','in')
+on conflict (fixture_id, profile_id) do nothing;
+insert into payments (fixture_id, profile_id, paid)
+values ('d0000002-0000-0000-0000-000000000002','a0000002-0000-0000-0000-000000000002', true);
+insert into lineups (fixture_id, profile_id, role)
+values ('d0000002-0000-0000-0000-000000000002','a0000002-0000-0000-0000-000000000002','start');
+insert into announcements (club_id, title, body)
+values ('11111111-1111-1111-1111-111111111111','Kit','Bring both kits');
+insert into storage.objects (bucket_id, name) values ('media', 'photos/harness.jpg');
+insert into client_errors (profile_id, club_id, kind, message, context)
+values ('a0000002-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111','fetch','club one error','{}');
+
+-- T32 — a PENDING player reads nothing club-wide, only their own rows.
+-- The hole: anyone who signed up could read the squad, availability, payments.
+create or replace function pg_temp.club_rows() returns jsonb language sql as $$
+  select jsonb_build_object(
+    'clubs',         (select count(*) from clubs),
+    'teams',         (select count(*) from teams),
+    'seasons',       (select count(*) from seasons),
+    'fixtures',      (select count(*) from fixtures),
+    'availability',  (select count(*) from availability),
+    'payments',      (select count(*) from payments),
+    'lineups',       (select count(*) from lineups),
+    'announcements', (select count(*) from announcements),
+    'opponents',     (select count(*) from opponents),
+    'competitions',  (select count(*) from competitions),
+    'sponsors',      (select count(*) from sponsors),
+    'other_profiles',(select count(*) from profiles where id <> auth.uid()),
+    'other_members', (select count(*) from team_memberships where profile_id <> auth.uid()),
+    'storage',       (select count(*) from storage.objects where bucket_id = 'media'));
+$$;
+create or replace function pg_temp.assert_sees_nothing(label text) returns void language plpgsql as $$
+declare r jsonb := pg_temp.club_rows(); k text;
+begin
+  for k in select jsonb_object_keys(r) loop
+    if (r->>k)::int <> 0 then
+      raise exception '% FAIL: can read % row(s) of %', label, r->>k, k;
+    end if;
+  end loop;
+end $$;
+grant execute on function pg_temp.club_rows() to authenticated;
+grant execute on function pg_temp.assert_sees_nothing(text) to authenticated;
+
+select pg_temp.act_as('a0000004-0000-0000-0000-000000000004'); set local role authenticated;
+do $$ begin
+  perform pg_temp.assert_sees_nothing('T32 (pending player)');
+  if (select count(*) from profiles where id = auth.uid()) <> 1 then
+    raise exception 'T32 FAIL: a pending player cannot read their OWN profile (the holding screen needs it)'; end if;
+  if (select count(*) from profile_private where profile_id = auth.uid()) <> 1 then
+    raise exception 'T32 FAIL: a pending player cannot read their own private row'; end if;
+  if (select count(*) from team_memberships where profile_id = auth.uid()) < 1 then
+    raise exception 'T32 FAIL: a pending player cannot read their own squad membership'; end if;
+  raise notice 'T32 PASS: a pending player reads nothing club-wide, only their own rows';
+end $$;
+
+-- T33 — supporters need sign-off too; once signed off they follow the club.
+reset role; select pg_temp.act_as('a0000017-0000-0000-0000-000000000017'); set local role authenticated;
+do $$ begin
+  perform pg_temp.assert_sees_nothing('T33 (pending supporter)');
+end $$;
+reset role;
+update profiles set approved = true where id = 'a0000017-0000-0000-0000-000000000017';
+select pg_temp.act_as('a0000017-0000-0000-0000-000000000017'); set local role authenticated;
+do $$ begin
+  if (select count(*) from fixtures) = 0 then
+    raise exception 'T33 FAIL: a signed-off supporter still cannot see fixtures'; end if;
+  if (select count(*) from profiles where id <> auth.uid()) = 0 then
+    raise exception 'T33 FAIL: a signed-off supporter cannot see the squad'; end if;
+  raise notice 'T33 PASS: a supporter sees nothing until signed off, then follows the club';
+end $$;
+
+-- T34 — a REMOVED player keeps nothing but their own profile.
+reset role; select pg_temp.act_as('a0000018-0000-0000-0000-000000000018'); set local role authenticated;
+do $$ begin
+  perform pg_temp.assert_sees_nothing('T34 (removed player)');
+  if (select count(*) from profiles where id = auth.uid()) <> 1 then
+    raise exception 'T34 FAIL: a removed player cannot read their own profile'; end if;
+  raise notice 'T34 PASS: a removed player reads only their own profile';
+end $$;
+
+-- T35 — a manager is exempt from the approved flag (bootstrapped by hand).
+reset role; select pg_temp.act_as('a0000019-0000-0000-0000-000000000019'); set local role authenticated;
+do $$ begin
+  if (select count(*) from fixtures) = 0 or (select count(*) from availability) = 0 then
+    raise exception 'T35 FAIL: a manager without approved=true is locked out'; end if;
+  raise notice 'T35 PASS: a manager with approved=false still sees the club';
+end $$;
+
+-- T36 — a manager of ANOTHER club can't read our line-ups or our error log.
+reset role;
+update profiles set role = 'admin' where id = 'a0000005-0000-0000-0000-000000000005';
+select pg_temp.act_as('a0000005-0000-0000-0000-000000000005'); set local role authenticated;
+do $$ declare n int; begin
+  if (select count(*) from lineups where fixture_id = 'd0000002-0000-0000-0000-000000000002') > 0 then
+    raise exception 'T36 FAIL: another club''s manager can read our line-ups'; end if;
+  if (select count(*) from client_errors where club_id = '11111111-1111-1111-1111-111111111111') > 0 then
+    raise exception 'T36 FAIL: another club''s manager can read our error log'; end if;
+  delete from client_errors where club_id = '11111111-1111-1111-1111-111111111111';
+  get diagnostics n = row_count;
+  if n > 0 then raise exception 'T36 FAIL: another club''s manager deleted our error log'; end if;
+  raise notice 'T36 PASS: line-ups and the error log are club-scoped for managers';
+end $$;
+reset role;
+update profiles set role = 'player' where id = 'a0000005-0000-0000-0000-000000000005';
+-- …and our own manager still reads both.
+select pg_temp.act_as('a0000001-0000-0000-0000-000000000001'); set local role authenticated;
+do $$ begin
+  if (select count(*) from lineups) = 0 or (select count(*) from client_errors) = 0 then
+    raise exception 'T36 FAIL: our own manager lost line-ups or the error log'; end if;
+end $$;
+
+-- T37 — client_errors: a row with no context lands (the NULL bug), attribution
+-- is filled from the session, nobody logs as someone else, and the hourly cap holds.
+reset role; select pg_temp.act_as('a0000004-0000-0000-0000-000000000004'); set local role authenticated;
+do $$ declare blocked boolean := false; begin
+  insert into client_errors (kind, message) values ('render', 'pending, no context, no attribution');
+  begin insert into client_errors (profile_id, kind, message)
+        values ('a0000002-0000-0000-0000-000000000002', 'spoof', 'as someone else');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T37 FAIL: a member logged an error as another member'; end if;
+end $$;
+reset role;
+do $$ begin
+  if not exists (select 1 from client_errors
+                  where message = 'pending, no context, no attribution'
+                    and profile_id = 'a0000004-0000-0000-0000-000000000004'
+                    and club_id = '11111111-1111-1111-1111-111111111111') then
+    raise exception 'T37 FAIL: a context-less row was refused or left unattributed'; end if;
+end $$;
+select pg_temp.act_as('a0000006-0000-0000-0000-000000000006'); set local role authenticated;
+do $$ begin
+  for i in 1..75 loop
+    insert into client_errors (kind, message, context) values ('error', 'flood ' || i, '{}');
+  end loop;
+end $$;
+reset role;
+do $$ declare n int; begin
+  select count(*) into n from client_errors where profile_id = 'a0000006-0000-0000-0000-000000000006';
+  if n > 60 then raise exception 'T37 FAIL: % error rows in an hour from one member (cap 60)', n; end if;
+  raise notice 'T37 PASS: context-less rows land, attribution is server-side, the hourly cap holds';
+end $$;
+
+-- T38 — anonymise_and_delete_profile refuses a manager.
+do $$ declare blocked boolean := false; begin
+  begin perform anonymise_and_delete_profile('a0000006-0000-0000-0000-000000000006','11111111-1111-1111-1111-111111111111');
+  exception when insufficient_privilege then blocked := true; end;
+  if not blocked then raise exception 'T38 FAIL: the delete RPC removed a manager'; end if;
+  if not exists (select 1 from profiles where id = 'a0000006-0000-0000-0000-000000000006') then
+    raise exception 'T38 FAIL: the manager profile is gone despite the refusal'; end if;
+  raise notice 'T38 PASS: a manager cannot be deleted through the RPC';
+end $$;
+
+-- T39 — push_tokens: real push endpoints only, 10 per member, one owner per token.
+select pg_temp.act_as('a0000002-0000-0000-0000-000000000002'); set local role authenticated;
+do $$ declare blocked boolean; n int; begin
+  blocked := false;
+  begin insert into push_tokens (profile_id, token) values (auth.uid(),
+          '{"endpoint":"https://evil.example/hook","keys":{"p256dh":"k","auth":"a"}}');
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T39 FAIL: a non-push endpoint was stored'; end if;
+
+  blocked := false;
+  begin insert into push_tokens (profile_id, token) values (auth.uid(),
+          '{"endpoint":"https://fcm.googleapis.com.evil.example/x","keys":{"p256dh":"k","auth":"a"}}');
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T39 FAIL: a look-alike push host was stored'; end if;
+
+  blocked := false;
+  begin insert into push_tokens (profile_id, token) values (auth.uid(),
+          '{"endpoint":"https://fcm.googleapis.com/fcm/send/nokeys"}');
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T39 FAIL: a subscription with no keys was stored'; end if;
+
+  for i in 1..12 loop
+    insert into push_tokens (profile_id, token) values (auth.uid(),
+      format('{"endpoint":"https://fcm.googleapis.com/fcm/send/dev%s","keys":{"p256dh":"k","auth":"a"}}', i));
+  end loop;
+  select count(*) into n from push_tokens where profile_id = auth.uid();
+  if n <> 10 then raise exception 'T39 FAIL: % push tokens kept for one member (cap 10)', n; end if;
+
+  insert into push_tokens (profile_id, token) values (auth.uid(),
+    '{"endpoint":"https://web.push.apple.com/shared-phone","keys":{"p256dh":"k","auth":"a"}}');
+end $$;
+reset role; select pg_temp.act_as('a0000006-0000-0000-0000-000000000006'); set local role authenticated;
+insert into push_tokens (profile_id, token) values ('a0000006-0000-0000-0000-000000000006',
+  '{"endpoint":"https://web.push.apple.com/shared-phone","keys":{"p256dh":"k","auth":"a"}}');
+reset role;
+do $$ begin
+  if exists (select 1 from push_tokens where profile_id = 'a0000002-0000-0000-0000-000000000002'
+               and token like '%shared-phone%') then
+    raise exception 'T39 FAIL: a shared phone still delivers the previous member''s notifications'; end if;
+  raise notice 'T39 PASS: push endpoints are real push services, capped at 10, one owner per device';
+end $$;
+
+-- T40 — storage: self-uploads only into players/<own uid>/, only once signed off;
+-- and the bucket takes photos, not SVG.
+select pg_temp.act_as('a0000002-0000-0000-0000-000000000002'); set local role authenticated;
+do $$ declare blocked boolean; begin
+  insert into storage.objects (bucket_id, name)
+  values ('media', 'players/a0000002-0000-0000-0000-000000000002/me.jpg');
+
+  blocked := false;
+  begin insert into storage.objects (bucket_id, name)
+        values ('media', 'players/a0000003-0000-0000-0000-000000000003/not-me.jpg');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T40 FAIL: a member uploaded into another member''s folder'; end if;
+
+  blocked := false;
+  begin insert into storage.objects (bucket_id, name) values ('media', 'players/loose.jpg');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T40 FAIL: a member uploaded outside their own folder'; end if;
+end $$;
+reset role; select pg_temp.act_as('a0000004-0000-0000-0000-000000000004'); set local role authenticated;
+do $$ declare blocked boolean := false; begin
+  begin insert into storage.objects (bucket_id, name)
+        values ('media', 'players/a0000004-0000-0000-0000-000000000004/me.jpg');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T40 FAIL: a pending account uploaded to the media bucket'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select allowed_mime_types from storage.buckets where id = 'media') && array['image/*','image/svg+xml'] then
+    raise exception 'T40 FAIL: the media bucket still accepts SVG'; end if;
+  raise notice 'T40 PASS: self-uploads go only to your own folder once signed off; no SVG';
+end $$;
+
+-- T41 — image URLs must be THIS project's bucket, not any Supabase project's.
+do $$ declare blocked boolean := false; begin
+  begin update profiles
+           set photo_url = 'https://someoneelse01.supabase.co/storage/v1/object/public/media/players/x.jpg'
+         where id = 'a0000002-0000-0000-0000-000000000002';
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T41 FAIL: photo_url accepted another Supabase project'; end if;
+  raise notice 'T41 PASS: image URLs are pinned to this project';
+end $$;
+
+-- T42 — a manager's writes can't reach another club's people or teams.
+select pg_temp.act_as('a0000001-0000-0000-0000-000000000001'); set local role authenticated;
+do $$ declare blocked boolean; begin
+  blocked := false;
+  begin insert into team_memberships (profile_id, team_id)
+        values ('a0000005-0000-0000-0000-000000000005','33333333-3333-3333-3333-333333333333');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T42 FAIL: our manager put another club''s player in our squad'; end if;
+
+  blocked := false;
+  begin insert into payments (fixture_id, profile_id, paid)
+        values ('d0000001-0000-0000-0000-000000000001','a0000005-0000-0000-0000-000000000005', true);
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T42 FAIL: our manager recorded a payment for another club''s player'; end if;
+
+  blocked := false;
+  begin insert into lineups (fixture_id, profile_id, role)
+        values ('d0000001-0000-0000-0000-000000000001','a0000005-0000-0000-0000-000000000005','start');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T42 FAIL: our manager picked another club''s player'; end if;
+
+  blocked := false;
+  begin insert into fixtures (club_id, season_id, team_id, opponent_id, match_date, kickoff, home_away, fixture_type)
+        values ('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222',
+                'b3333333-3333-3333-3333-333333333333','c0000001-0000-0000-0000-000000000001',
+                current_date + 20, '13:00', 'Home', 'League');
+  exception when others then blocked := true; end;
+  if not blocked then raise exception 'T42 FAIL: our manager created a fixture for another club''s team'; end if;
+
+  -- the honest version of each still works
+  insert into team_memberships (profile_id, team_id)
+  values ('a0000002-0000-0000-0000-000000000002','33333333-3333-3333-3333-333333333333')
+  on conflict do nothing;
+  insert into lineups (fixture_id, profile_id, role)
+  values ('d0000001-0000-0000-0000-000000000001','a0000002-0000-0000-0000-000000000002','start');
+  raise notice 'T42 PASS: manager writes stay inside the club at both ends';
+end $$;
+
+-- T43 — anon holds no table privilege and no function execute in public,
+-- including on objects created after this migration (default privileges).
+reset role;
+create table public.harness_future (id int);
+create function public.harness_future_fn() returns int language sql as $$ select 1 $$;
+do $$ declare t text; f text; begin
+  select string_agg(c.relname, ', ') into t
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind in ('r','v','m','p')
+     and (has_table_privilege('anon', c.oid, 'select') or has_table_privilege('anon', c.oid, 'insert')
+          or has_table_privilege('anon', c.oid, 'update') or has_table_privilege('anon', c.oid, 'delete'));
+  if t is not null then raise exception 'T43 FAIL: anon holds privileges on %', t; end if;
+  select string_agg(p.proname, ', ') into f
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute');
+  if f is not null then raise exception 'T43 FAIL: anon can execute %', f; end if;
+  if not has_function_privilege('authenticated', 'public.is_admin(uuid)', 'execute') then
+    raise exception 'T43 FAIL: authenticated lost execute on the policy helpers'; end if;
+  if not has_function_privilege('authenticated', 'public.harness_future_fn()', 'execute') then
+    raise exception 'T43 FAIL: a new function is not executable by authenticated'; end if;
+  raise notice 'T43 PASS: anon has no privileges in public, now or for new objects';
+end $$;
+drop function public.harness_future_fn();
+drop table public.harness_future;
+
+-- T44 — one current season per club.
+do $$ declare blocked boolean := false; begin
+  begin insert into seasons (club_id, label, is_current)
+        values ('11111111-1111-1111-1111-111111111111', '2099/00', true);
+  exception when unique_violation then blocked := true; end;
+  if not blocked then raise exception 'T44 FAIL: a club now has two current seasons'; end if;
+  raise notice 'T44 PASS: one current season per club';
+end $$;
+
+-- T45 — an availability UPDATE can't move an answer onto a game outside your
+-- squad, and a member's own name can't be blown up to any length.
+-- Actor: uM, the Community-only manager (uA was put in the First Team by T42),
+-- which also proves a manager gets no bypass here.
+select pg_temp.act_as('a0000006-0000-0000-0000-000000000006'); set local role authenticated;
+insert into availability (fixture_id, profile_id, status)
+values ('d0000002-0000-0000-0000-000000000002','a0000006-0000-0000-0000-000000000006','in')
+on conflict (fixture_id, profile_id) do nothing;
+do $$ declare blocked boolean; begin
+  blocked := false;
+  begin update availability set fixture_id = 'd0000001-0000-0000-0000-000000000001'
+         where fixture_id = 'd0000002-0000-0000-0000-000000000002' and profile_id = auth.uid();
+  exception when others then blocked := true; end;
+  if not blocked and exists (select 1 from availability
+                              where fixture_id = 'd0000001-0000-0000-0000-000000000001' and profile_id = auth.uid()) then
+    raise exception 'T45 FAIL: a Community player moved an answer onto a First Team game'; end if;
+
+  blocked := false;
+  begin update profiles set first_name = repeat('x', 61) where id = auth.uid();
+  exception when check_violation then blocked := true; end;
+  if not blocked then raise exception 'T45 FAIL: a 61-character first name was accepted'; end if;
+  raise notice 'T45 PASS: answers can''t be moved out of your squad; names have a ceiling';
+end $$;
+
+
+-- T46 — half time is optional (0040). NULL means "not recorded", and it is
+-- both sides or neither. Fails by name while 0040 has not been run.
 reset role;
 do $$
 declare blocked boolean := false;
@@ -876,19 +1241,19 @@ begin
     update results set ht_us = null, ht_them = null
      where fixture_id = 'd0000004-0000-0000-0000-000000000004';
   exception when not_null_violation then
-    raise exception 'T32 FAIL: results.ht_us / ht_them are still NOT NULL. Run migration 0039';
+    raise exception 'T46 FAIL: results.ht_us / ht_them are still NOT NULL. Run migration 0040';
   end;
   begin
     update results set ht_us = 1, ht_them = null
      where fixture_id = 'd0000004-0000-0000-0000-000000000004';
   exception when check_violation then blocked := true;
   end;
-  if not blocked then raise exception 'T32 FAIL: half a half-time score (one side NULL) was accepted'; end if;
-  raise notice 'T32 PASS: half time may be left unrecorded, both sides or neither';
+  if not blocked then raise exception 'T46 FAIL: half a half-time score (one side NULL) was accepted'; end if;
+  raise notice 'T46 PASS: half time may be left unrecorded, both sides or neither';
 end $$;
 
 
-reset role;
+-- ============================================================================
 do $$ begin raise notice '================  ALL RLS TESTS PASSED  ================'; end $$;
 
 rollback;

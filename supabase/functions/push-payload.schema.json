@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Nottinghamshire MvF rich Web Push payload",
+  "description": "Producer contract for the encrypted JSON body. All fields are optional. The worker also tolerates historical plain text, empty bodies and unknown fields. Send portable root-relative paths to work on installed clients and preview origins.",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string", "default": "Nottinghamshire MvF" },
+    "body": { "type": "string", "default": "" },
+    "icon": { "$ref": "#/definitions/image" },
+    "badge": { "$ref": "#/definitions/image" },
+    "tag": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$" },
+    "url": { "$ref": "#/definitions/path" },
+    "data": { "type": "object", "properties": { "url": { "$ref": "#/definitions/path" } } },
+    "fixtureId": { "type": ["string", "null"], "format": "uuid" },
+    "teamKey": { "enum": ["xl", "community"] },
+    "kind": { "enum": ["lineup", "training"] },
+    "withAvailability": { "type": "boolean", "default": false },
+    "canReply": { "type": "boolean", "description": "Metadata from the Training dispatcher. Training notifications open the session." },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "title"],
+        "properties": {
+          "action": { "type": "string", "pattern": "\\S", "description": "Reserved fixture actions: lineup, availability, in, maybe, out. Other IDs open the notification destination." },
+          "title": { "type": "string", "pattern": "\\S" },
+          "icon": { "$ref": "#/definitions/image" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "path": { "type": "string", "pattern": "^/(?!/)[^\\\\\\u0000-\\u001f\\u007f]*$", "description": "A root-relative path that still resolves within the app, including its optional query and fragment." },
+    "image": { "type": "string", "allOf": [{ "$ref": "#/definitions/path" }, { "pattern": "\\.(?:[aA][vV][iI][fF]|[gG][iI][fF]|[iI][cC][oO]|[jJ][pP][eE]?[gG]|[pP][nN][gG]|[sS][vV][gG]|[wW][eE][bB][pP])(?:[?#].*)?$" }] }
+  }
+}

@@ -6,7 +6,7 @@ export const auditOrigin = 'https://matrix-local.supabase.co'
 export const nextOpponent = 'Sherwood Athletic'
 const dates = (days) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
 
-function auditRows(role, { photoUrl, squad = 'xl', answered = false }) {
+export function auditRows(role, { photoUrl, squad = 'xl', answered = false } = {}) {
   const teams = [
     { id: ID.team, club_id: ID.club, key: 'xl', label: 'XL 11s', match_name: 'Nottingham', is_first_team: true },
     { id: 'team-community', club_id: ID.club, key: 'community', label: 'Community', match_name: 'Notts Community' },

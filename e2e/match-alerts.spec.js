@@ -109,3 +109,34 @@ test('a foreground line-up can be swiped away or opened on the addressed fixture
   await expect(sheet.getByRole('heading', { name: 'Sherwood Athletic' })).toBeVisible()
   await expect(sheet.getByRole('tab', { name: 'Line-up' })).toHaveAttribute('aria-selected', 'true')
 })
+
+test('a cold action from the prior worker uses its stored answer once across reloads', async ({ page }) => {
+  await prepare(page, { permission: 'granted' })
+  await page.goto('/you')
+  await expect(page.getByRole('button', { name: 'Edit your details' })).toBeVisible()
+  const nonce = await page.evaluate(async id => {
+    // This is the receipt the deployed worker leaves when there is no open tab.
+    const nonce = crypto.randomUUID().replaceAll('-', '')
+    const cache = await caches.open('mvf-actions')
+    await cache.put('/__mvf_action/' + nonce, new Response(JSON.stringify({
+      fixtureId: id, status: 'maybe', expiresAt: Date.now() + 600_000,
+    })))
+    return nonce
+  }, fixtureId)
+  // The worker holds the source cache while clients.openWindow creates a
+  // separate document. Keep the synthetic source alive for that same handoff.
+  const receiver = await page.context().newPage()
+  await prepare(receiver, { permission: 'granted' })
+  const saved = []
+  receiver.on('request', req => {
+    if (req.method() === 'POST' && new URL(req.url()).pathname === '/rest/v1/availability') saved.push(req.postDataJSON())
+  })
+  const destination = '/fixtures?mvf_action=' + nonce
+  await receiver.goto(destination)
+  await expect(receiver.getByText('Availability saved · maybe.')).toBeVisible()
+  await expect(receiver).toHaveURL(/\/fixtures$/)
+  expect(saved).toEqual([expect.objectContaining({ fixture_id: fixtureId, status: 'maybe' })])
+  await receiver.goto(destination)
+  await expect(receiver).toHaveURL(/\/fixtures$/)
+  expect(saved).toHaveLength(1)
+})

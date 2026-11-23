@@ -30,7 +30,7 @@ export function safeAppPath(url, origin = globalThis.location?.origin) {
   if (!origin) return null
   try {
     const resolved = new URL(url, origin)
-    if (resolved.origin !== origin) return null
+    if (resolved.origin !== origin || resolved.pathname.startsWith('//')) return null
     return resolved.pathname + resolved.search + resolved.hash
   } catch {
     return null

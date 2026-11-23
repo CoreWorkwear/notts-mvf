@@ -23,7 +23,7 @@ export function venueCoords(fixture) {
   return null
 }
 
-export default function WeatherStrip({ fixture, light = false, detailed = false, card = false }) {
+export default function WeatherStrip({ fixture, light = false, detailed = false, card = false, training = false }) {
   const [wx, setWx] = useState(null)
 
   useEffect(() => {
@@ -35,6 +35,7 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
     const key = `wx:${fixture.id}:${fixture.match_date}:${fixture.kickoff ?? ''}:${ll.lat},${ll.lng}`
     const cached = cacheGet(key)
     if (cached) { setWx(cached); return }
+    setWx(null)
     ;(async () => {
       try {
         const data = await fetchForecast(ll.lat, ll.lng, fixture.match_date, fixture.kickoff)
@@ -53,17 +54,20 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
   // Headline the ACTUAL temperature; feels-like is the labelled secondary.
   const actual = wx.tempMax ?? wx.feelsLike
   const feels = wx.feelsLike
+  const forecastTitle = training ? 'Training forecast' : 'Match-day weather'
+  const timeLabel = fixture?.kickoff && (!training || wx.atKickoff)
+    ? `at ${fmtKO(fixture.kickoff)}${training ? '' : ' KO'}` : ''
 
   // Big match-day weather panel (the expanded match-details version).
   if (card) {
     return (
-      <section className="mt-5" aria-label="Match-day weather">
-        <h3 className="kicker">Match-day weather</h3>
+      <section className="mt-5" aria-label={forecastTitle}>
+        <h3 className="kicker">{forecastTitle}</h3>
         <div className="wx-card mt-2">
           <WeatherIcon category={wx.category} size={56} windy={wx.wind != null && wx.wind >= 16} />
           <div className="wx-card-main">
-            <span className="wx-card-text">{wx.text}{fixture?.kickoff ? ` · at ${fmtKO(fixture.kickoff)} KO` : ''}</span>
-            <span className="wx-card-temp display">{actual}°</span>
+            <span className="wx-card-text">{wx.text}{timeLabel && ` · ${timeLabel}`}</span>
+            {actual != null && <span className="wx-card-temp display">{actual}°</span>}
             {feels != null && <span className="wx-card-feels mono">Feels like {feels}°</span>}
           </div>
           <div className="wx-card-bits">
@@ -87,7 +91,7 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
 
   return (
     <span className={'wx' + (light ? ' wx-light' : '') + (detailed ? ' wx-detailed' : '')}
-      role="group" aria-label={`${wx.text}${fixture?.kickoff ? ` at ${fmtKO(fixture.kickoff)} KO` : ''}`}>
+      role="group" aria-label={`${training ? 'Training forecast, ' : ''}${wx.text}${timeLabel ? ' ' + timeLabel : ''}`}>
       <WeatherIcon category={wx.category} size={detailed ? 30 : 20} windy={wx.wind != null && wx.wind >= 16} />
       {actual != null && <span className="wx-temp mono">{actual}°</span>}
       {detailed && feels != null && feels !== actual && <span className="wx-bit mono">feels {feels}°</span>}

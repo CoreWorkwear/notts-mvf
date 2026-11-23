@@ -3,7 +3,7 @@ import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion } fr
 import { SPRING_SNAPPY } from '../lib/motion'
 import '../styles/notifications.css'
 
-const actionText = { lineup: 'View line-up', avail: 'Confirm availability', match: 'View fixture', news: 'Read club news' }
+const actionText = { lineup: 'View line-up', avail: 'Confirm availability', match: 'View fixture', news: 'Read club news', training: 'View training session' }
 
 export default function ForegroundAlert({ alert, onDismiss, onOpen }) {
   const reduce = useReducedMotion()

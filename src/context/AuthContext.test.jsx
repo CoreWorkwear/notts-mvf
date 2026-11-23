@@ -39,7 +39,8 @@ vi.mock('../lib/supabase', () => {
     },
   }
 })
-vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
+const resetLogState = vi.hoisted(() => vi.fn())
+vi.mock('../lib/logger', () => ({ logError: vi.fn(), resetLogState }))
 const disablePush = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('../lib/push', () => ({ disablePush }))
 
@@ -200,8 +201,25 @@ describe('AuthContext — failed recovery links are explained', () => {
     window.history.replaceState(null, '', '/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired')
     supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
     render(<AuthProvider><RecoveryProbe /></AuthProvider>)
-    await waitFor(() => expect(screen.getByText(/expired or already used/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/expired or been used already/i)).toBeInTheDocument())
     expect(window.location.hash).toBe('')
+  })
+
+  test('error_description is NEVER shown — spoofed link text is replaced by fixed copy', async () => {
+    window.history.replaceState(null, '', '/#error=server_error&error_code=unexpected_failure&error_description=Your+account+is+locked.+Call+0800+123+456')
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
+    render(<AuthProvider><RecoveryProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText(/something went wrong with that link/i)).toBeInTheDocument())
+    expect(screen.queryByText(/locked|0800/)).toBeNull()
+    expect(window.location.hash).toBe('')
+  })
+
+  test('even an otp_expired code ignores a spoofed description', async () => {
+    window.history.replaceState(null, '', '/#error=access_denied&error_code=otp_expired&error_description=Visit+evil.example')
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
+    render(<AuthProvider><RecoveryProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText(/expired or been used already/i)).toBeInTheDocument())
+    expect(screen.queryByText(/evil/)).toBeNull()
   })
 
   test('a clean load has no notice', async () => {
@@ -235,6 +253,18 @@ describe('AuthContext — an interrupted recovery survives a reload', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
     render(<AuthProvider><RecoveryProbe /></AuthProvider>)
     await waitFor(() => expect(screen.getByText('NORMAL')).toBeInTheDocument())
+  })
+})
+
+describe('AuthContext — sign-out clears the logger state', () => {
+  test('signOut resets the offline error queue and breadcrumb trail', async () => {
+    store.profile = { id: 'u1', first_name: 'Joe', role: 'player', approved: true, active: true, is_player: true, club_id: null }
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } })
+    render(<AuthProvider><ProfileProbe /></AuthProvider>)
+    await waitFor(() => expect(screen.getByText('Joe')).toBeInTheDocument())
+    expect(resetLogState).not.toHaveBeenCalled()
+    await act(async () => { screen.getByText('signout').click() })
+    expect(resetLogState).toHaveBeenCalled()
   })
 })
 

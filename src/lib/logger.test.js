@@ -19,9 +19,9 @@ vi.mock('./supabase', () => ({
 
 import {
   buildErrorRow, isActionableWindowError, isNoiseError, scrub, enrichContext, shouldSend, logError,
-  flushQueue, _resetLogBudget, _queuedRows, MAX_PER_SESSION, DEDUPE_WINDOW_MS, BUILD, BUDGET_WINDOW_MS,
+  flushQueue, resetLogState, _resetLogBudget, _queuedRows, MAX_PER_SESSION, DEDUPE_WINDOW_MS, BUILD, BUDGET_WINDOW_MS,
 } from './logger'
-import { breadcrumb, clearBreadcrumbs } from './breadcrumbs'
+import { breadcrumb, clearBreadcrumbs, getBreadcrumbs } from './breadcrumbs'
 
 beforeEach(() => {
   db.inserts = []
@@ -103,6 +103,41 @@ describe('scrub — PII never reaches client_errors', () => {
 
   test('leaves ordinary values and arrays alone', () => {
     expect(scrub({ fixtureId: 'f1', ids: ['a', 'b'], n: 3, ok: true })).toEqual({ fixtureId: 'f1', ids: ['a', 'b'], n: 3, ok: true })
+  })
+})
+
+describe('scrub — row echoes and phone numbers', () => {
+  test('Postgres "Failing row contains (...)" is redacted, even when truncated', () => {
+    const full = scrub('new row violates check constraint "x"\nDETAIL: Failing row contains (1, Joe, Morris, 07700 900123, 1990-01-01).')
+    expect(full).toContain('Failing row contains ([redacted])')
+    expect(full).not.toMatch(/Morris|1990/)
+    expect(scrub('Failing row contains (1, Joe, Mor')).toBe('Failing row contains ([redacted])')
+  })
+  // CI caught this: a short git sha that happened to be all digits turned the
+  // build stamp into '0.1.0+[phone]'. Ids, uuids and timestamps are not phones.
+  test('build stamps, uuid pieces and timestamps are not mistaken for phone numbers', () => {
+    expect(scrub('0.1.0+9043233')).toBe('0.1.0+9043233')
+    expect(scrub({ build: '0.1.0+1234567' })).toEqual({ build: '0.1.0+1234567' })
+    expect(scrub('fixture 01234567-8901-4abc-9def-012345678901 failed')).toBe('fixture 01234567-8901-4abc-9def-012345678901 failed')
+    expect(scrub('at 1732150000000 ms')).toBe('at 1732150000000 ms')
+    expect(scrub('row 1234567 of 9876543')).toBe('row 1234567 of 9876543')
+  })
+
+  test('phone-like digit runs are masked in strings, nested context and details', () => {
+    expect(scrub('call 07700 900123 now')).toBe('call [phone] now')
+    expect(scrub('+44 (0)7700-900-123')).toBe('[phone]')
+    expect(scrub('ring (0115) 123 4567')).toBe('ring [phone]')
+    expect(scrub({ details: 'dup 07700900123', n: { deep: ['tel 01234567890'] } })).toEqual({ details: 'dup [phone]', n: { deep: ['tel [phone]'] } })
+  })
+  test('short numbers and UUID tails are left alone', () => {
+    expect(scrub('status 404 after 1200ms')).toBe('status 404 after 1200ms')
+    const id = '123e4567-e89b-12d3-a456-426614174000'
+    expect(scrub(`fixture ${id}`)).toBe(`fixture ${id}`)
+  })
+  test('buildErrorRow applies it to message and context', () => {
+    const row = buildErrorRow({ kind: 'write', message: 'bad 07700900123', context: { details: 'Failing row contains (a, b)' } })
+    expect(row.message).toBe('bad [phone]')
+    expect(row.context.details).toBe('Failing row contains ([redacted])')
   })
 })
 
@@ -216,6 +251,50 @@ describe('logError — offline queue', () => {
     db.reject = new TypeError('Load failed')
     await flushQueue()
     expect(_queuedRows()).toHaveLength(2)
+  })
+})
+
+describe('sign-out hygiene and flush resilience', () => {
+  test('resetLogState empties the offline queue and the breadcrumb trail', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    await logError('write', 'previous user row')
+    breadcrumb('action', 'previous user tap')
+    expect(_queuedRows()).toHaveLength(1)
+    resetLogState()
+    expect(_queuedRows()).toHaveLength(0)
+    expect(getBreadcrumbs()).toHaveLength(0)
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+  })
+
+  test('flush drops a row the database rejects and carries on with the rest', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    await logError('a', 'poison'); await logError('a', 'good')
+    expect(_queuedRows()).toHaveLength(2)
+    db.insertResult = { error: { message: 'new row violates check constraint', code: '23514' } }
+    // Both rows are refused by the DB: each is attempted once, then dropped,
+    // so the queue drains rather than stalling on the first.
+    await flushQueue()
+    expect(_queuedRows()).toHaveLength(0)
+    expect(db.inserts.map((r) => r.message)).toEqual(['poison', 'good'])
+  })
+
+  test('flush drops RLS 42501 and 4xx rows but keeps retrying a network failure', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    await logError('a', 'one')
+    db.insertResult = { error: { message: 'row-level security', code: '42501', status: 403 } }
+    await flushQueue()
+    expect(_queuedRows()).toHaveLength(0)
+
+    await logError('a', 'two')
+    db.insertResult = { error: { message: 'bad request', status: 400 } }
+    await flushQueue()
+    expect(_queuedRows()).toHaveLength(0)
+
+    await logError('a', 'three')
+    db.insertResult = { error: null }
+    db.reject = new TypeError('Load failed')
+    await flushQueue()
+    expect(_queuedRows()).toHaveLength(1)
   })
 })
 

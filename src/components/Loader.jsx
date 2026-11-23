@@ -1,6 +1,7 @@
 import PageHead from './PageHead'
 
 const SCREENS = {
+  training: ['Training', 'list'],
   fixtures: ['Fixtures', 'fixture'], results: ['Results', 'score'], club: ['The Club', 'table'],
   you: ['You', 'profile'], news: ['Club news', 'article'], manage: ['Club admin', 'list'],
   'whos-in': ["Who's in", 'list'], players: ['Players', 'list'], opponents: ['Opponents', 'list'],

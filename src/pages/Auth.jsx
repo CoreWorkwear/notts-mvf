@@ -83,7 +83,7 @@ export default function Auth() {
     } else {
       setNotice(isPlayer
         ? 'Registered. Awaiting manager approval.'
-        : 'Registered as a supporter.')
+        : 'Registered as a supporter. Awaiting manager approval.')
     }
   }
 

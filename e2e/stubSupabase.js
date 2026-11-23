@@ -75,7 +75,7 @@ function cors(req) {
 
 // `net.authDown` (mutable, read per request) drops the token endpoint the way a
 // phone with no signal does, so a spec can start offline and come back.
-const answer = (net, getRows) => async (route) => {
+const answer = (net, getRows, rowsFor, seen, rpc) => async (route) => {
   const req = route.request()
   const headers = cors(req)
   const method = req.method()
@@ -85,12 +85,18 @@ const answer = (net, getRows) => async (route) => {
   if (pathname.startsWith('/auth/v1/user')) return route.fulfill({ headers, json: USER })
   if (pathname.startsWith('/auth/v1/')) return route.fulfill({ headers, json: session() })
 
+  if (rpc && method === 'POST' && pathname.startsWith('/rest/v1/rpc/')) {
+    const data = await rpc(pathname.split('/').pop(), req.postDataJSON())
+    return route.fulfill({ headers, json: data ?? null })
+  }
+
   const table = pathname.match(/^\/rest\/v1\/([^/]+)/)?.[1]
+  if (table) seen.push(table)
   // Writes succeed with nothing to say (PostgREST's return=minimal); storage and
   // functions have nothing to serve.
   if (!table || (method !== 'GET' && method !== 'HEAD')) return route.fulfill({ status: 204, headers })
 
-  const rows = getRows?.(table, new URL(req.url()).searchParams, ROWS[table] ?? []) ?? ROWS[table] ?? []
+  const rows = getRows?.(table, new URL(req.url()).searchParams, rowsFor[table] ?? []) ?? rowsFor[table] ?? []
   // .single() asks for one object, and PostgREST refuses unless there is exactly one.
   if ((req.headers().accept ?? '').includes('vnd.pgrst.object')) {
     return rows.length === 1
@@ -104,12 +110,19 @@ const answer = (net, getRows) => async (route) => {
 // Call before the first page.goto(). `expired` seeds a session whose access
 // token ran out an hour ago (the app must refresh it before it has a session);
 // `net` is the switch described above.
-export async function signInAsStubPlayer(page, { expired = false, net = {}, getRows, origin = SUPABASE_URL } = {}) {
+export async function seedStubSession(page, origin, expired = false) {
   if (!origin) throw new Error('VITE_SUPABASE_URL is not set, so the build has no Supabase origin to stub.')
   const url = new URL(origin)
   const storageKey = `sb-${url.hostname.split('.')[0]}-auth-token`
   await page.addInitScript(([key, value]) => {
     try { localStorage.setItem(key, value) } catch { /* storage blocked: the spec will fail loudly at sign-in */ }
   }, [storageKey, JSON.stringify(session({ expired }))])
-  await page.route(`${url.origin}/**`, answer(net, getRows))
+}
+
+export async function signInAsStubPlayer(page, { expired = false, net = {}, getRows, rpc, profile, origin = SUPABASE_URL } = {}) {
+  await seedStubSession(page, origin, expired)
+  const rowsFor = profile ? { ...ROWS, profiles: [{ ...ROWS.profiles[0], ...profile }] } : ROWS
+  const seen = []
+  await page.route(`${new URL(origin).origin}/**`, answer(net, getRows, rowsFor, seen, rpc))
+  return seen
 }

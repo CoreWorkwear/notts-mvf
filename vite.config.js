@@ -20,16 +20,16 @@ function buildStamp() {
 }
 
 // Installable PWA on Cloudflare Pages (HANDOVER §8.13 / BUILD-LIST C): manifest,
-// crest icons, service worker (offline app shell), auto-update.
+// crest icons, service worker (offline app shell), user-accepted updates.
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // 'prompt' (not autoUpdate): a new build installs in the background but is
-      // NOT force-applied. autoUpdate reloaded the page mid-launch on the first
-      // open after every deploy — the cold-start "hang". We surface a quiet
-      // "Refresh" prompt instead (main.jsx + UpdatePrompt), so cold open serves
-      // the cached shell instantly.
+      // 'prompt' (not autoUpdate): a new build installs in the background and
+      // WAITS. autoUpdate reloaded the page mid-launch on the first open after
+      // every deploy — the cold-start "hang". We surface a quiet "Refresh"
+      // prompt instead (main.jsx + UpdatePrompt); tapping it posts SKIP_WAITING
+      // and reloads only the document that accepted.
       registerType: 'prompt',
       injectRegister: false, // we register manually in main.jsx to poll for updates
       includeAssets: ['icon.svg', 'apple-touch-icon.png', 'favicon.png'],
@@ -58,14 +58,13 @@ export default defineConfig({
         // Supabase API/auth is always network — never serve it from the SW cache.
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
         cleanupOutdatedCaches: true,
-        // Push a new deploy out immediately: the fresh SW skips the "waiting"
-        // state and claims open tabs, so users get the latest build on next load
-        // (with registerType:'autoUpdate' that triggers an auto-reload) — no
-        // manual cache-clearing after a deploy.
-        skipWaiting: true,
-        clientsClaim: true,
-        // Web-push handlers live in a plain script imported into the SW.
-        importScripts: ['/push-sw.js'],
+        importScripts: ['/push-sw.js', '/previous-assets.js'],
+        // Precache routes get first refusal. An older open document may still
+        // request its own hashed modules after a different tab accepted.
+        runtimeCaching: [{
+          urlPattern: ({ sameOrigin, url }) => sameOrigin && /^\/assets\/[^/]+-[\w-]{8,}\.(js|css)$/.test(url.pathname),
+          handler: async ({ request }) => (await caches.match(request, { cacheName: 'mvf-previous-assets' })) ?? fetch(request),
+        }],
       },
       devOptions: { enabled: false },
     }),
@@ -91,6 +90,13 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
     css: false,
+    // Hermetic: the real Supabase client throws at import without these, and a
+    // handful of suites import it. Placeholders only when the shell/.env has
+    // not set real ones; nothing in the suite makes a network call.
+    env: {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co',
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key',
+    },
     // Keep vitest to src unit/component tests — the e2e/*.spec.js Playwright
     // tests run under a separate runner (npm run test:e2e).
     // The Edge Functions' pure decision logic lives in plain-JS modules under

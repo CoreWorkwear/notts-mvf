@@ -5,18 +5,25 @@ import userEvent from '@testing-library/user-event'
 const enablePush = vi.hoisted(() => vi.fn())
 let supported
 vi.mock('../lib/push', () => ({ get pushSupported() { return supported }, enablePush, needsHomeScreen: () => false }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }))
+const authState = vi.hoisted(() => ({ holding: null }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' }, holding: authState.holding }) }))
 
 import NotificationPrompt from './NotificationPrompt'
 
 const setPermission = (p) => Object.defineProperty(window, 'Notification', { value: { permission: p }, configurable: true })
 
-beforeEach(() => { sessionStorage.clear(); enablePush.mockReset(); enablePush.mockResolvedValue(); supported = true; setPermission('default') })
+beforeEach(() => { sessionStorage.clear(); authState.holding = null; enablePush.mockReset(); enablePush.mockResolvedValue(); supported = true; setPermission('default') })
 
 describe('NotificationPrompt (§3.6)', () => {
   test('shows while permission is default', () => {
     render(<NotificationPrompt />)
     expect(screen.getByRole('region', { name: /turn on notifications/i })).toBeVisible()
+  })
+
+  test('hidden on the holding screen (pending / inactive accounts)', () => {
+    authState.holding = 'pending'
+    render(<NotificationPrompt />)
+    expect(screen.queryByRole('region', { name: /turn on notifications/i })).not.toBeInTheDocument()
   })
 
   test('hidden once granted or denied (never nags the settled)', () => {

@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { teamLabel } from '../lib/teams'
 import { FIXTURE_TYPES } from '../lib/constants'
 import { todayISO } from '../lib/format'
-import { geocodePostcode, normalizePostcode } from '../lib/geocode'
+import { resolveVenuePostcode } from '../lib/venuePostcode'
 
 // Admin create/edit a fixture. Opponent is picked from the opponents table or
 // added inline (so the badge attaches to the opponent, reused across fixtures).
@@ -162,14 +162,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         oppId = data.id
       }
 
-      // Geocode the postcode → venue coords for venue-precise weather. Non-fatal:
-      // a bad/unknown postcode just leaves coords null (weather falls back to
-      // the club city). Skip the lookup if the postcode is unchanged on an edit.
-      const pc = normalizePostcode(postcode)
-      let coords = { lat: fixture?.venue_lat ?? null, lng: fixture?.venue_lng ?? null }
-      if (pc !== normalizePostcode(fixture?.postcode ?? '')) {
-        coords = pc ? (await geocodePostcode(pc)) ?? { lat: null, lng: null } : { lat: null, lng: null }
-      }
+      const location = await resolveVenuePostcode(postcode, fixture)
 
       const payload = {
         club_id: profile.club_id,
@@ -184,9 +177,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         league_name: competition?.name ?? null, // denormalised for display fallback
         venue: venue.trim(),
         address: address.trim() || null,
-        postcode: pc || null,
-        venue_lat: coords.lat,
-        venue_lng: coords.lng,
+        ...location,
         w3w: w3w.trim() || null,
         status,
       }

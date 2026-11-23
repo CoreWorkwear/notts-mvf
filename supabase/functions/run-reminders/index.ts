@@ -18,10 +18,11 @@
 // Deploy:  supabase functions deploy run-reminders   (config.toml verify_jwt=false)
 // Secret:  supabase secrets set CRON_SECRET=<same value as the cron job>
 import webpush from 'npm:web-push@3.6.7'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.119.2'
 import { processFixture, emptyTotals, addToTotals } from '../_shared/reminders.js'
 import { pushToTokens, emptySendResult } from '../_shared/push.js'
-import { mkLog } from '../_shared/log.js'
+import { mkLog, internalErrorBody } from '../_shared/log.js'
+import { timingSafeEqualStrings } from '../_shared/auth.js'
 
 Deno.serve(async (req) => {
   const log = mkLog('run-reminders', req)
@@ -30,7 +31,7 @@ Deno.serve(async (req) => {
 
   if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'x-request-id': log.id } })
   const secret = Deno.env.get('CRON_SECRET')
-  if (!secret || req.headers.get('x-cron-secret') !== secret) {
+  if (!secret || !(await timingSafeEqualStrings(req.headers.get('x-cron-secret') ?? '', secret))) {
     log.warn('unauthorized', { ms: log.elapsed() })
     return json({ error: 'unauthorized', requestId: log.id }, 401)
   }
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
       .or('availability_enabled.eq.true,match_enabled.eq.true')
     if (sErr) {
       log.error('settings_read_failed', { code: sErr.code, message: sErr.message, ms: log.elapsed() })
-      return json({ error: 'could not read reminder settings', requestId: log.id }, 500)
+      return json(internalErrorBody(log.id), 500)
     }
 
     const totals = emptyTotals()
@@ -121,6 +122,6 @@ Deno.serve(async (req) => {
     return json({ requestId: log.id, remindersSent: totals.offsets_recorded, pushes: totals.sent, clubs, clubsFailed, ...totals })
   } catch (e) {
     log.error('unhandled', { message: String((e as Error)?.message ?? e), ms: log.elapsed() })
-    return json({ error: String((e as Error)?.message ?? e), requestId: log.id }, 500)
+    return json(internalErrorBody(log.id), 500)
   }
 })

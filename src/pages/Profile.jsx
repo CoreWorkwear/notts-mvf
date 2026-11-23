@@ -1,5 +1,5 @@
-import InstallPrompt from '../components/InstallPrompt'
 import Loader from '../components/Loader'
+import InstallPrompt from '../components/InstallPrompt'
 import ClubImage from '../components/ClubImage'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
@@ -69,10 +69,10 @@ export default function Profile() {
 
       {/* Storage only takes a headshot from an approved, active member. Offering
           the button to anyone else got them a raw RLS refusal. */}
-      {profile.approved && profile.active ? (
+      {(isRealAdmin || (profile.approved && profile.active)) ? (
         <div className="mt-3" style={{ maxWidth: 280 }}>
           <ImageUpload
-            folder="players" shape="round" maxDim={512}
+            folder={`players/${profile.id}`} shape="round" maxDim={512}
             current={profile.photo_url}
             label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
             onUploaded={async (url) => {

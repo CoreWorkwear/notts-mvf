@@ -21,6 +21,11 @@ describe('safeAppPath', () => {
     expect(safeAppPath('/news#latest', ORIGIN)).toBe('/news#latest')
   })
 
+  test('the canonical path remains an unambiguous local path when the router consumes it', () => {
+    expect(safeAppPath('/club/../fixtures?team=xl', ORIGIN)).toBe('/fixtures?team=xl')
+    expect(safeAppPath('/club/..//?team=xl', ORIGIN)).toBeNull()
+  })
+
   // The regression this function exists for: the old check was
   // `url.startsWith('/') && !url.startsWith('//')`, which every one of these
   // walks straight past on its way to another origin.

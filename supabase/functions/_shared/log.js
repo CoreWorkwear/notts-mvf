@@ -13,13 +13,57 @@
 
 const PII_KEY = /(token|email|phone|password|secret|authorization|name)$/i
 
-export function scrub(fields) {
+const EMAIL = /[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g
+const JWT = /eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g
+// Postgres puts the whole offending row (names, emails, phones) in the
+// DETAIL of a constraint error: "Failing row contains (…)".
+const FAILING_ROW = /Failing row contains \(.*\)/g
+// A phone number as people write one: starts with +, 0 or (0, holds 10-15
+// digits (spaces, hyphens and brackets allowed between), and isn't glued to a
+// letter, digit, dot, plus or hyphen on either side, so versions, uuids, uuid
+// pieces and timestamps are left alone. Same rule as src/lib/logger.js.
+const PHONE = /(?<![\w.+-])(?:\+|\(?0)[\d\s\-()]*\d(?![\w-])/g
+
+// Mask PII inside a free-text string: failing-row dumps, JWTs, emails and
+// phone numbers (see PHONE). Request ids and other uuids are left alone.
+export function scrubString(str) {
+  if (typeof str !== 'string') return str
+  return str
+    .replace(FAILING_ROW, 'Failing row contains ([redacted])')
+    .replace(JWT, '[jwt]')
+    .replace(EMAIL, '[email]')
+    .replace(PHONE, (m) => {
+      const n = (m.match(/\d/g) ?? []).length
+      return n >= 10 && n <= 15 ? '[phone]' : m
+    })
+}
+
+function scrubValue(v, depth) {
+  if (typeof v === 'string') return scrubString(v)
+  if (v === null || typeof v !== 'object') return v
+  if (depth > 5) return '[deep]'
+  if (v instanceof Error) return scrubString(String(v.message ?? v))
+  if (Array.isArray(v)) return v.map((x) => scrubValue(x, depth + 1))
+  return scrubObject(v, depth + 1)
+}
+
+function scrubObject(fields, depth) {
   const out = {}
   for (const [k, v] of Object.entries(fields ?? {})) {
     if (PII_KEY.test(k)) continue
-    out[k] = v
+    out[k] = scrubValue(v, depth)
   }
   return out
+}
+
+export function scrub(fields) {
+  return scrubObject(fields, 0)
+}
+
+// What a caller is told when something unexpected broke: no exception text,
+// no database wording, just a reference to quote.
+export function internalErrorBody(requestId) {
+  return { error: `Something went wrong on our side. Quote this reference: ${requestId}`, requestId }
 }
 
 export function newRequestId() {

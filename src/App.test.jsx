@@ -124,3 +124,38 @@ describe('App — a tapped push notification navigates the open app', () => {
     expect(window.location.pathname).toBe('/fixtures')
   })
 })
+
+describe('App — the holding screen for accounts the database shows nothing', () => {
+  test.each([
+    ['pending', { id: 'u1', role: 'player', is_player: true, approved: false, active: true }, /awaiting manager sign-off/i, /player/i],
+    ['pending', { id: 'u1', role: 'player', is_player: false, approved: false, active: true }, /awaiting manager sign-off/i, /supporter/i],
+    ['inactive', { id: 'u1', role: 'player', is_player: true, approved: true, active: false }, /account inactive/i, /contact your manager/i],
+  ])('a %s account sees the holding screen, not the app', async (holding, profile, head, body) => {
+    window.history.replaceState({}, '', '/fixtures')
+    auth.state = { ...base, profile, holding, refreshProfile: vi.fn(() => Promise.resolve()), signOut: vi.fn() }
+    render(<App />)
+    expect(screen.getByRole('heading', { name: head })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(body)
+    expect(screen.queryByText('FIXTURES-PAGE')).toBeNull()
+    expect(screen.getByRole('button', { name: /check again/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
+  })
+
+  test('Check again reloads the profile; Sign out signs out', async () => {
+    const refreshProfile = vi.fn(() => Promise.resolve())
+    const signOut = vi.fn(() => Promise.resolve())
+    auth.state = { ...base, profile: { id: 'u1', is_player: true, approved: false, active: true }, holding: 'pending', refreshProfile, signOut }
+    render(<App />)
+    await act(async () => { screen.getByRole('button', { name: /check again/i }).click() })
+    expect(refreshProfile).toHaveBeenCalledTimes(1)
+    await act(async () => { screen.getByRole('button', { name: /sign out/i }).click() })
+    expect(signOut).toHaveBeenCalledTimes(1)
+  })
+
+  test('an approved account (holding null) still gets the app', async () => {
+    window.history.replaceState({}, '', '/fixtures')
+    auth.state = { ...base, profile: { id: 'u1', role: 'player', is_player: true, approved: true, active: true }, holding: null }
+    render(<App />)
+    expect(await screen.findByText('FIXTURES-PAGE')).toBeInTheDocument()
+  })
+})
