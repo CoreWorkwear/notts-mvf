@@ -1,3 +1,6 @@
+import Loader from './Loader'
+import LoadIssue from './LoadIssue'
+import ClubImage from './ClubImage'
 import { useSponsors, sponsorWebsite } from '../hooks/useSponsors'
 
 // Player-facing roll-call on the Club page: every sponsor with their logo +
@@ -14,7 +17,7 @@ function Card({ s }) {
   const inner = (
     <>
       <span className="sl-logo">
-        {s.logo_url ? <img src={s.logo_url} alt={s.name} /> : <span className="sl-logo-empty mono">{(s.name?.[0] ?? '?').toUpperCase()}</span>}
+        {s.logo_url ? <ClubImage sizes="64px" src={s.logo_url} alt={s.name} /> : <span className="sl-logo-empty mono">{(s.name?.[0] ?? '?').toUpperCase()}</span>}
       </span>
       <span className="sl-main">
         <span className="sl-name">{s.name}</span>
@@ -29,15 +32,17 @@ function Card({ s }) {
 }
 
 export default function SponsorsList() {
-  const { sponsors, loading } = useSponsors()
+  const { sponsors, loading, error, refetch } = useSponsors()
   const active = (sponsors ?? []).filter((s) => s.active)
 
+  if (loading && !sponsors.length) return <Loader label="Loading the sponsors…" />
+  if (error && !sponsors.length) return <LoadIssue subject="the sponsors" retry={refetch} />
   return (
     <div className="mt-4">
+      {error && <LoadIssue subject="the sponsors" retry={refetch} stale />}
       {!loading && active.length === 0 ? (
         <div className="empty mt-2">
           <p className="empty-title">No sponsors listed yet</p>
-          <p>The club's sponsors and partners will appear here.</p>
         </div>
       ) : (
         GROUPS.map((g) => {
@@ -55,17 +60,17 @@ export default function SponsorsList() {
       )}
 
       <style>{`
-        .sl-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--coal);
+        .sl-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3); background: var(--coal);
           color: var(--bone); border: 1px solid var(--line); text-align: left; }
-        .sl-logo { width: 64px; height: 48px; flex: none; border-radius: 10px; background: var(--bone);
+        .sl-logo { width: 64px; height: 48px; flex: none; border-radius: var(--r-card); background: var(--bone);
           display: grid; place-items: center; overflow: hidden; }
         .sl-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .sl-logo-empty { background: var(--slate); width: 100%; height: 100%; display: grid; place-items: center;
           color: var(--bone-mute); font-weight: 700; }
         .sl-main { flex: 1; min-width: 0; }
         .sl-name { display: block; font-weight: 600; }
-        .sl-web { display: block; font-size: 12px; color: var(--bone-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .sl-go { color: var(--bone-dim); font-size: 16px; }
+        .sl-web { display: block; font-size: var(--type-caption); color: var(--bone-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sl-go { color: var(--bone-dim); font-size: var(--type-body); }
       `}</style>
     </div>
   )

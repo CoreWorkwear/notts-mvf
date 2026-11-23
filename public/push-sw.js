@@ -7,16 +7,17 @@ self.addEventListener('push', (event) => {
 
   const title = data.title || 'Nottinghamshire MvF'
   const fixtureId = data.fixtureId || null
-  // Inline actions for an availability nudge (Android; iOS ignores). Chrome
-  // renders at most Notification.maxActions = 2 and silently DROPS the rest —
-  // three buttons meant "Can't make it" never showed. Keep the two decisive
-  // answers; "maybe" is a tap on the notification body (opens the fixture).
+  // Keep the two decisive answers first on platforms with two tray buttons.
+  // Where three fit, Maybe is one tap too. The body always opens the fixture.
   const actions = data.withAvailability && fixtureId
     ? [
         { action: 'in', title: "I'm in" },
         { action: 'out', title: "Can't make it" },
       ]
     : (data.actions || [])
+  if (data.withAvailability && fixtureId && self.Notification?.maxActions >= 3) {
+    actions.push({ action: 'maybe', title: 'Maybe' })
+  }
 
   // Tag per KIND per fixture: an availability nudge and a match reminder for
   // the same game must not replace each other (the default offsets collide at
@@ -97,7 +98,10 @@ self.addEventListener('notificationclick', (event) => {
   // Anything we can't vouch for falls back to the app root, so a tap still
   // opens the club rather than doing nothing (or going somewhere else).
   let url = safePath(d.url) || '/'
-  if (avail && d.fixtureId) url = `/fixtures?mvf_fixture=${encodeURIComponent(d.fixtureId)}&mvf_avail=${avail}`
+  if (d.fixtureId && (avail || url === '/fixtures' || url === '/')) {
+    url = `/fixtures?mvf_fixture=${encodeURIComponent(d.fixtureId)}`
+    if (avail) url += `&mvf_avail=${avail}`
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {

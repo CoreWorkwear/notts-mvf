@@ -65,6 +65,17 @@ describe('targets + payloads', () => {
     expect(targetsFor('availability', { roster, statusById }).sort()).toEqual(['b', 'outsider-free'])
     expect(targetsFor('match', { roster, statusById }).sort()).toEqual(['a', 'b'])
   })
+  test.each([{ key: 'xl', label: 'First Team' }, { key: 'xl', label: 'XL 11s' }, { label: 'First Team' }])('both reminders use 1st Team for the stored squad $label', team => {
+    const fixture = { ...f, team }
+    expect(availabilityPayload(fixture).title).toBe('Carlton Town v 1st Team')
+    expect(matchPayload(fixture).title).toBe('Carlton Town v 1st Team')
+  })
+  test.each(['XL', 'xl 11S', ' First Team '])('renames the historical alias %s stored as a match name', match_name => {
+    expect(matchupTitle({ ...f, team: { key: 'xl', match_name } })).toBe('Carlton Town v 1st Team')
+  })
+  test('keeps the competitive first-team name', () => {
+    expect(matchupTitle({ ...f, team: { key: 'xl', match_name: 'Nottingham' } })).toBe('Carlton Town v Nottingham')
+  })
   test('copy is unchanged from the function it replaces', () => {
     expect(matchupTitle(f)).toBe('Carlton Town v Notts MvF XL')
     expect(availabilityPayload(f)).toEqual({ title: 'Carlton Town v Notts MvF XL', body: 'Coming up — are you in? Tap to set your availability.', fixtureId: 'f1', withAvailability: true, url: '/fixtures' })

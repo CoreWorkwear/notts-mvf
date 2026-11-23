@@ -4,6 +4,7 @@ import Toast from './Toast'
 import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { teamLabel } from '../lib/teams'
 import { FIXTURE_TYPES } from '../lib/constants'
 import { todayISO } from '../lib/format'
 import { geocodePostcode, normalizePostcode } from '../lib/geocode'
@@ -43,10 +44,22 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   const [w3w, setW3w] = useState('')
   const [status, setStatus] = useState('scheduled')
   const [competitionId, setCompetitionId] = useState('')
+  // True while the venue / address / postcode on screen are the ones WE copied
+  // in from an opponent's home ground, not ones the manager typed or that came
+  // with the fixture. Only an autofill may be replaced or cleared by another.
+  const autoVenue = useRef(false)
 
   // Prefill (or clear) when the sheet opens.
   useEffect(() => {
     if (!open) return
+    // A saved away game whose venue IS its opponent's ground on file counts as
+    // our fill, so correcting the opponent moves the ground with it. Anything
+    // else that came with the fixture is the manager's and is left alone.
+    const opp0 = opponents.find((o) => o.id === fixture?.opponent_id)
+    autoVenue.current = !!fixture && fixture.home_away === 'Away' && !!opp0?.home_venue
+      && (fixture.venue ?? '') === (opp0.home_venue ?? '')
+      && (fixture.address ?? '') === (opp0.home_address ?? '')
+      && (fixture.postcode ?? '') === (opp0.home_postcode ?? '')
     setError(null)
     setInvalid(new Set())
     setTeamId(fixture?.team_id ?? teams[0]?.id ?? '')
@@ -65,16 +78,37 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Selecting an existing opponent fills the venue from their saved home ground
-  // (still editable — overridden for a home/neutral game). Only fills fields the
-  // opponent actually has, so picking a name-only opponent won't wipe what's typed.
+  // An opponent's saved home ground is where an AWAY game is played, so that is
+  // the only time it is copied in — and as one ground, all three fields
+  // together (blanking the ones they have not got), never field by field: a
+  // ground name over the previous opponent's address and postcode sent the
+  // map, directions and weather to the wrong place. It never touches a venue
+  // the manager typed or one the fixture already had; it only fills blanks and
+  // replaces (or, for a home game, removes) its own earlier fill.
+  function fillGround(oppId, homeOrAway) {
+    const opp = opponents.find((o) => o.id === oppId)
+    const hasGround = !!(opp?.home_venue || opp?.home_address || opp?.home_postcode)
+    const blank = !venue.trim() && !address.trim() && !postcode.trim()
+    if (homeOrAway === 'Away' && hasGround) {
+      if (!blank && !autoVenue.current) return
+      setVenue(opp.home_venue ?? ''); setAddress(opp.home_address ?? ''); setPostcode(opp.home_postcode ?? '')
+      autoVenue.current = true
+      if (opp.home_venue) clearInvalid('venue')
+    } else if (autoVenue.current) {
+      setVenue(''); setAddress(''); setPostcode('')
+      autoVenue.current = false
+    }
+  }
   function pickOpponent(id) {
     setOpponentId(id); clearInvalid('opponent')
-    const opp = opponents.find((o) => o.id === id)
-    if (opp?.home_venue) setVenue(opp.home_venue)
-    if (opp?.home_address) setAddress(opp.home_address)
-    if (opp?.home_postcode) setPostcode(opp.home_postcode)
+    fillGround(id, homeAway)
   }
+  function pickHomeAway(v) {
+    setHomeAway(v)
+    fillGround(opponentId, v)
+  }
+  // Anything typed into the three fields makes them the manager's own.
+  const typed = (set) => (e) => { autoVenue.current = false; set(e.target.value) }
 
   // League defaults from the team but is shown as a placeholder hint, not a
   // pre-filled value (which reads as stale). The default is applied on save.
@@ -85,8 +119,8 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   // old wording mentioned only availability, and there is no undo.
   async function onDelete() {
     const ask = fixture.hasResult
-      ? 'Bin this fixture off? It has a result logged: the score, scorers, line-up and subs all go with it, and there is no undo.'
-      : 'Bin this fixture off? Any availability and line-up for it go too.'
+      ? 'Permanently delete this fixture, result, scorers, availability, line-up and subs?'
+      : 'Permanently delete this fixture, its availability and line-up?'
     if (!confirm(ask)) return
     setBusy(true)
     const { error } = await supabase.from('fixtures').delete().eq('id', fixture.id)
@@ -108,13 +142,13 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
     if (!venue.trim()) miss.push('venue')
     if (miss.length) {
       setInvalid(new Set(miss))
-      setError(`Still needs: ${miss.join(', ')}.`)
+      setError(`Required: ${miss.join(', ')}.`)
       return
     }
     // Guard the required FKs so a not-yet-loaded season/profile can't produce a
     // silent insert that the DB rejects ("save does nothing").
-    if (!seasonId) { setError('No season selected yet — pick a season up top, then try again.'); return }
-    if (!profile?.club_id) { setError('Your profile is still loading — give it a second and try again.'); return }
+    if (!seasonId) { setError('Select a season before saving.'); return }
+    if (!profile?.club_id) { setError('Profile loading. Try again shortly.'); return }
 
     setBusy(true)
     try {
@@ -173,16 +207,16 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
   return (
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} onDismiss={() => setError(null)} />
-      <p className="kicker"><span className="kicker-rule">{editing ? 'EDIT FIXTURE' : 'NEW FIXTURE'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 26 }}>{editing ? 'Edit the game' : 'Add a game'}</h2>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{editing ? 'Edit fixture' : 'Add fixture'}</h2>
 
-      <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
+      <form className="fixture-form col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="field">
-          <label className="label">Team</label>
-          <select className="select" value={teamId} aria-invalid={invalid.has('team') || undefined}
-            onChange={(e) => { setTeamId(e.target.value); clearInvalid('team') }}>
-            {teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-          </select>
+          <span className="label">Team</span>
+          <div className="fixture-pills" role="group" aria-label="Team">
+            {teams.map(t => <button key={t.id} type="button" className={'chip' + (t.key === 'community' ? ' community' : '')}
+              aria-pressed={teamId === t.id} aria-invalid={invalid.has('team') || undefined}
+              onClick={() => { setTeamId(t.id); clearInvalid('team') }}>{teamLabel(t)}</button>)}
+          </div>
         </div>
 
         <div className="field">
@@ -198,7 +232,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           )}
           {opponentId && (
             <div className="mt-2">
-              <span className="label">Badge (reused for every game vs them)</span>
+              <span className="label">Opponent badge</span>
               <div className="mt-1">
                 <ImageUpload
                   key={opponentId} // fresh picker per opponent, so the badge preview can't lag behind the pick
@@ -231,7 +265,7 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
         <div className="row gap-2">
           <div className="field grow">
             <label className="label">Home / Away</label>
-            <select className="select" value={homeAway} onChange={(e) => setHomeAway(e.target.value)}>
+            <select className="select" aria-label="Home or away" value={homeAway} onChange={(e) => pickHomeAway(e.target.value)}>
               <option>Home</option><option>Away</option>
             </select>
           </div>
@@ -251,26 +285,25 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
             {competitions.filter((c) => c.active !== false || c.id === competitionId)
               .map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (retired)' : ''}</option>)}
           </select>
-          <span className="dim" style={{ fontSize: 12 }}>Set up leagues & cups in Manage → Competitions.</span>
+          {competitions.length === 0 && <span className="dim" style={{ fontSize: 'var(--type-caption)' }}>Add competitions in Manage → Competitions</span>}
         </div>
 
         <div className="field">
           <label className="label">Venue</label>
           <input className="input" value={venue} aria-invalid={invalid.has('venue') || undefined}
-            onChange={(e) => { setVenue(e.target.value); clearInvalid('venue') }} placeholder="e.g. Harvey Hadden 4G" />
+            onChange={(e) => { autoVenue.current = false; setVenue(e.target.value); clearInvalid('venue') }} placeholder="e.g. Harvey Hadden 4G" />
         </div>
         <div className="row gap-2">
           <div className="field grow">
             <label className="label">Address</label>
-            <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input className="input" aria-label="Address" value={address} onChange={typed(setAddress)} />
           </div>
           <div className="field">
             <label className="label">Postcode</label>
-            <input className="input" value={postcode} onChange={(e) => setPostcode(e.target.value)}
+            <input className="input" aria-label="Postcode" value={postcode} onChange={typed(setPostcode)}
               placeholder="NG18 4YD" style={{ textTransform: 'uppercase', maxWidth: 130 }} />
           </div>
         </div>
-        <span className="dim" style={{ fontSize: 12, marginTop: -6 }}>Postcode sets the weather for the right pitch.</span>
         <div className="field">
           <label className="label">what3words</label>
           <input className="input" value={w3w} onChange={(e) => setW3w(e.target.value)} placeholder="///filled.count.soap" />
@@ -284,15 +317,17 @@ export default function FixtureForm({ open, onClose, onSaved, teams, opponents, 
           </select>
         </div>
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>
-          {busy ? 'Saving…' : editing ? 'Save changes' : 'Add fixture'}
-        </button>
         {editing && (
           <button type="button" className="btn btn-ghost btn-block" disabled={busy} onClick={onDelete}
             style={{ color: 'var(--red-bright)', borderColor: 'var(--line)' }}>
-            Bin this fixture
+            Delete fixture
           </button>
         )}
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>
+            {busy ? 'Saving…' : editing ? 'Save changes' : 'Add fixture'}
+          </button>
+        </div>
       </form>
     </Sheet>
   )

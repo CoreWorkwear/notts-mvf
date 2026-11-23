@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
@@ -8,9 +8,7 @@ import { logError } from '../lib/logger'
 // the squad map client-side (keyed by profile_id, free-typed name as fallback)
 // — robust, and exactly the data-integrity rule from HANDOVER §3.
 export function useResults(seasonId) {
-  const [played, setPlayed] = useState([])
-  const [needsResult, setNeedsResult] = useState([])
-  const [postponed, setPostponed] = useState([]) // concluded P-P games, archived
+  const [fixtures, setFixtures] = useState([])
   const [squad, setSquad] = useState([])         // [{id, name, first, active}] — active players (the picker)
   const [everyone, setEveryone] = useState([])   // same shape, inactive included (resolves past contributors)
   const [loading, setLoading] = useState(true)
@@ -18,13 +16,16 @@ export function useResults(seasonId) {
   // Latest wins: a slower, older load (last season's, say) must not overwrite
   // the newer one. Each load takes a ticket; a stale ticket sets nothing.
   const reqRef = useRef(0)
+  const activeSeason = useRef(seasonId)
+  activeSeason.current = seasonId
 
   const load = useCallback(async () => {
+    if (activeSeason.current !== seasonId) return
     const id = ++reqRef.current
     const fresh = () => id === reqRef.current
     // No season yet (or the seasons fetch failed): resolve to an empty,
     // non-loading state — don't sit on "Fetching the results…" forever.
-    if (!seasonId) { setPlayed([]); setNeedsResult([]); setPostponed([]); setSquad([]); setEveryone([]); setLoading(false); setError(null); return }
+    if (!seasonId) { setFixtures([]); setSquad([]); setEveryone([]); setLoading(false); setError(null); return }
     setLoading(true)
     setError(null)
 
@@ -70,10 +71,7 @@ export function useResults(seasonId) {
         squadById,
       }))
 
-      const concluded = (f) => fixtureConcluded(f.match_date, f.kickoff)
-      setPlayed(fixtures.filter((f) => f.result))
-      setNeedsResult(fixtures.filter((f) => !f.result && f.status !== 'postponed' && concluded(f)))
-      setPostponed(fixtures.filter((f) => !f.result && f.status === 'postponed' && concluded(f)))
+      setFixtures(fixtures)
       setSquad(all.filter((p) => p.active))
       setEveryone(all)
     } catch (e) {
@@ -87,7 +85,26 @@ export function useResults(seasonId) {
 
   useEffect(() => { load() }, [load])
 
-  return { played, needsResult, postponed, squad, everyone, loading, error, refetch: load }
+  // Keep the server's match-date/kick-off order as a game moves between groups.
+  // A confirmed score is available even when the subsequent read is slow.
+  const applySavedResult = useCallback(({ id, result, goals }) => {
+    if (activeSeason.current !== seasonId) return
+    const byMinute = [...goals].sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999))
+    setFixtures(current => current.map(f => f.id === id ? { ...f, result, goals: byMinute } : f))
+  }, [seasonId])
+
+  const { played, needsResult, postponed } = useMemo(() => {
+    const played = [], needsResult = [], postponed = []
+    for (const f of fixtures) {
+      if (f.result) played.push(f)
+      else if (fixtureConcluded(f.match_date, f.kickoff)) {
+        if (f.status === 'postponed') postponed.push(f)
+        else needsResult.push(f)
+      }
+    }
+    return { played, needsResult, postponed }
+  }, [fixtures])
+  return { played, needsResult, postponed, squad, everyone, loading, error, refetch: load, applySavedResult }
 }
 
 // W / D / L from our perspective.

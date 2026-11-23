@@ -70,8 +70,15 @@ export function targetsFor(kind, { roster, statusById }) {
 }
 
 // --- payloads ---------------------------------------------------------------
+// Historical squad labels can also have been saved as the competitive name.
+const firstTeamAlias = (name) => /^(?:xl(?: 11s)?|first team|1st team)$/i.test(name?.trim() ?? '')
+
 export function matchupTitle(f) {
-  const us = f?.team?.match_name || f?.team?.label || 'Notts MvF'
+  const team = f?.team
+  const firstTeam = team?.match_name
+    ? firstTeamAlias(team.match_name)
+    : team?.key === 'xl' || (!team?.key && firstTeamAlias(team?.label))
+  const us = firstTeam ? '1st Team' : team?.match_name || team?.label || 'Notts MvF'
   const them = f?.opponent?.name ?? 'the opposition'
   return f?.home_away === 'Home' ? `${us} v ${them}` : `${them} v ${us}`
 }

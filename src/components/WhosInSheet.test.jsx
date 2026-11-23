@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -54,7 +54,7 @@ describe("WhosInSheet — a failed load doesn't pose as an empty team-sheet", ()
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.queryByText(/no one's in yet/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/counting heads/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/loading availability/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
   })
 
@@ -112,7 +112,7 @@ describe('WhosInSheet — a late answer for a previous fixture is ignored', () =
     store.defer['availability:fA'] = new Promise((r) => { releaseA = r })
 
     const { rerender } = render(<WhosInSheet open fixture={fxA} onClose={() => {}} />)
-    expect(screen.getByText(/counting heads/i)).toBeInTheDocument()
+    expect(screen.getByText(/loading availability/i)).toBeInTheDocument()
 
     rerender(<WhosInSheet open fixture={fxB} onClose={() => {}} />)
     expect(await screen.findByText('Sam')).toBeInTheDocument()
@@ -120,5 +120,72 @@ describe('WhosInSheet — a late answer for a previous fixture is ignored', () =
     await act(async () => { releaseA(); await new Promise((r) => setTimeout(r, 0)) })
     expect(screen.getByText('Sam')).toBeInTheDocument()
     expect(screen.queryByText('Joe')).not.toBeInTheDocument()
+  })
+})
+
+// After kickoff nobody can answer (0034), so chasing is pointless; what is left
+// to do on the sheet is the subs. And whoever was named in the line-up owes
+// subs whatever they answered: a late call-up never said "in".
+describe('WhosInSheet — a game that has kicked off', () => {
+  const past = { ...fxA, id: 'fP', match_date: '2020-01-05' }
+  const tom = member('p3', 'Tom', 'Reid')
+
+  beforeEach(() => {
+    auth.isAdmin = true
+    store.tables.availability = [{ fixture_id: 'fP', status: 'in', profile: joe }]
+    store.tables.team_memberships = [{ team_id: 't1', profiles: joe }, { team_id: 't1', profiles: sam }, { team_id: 't1', profiles: tom }]
+    store.tables.payments = [{ fixture_id: 'fP', profile_id: 'p3', paid: true }]
+    store.tables.lineups = [
+      { fixture_id: 'fP', profile_id: 'p1', profiles: joe },
+      { fixture_id: 'fP', profile_id: 'p3', profiles: tom },
+      { fixture_id: 'fP', profile_id: null, profiles: null }, // a since-deleted player: a name with no account
+    ]
+  })
+  afterEach(() => { auth.isAdmin = false })
+
+  test('no chase and no push reminder; the subs list and the CSV are still there', async () => {
+    render(<WhosInSheet open fixture={past} onClose={() => {}} />)
+    expect(await screen.findByRole('button', { name: /export csv/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /copy whatsapp reminder/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /push reminder/i })).toBeNull()
+  })
+
+  test('a line-up player who never answered is on the subs list, once, with his paid state', async () => {
+    const { container } = render(<WhosInSheet open fixture={past} onClose={() => {}} />)
+    await screen.findByRole('button', { name: /export csv/i })
+    const rows = [...container.querySelectorAll('.sub-row')].map((r) => r.textContent)
+    expect(rows).toHaveLength(2) // Joe (in + line-up, once) and Tom (line-up only)
+    expect(rows[0]).toMatch(/Joe M.*Not paid/)
+    expect(rows[1]).toMatch(/Tom R.*Paid/)
+    expect(screen.getByText(/1 of 2 paid/)).toBeInTheDocument()
+  })
+
+  test('before kickoff the line-up plays no part: subs are the players who are in', async () => {
+    store.tables.availability = [{ fixture_id: 'fA', status: 'in', profile: joe }]
+    store.tables.lineups = [{ fixture_id: 'fA', profile_id: 'p3', profiles: tom }]
+    const { container } = render(<WhosInSheet open fixture={fxA} onClose={() => {}} />)
+    await screen.findByRole('button', { name: /export csv/i })
+    expect(container.querySelectorAll('.sub-row')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: /copy whatsapp reminder/i })).toBeInTheDocument()
+  })
+})
+
+// supabase-js hands AuthContext a freshly parsed session on every return to the
+// foreground and every hourly refresh, so `user` is a new object each time. The
+// load effect keyed on the object: copy the chase message, paste it in WhatsApp,
+// come back, and the sheet had blanked to "Counting heads…" and lost its place.
+describe('WhosInSheet — the same user coming back is not a reason to reload', () => {
+  afterEach(() => { auth.user = { id: 'u1' } })
+
+  test('a new user object with the same id keeps the sheet as it is', async () => {
+    store.tables.availability = [{ fixture_id: 'fA', status: 'in', profile: joe }]
+    store.tables.team_memberships = [{ team_id: 't1', profiles: joe }]
+    const { rerender } = render(<WhosInSheet open fixture={fxA} onClose={() => {}} />)
+    expect(await screen.findByText('Joe')).toBeInTheDocument()
+
+    auth.user = { id: 'u1' } // same person, new object
+    rerender(<WhosInSheet open fixture={fxA} onClose={() => {}} />)
+    expect(screen.queryByText(/loading availability/i)).toBeNull()
+    expect(screen.getByText('Joe')).toBeInTheDocument()
   })
 })

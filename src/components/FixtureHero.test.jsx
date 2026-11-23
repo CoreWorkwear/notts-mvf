@@ -6,6 +6,7 @@ vi.mock('./Crest', () => ({ default: () => null }))
 vi.mock('./WeatherStrip', () => ({ default: () => null }))
 
 import FixtureHero from './FixtureHero'
+import { todayISO } from '../lib/format'
 
 const fixture = {
   id: 'f1', match_date: '2030-12-01', kickoff: '13:00:00', home_away: 'Home', fixture_type: 'League',
@@ -14,6 +15,38 @@ const fixture = {
 }
 
 describe('FixtureHero — manager keeps counts + their own availability', () => {
+  test('shows the matchday countdown alongside the real date', () => {
+    render(<FixtureHero fixture={{ ...fixture, match_date: todayISO() }} />)
+    expect(screen.getByText(/next fixture · today/i)).toBeVisible()
+  })
+  test('shows how many of the squad have answered, including players who are out', () => {
+    render(<FixtureHero fixture={{ ...fixture, rosterSize: 12, replied: 9 }} isAdmin />)
+    const meter = screen.getByRole('meter', { name: 'Squad replies' })
+    expect(meter).toHaveAttribute('aria-valuenow', '9')
+    expect(meter).toHaveAttribute('aria-valuemax', '12')
+  })
+  test('the next fixture shows its actual day, kick-off and availability outside the photo', () => {
+    const game = { ...fixture, match_date: '2030-12-04', myStatus: 'in' }
+    const { container } = render(<FixtureHero fixture={game} />)
+    expect(screen.getByText('Wednesday')).toBeInTheDocument()
+    expect(screen.getByText('4 Dec').closest('time')).toHaveAttribute('datetime', '2030-12-04')
+    expect(screen.getByText('13:00')).toBeInTheDocument()
+    expect(screen.getByText('Your availability')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Confirmed')
+    expect(container.querySelector('.hero-poster')).not.toContainElement(screen.getByRole('button', { name: "I'm in" }))
+  })
+  test('a historical fixture without a competitive name announces its squad once', () => {
+    const team = { key: 'xl', label: 'XL 11s', is_first_team: true }
+    const { container } = render(<FixtureHero fixture={{ ...fixture, team }} />)
+    expect(container.textContent.match(/1st Team/g)).toHaveLength(1)
+  })
+  test('a player opens the squad list in one tap without changing their answer', async () => {
+    const onOpenWhosIn = vi.fn(), onSetAvail = vi.fn()
+    render(<FixtureHero fixture={fixture} onOpenWhosIn={onOpenWhosIn} onSetAvail={onSetAvail} />)
+    await userEvent.click(screen.getByRole('button', { name: /who's in/i }))
+    expect(onOpenWhosIn).toHaveBeenCalledOnce()
+    expect(onSetAvail).not.toHaveBeenCalled()
+  })
   test('admin sees squad state and a personal In/Maybe/Out', () => {
     render(<FixtureHero fixture={fixture} isAdmin onSetAvail={() => {}} onOpenWhosIn={() => {}} onEdit={() => {}} />)
     expect(screen.getByText(/not replied/i)).toBeInTheDocument()        // counts lead
@@ -41,7 +74,7 @@ describe('FixtureHero — team-scoped availability', () => {
     render(<FixtureHero fixture={fixture} isAdmin={false} blockReason="other-team" onSetAvail={() => {}} onOpenWhosIn={() => {}} onEdit={() => {}} />)
     expect(screen.queryByRole('button', { name: "I'm in" })).not.toBeInTheDocument()
     expect(screen.queryByText(/YOU IN\?/)).not.toBeInTheDocument()
-    expect(screen.getByText(/First Team squad only/i)).toBeInTheDocument()
+    expect(screen.queryByText(/squad only|stepping up/i)).not.toBeInTheDocument()
   })
 
   test('a manager outside that squad keeps squad state but loses their own control', () => {
@@ -52,6 +85,6 @@ describe('FixtureHero — team-scoped availability', () => {
 
   test('a pending player still gets the sign-off line, not the squad one', () => {
     render(<FixtureHero fixture={fixture} isAdmin={false} blockReason="pending" onSetAvail={() => {}} onOpenWhosIn={() => {}} onEdit={() => {}} />)
-    expect(screen.getByText(/signs you off/i)).toBeInTheDocument()
+    expect(screen.getByText(/awaiting manager approval/i)).toBeInTheDocument()
   })
 })

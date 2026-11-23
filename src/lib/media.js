@@ -23,7 +23,7 @@ export function pickHeroImage({ pinnedUrl = null, pool = [], seed = '' } = {}) {
 // stays on top so white display type reads (DESIGN-SYSTEM §1).
 export function heroBackground({ pinnedUrl = null, pool = [], seed = '', gradient } = {}) {
   const img = pickHeroImage({ pinnedUrl, pool, seed })
-  return img ? `var(--hero-wash), url("${cssUrl(img)}")` : `var(--hero-wash), ${gradient}`
+  return img ? `var(--hero-wash), url("${cssUrl(img)}")` : `var(--kit-wash), ${gradient}`
 }
 
 // Make a URL safe to drop inside a CSS url("…"). The value comes from a

@@ -17,8 +17,8 @@ export default function SetNewPassword() {
 
   async function onSubmit(e) {
     e.preventDefault()
-    if (password.length < MIN_PASSWORD) { setError(`Pick a password of at least ${MIN_PASSWORD} characters.`); return }
-    if (password !== confirm) { setError("Those passwords don't match."); return }
+    if (password.length < MIN_PASSWORD) { setError(`Use at least ${MIN_PASSWORD} characters for your password.`); return }
+    if (password !== confirm) { setError("Passwords don't match."); return }
     setError(null); setBusy(true)
     const { error } = await updatePassword(password)
     setBusy(false)
@@ -30,14 +30,13 @@ export default function SetNewPassword() {
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      <div className="page" style={{ paddingTop: 'calc(48px + var(--safe-t))', maxWidth: 460, margin: '0 auto', width: '100%' }}>
+      <div className="page" style={{ paddingTop: 'calc(var(--space-12) + var(--safe-t))', maxWidth: 460, margin: '0 auto', width: '100%' }}>
         <div className="center">
           <Crest size={56} />
-          <h1 className="display mt-3" style={{ fontSize: 30 }}>New password</h1>
-          <p className="kicker mt-2"><span className="kicker-rule">RESET</span></p>
+          <h1 className="display mt-3" style={{ fontSize: 'var(--type-display)' }}>New password</h1>
         </div>
 
-        <Toast message={done ? "Password changed — you're in 👍" : null} tone="success" onDismiss={() => {}} />
+        <Toast message={done ? "Password changed" : null} tone="success" onDismiss={() => {}} />
         {error && <p className="field-error mt-4 center">{error}</p>}
 
         <form className="col gap-3 mt-4" onSubmit={onSubmit}>

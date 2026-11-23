@@ -61,16 +61,16 @@ describe('classifiers', () => {
 
 describe('friendlyError — club-voice copy a player can act on', () => {
   test.each([
-    [new TypeError('Load failed'), /check your signal/],
+    [new TypeError('Load failed'), /Check your connection and try again/],
     [{ message: 'JWT issued at future' }, /clock/],
-    [{ message: 'JWT expired', code: 'PGRST301' }, /sign out and back in/],
-    [{ message: 'new row violates row-level security policy' }, /not allowed/],
-    [{ message: 'duplicate key value violates unique constraint', code: '23505' }, /duplicate/],
+    [{ message: 'JWT expired', code: 'PGRST301' }, /Sign out and sign in again/],
+    [{ message: 'new row violates row-level security policy' }, /Permission denied/],
+    [{ message: 'duplicate key value violates unique constraint', code: '23505' }, /already exists/],
     [{ message: 'Invalid login credentials' }, /wrong email or password/i],
     [{ message: 'User already registered' }, /already an account/],
     [{ message: 'Too many requests', status: 429 }, /minute/],
-    [{ message: 'The object exceeded the maximum allowed size', status: 413 }, /too big/],
-    [{ message: 'Internal error', status: 500 }, /wobble/],
+    [{ message: 'The object exceeded the maximum allowed size', status: 413 }, /File too large\. Choose a smaller photo/],
+    [{ message: 'Internal error', status: 500 }, /Server unavailable\. Try again shortly\./],
   ])('%o → %s', (err, re) => {
     expect(friendlyError(err)).toMatch(re)
   })

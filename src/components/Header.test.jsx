@@ -51,3 +51,31 @@ describe('Header manager-view toggle (§3)', () => {
     expect(setManagerView).toHaveBeenCalledWith(false)
   })
 })
+
+// The confirm used to be a hand-rolled sheet INSIDE <header>. The header has a
+// backdrop-filter, which makes it the containing block for a fixed child: the
+// backdrop was 57px tall, the sheet sat above the top of the screen, and only
+// the lower part of "Stay / Sign out" showed (both phone engines). It now goes
+// through the shared Sheet, as a sibling of the header. vitest runs css:false,
+// so the on-screen proof is e2e/overlays.spec.js; this pins the structure.
+describe('Header sign-out confirm', () => {
+  test('opens as a dialog that is not inside the header', async () => {
+    const { container } = renderHeader()
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Sign out?')
+    expect(container.querySelector('header')).not.toContainElement(dialog)
+  })
+
+  test('Stay closes it without signing out; Sign out signs out', async () => {
+    renderHeader()
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Stay' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(auth.signOut).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await userEvent.click(screen.getByRole('dialog').querySelector('.btn-primary'))
+    expect(auth.signOut).toHaveBeenCalledTimes(1)
+  })
+})

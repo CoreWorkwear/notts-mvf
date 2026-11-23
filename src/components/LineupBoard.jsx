@@ -1,16 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import ClubImage from './ClubImage'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLineup } from '../hooks/useLineup'
 import { FORMATION_NAMES, stateToRows, filledCount, swapStarters } from '../lib/lineup'
 import { fixtureMatchup } from '../lib/teams'
 import { supabase } from '../lib/supabase'
 import PitchView, { initials } from './PitchView'
 import Toast from './Toast'
+import { haptic } from '../lib/haptics'
+import { friendlyError } from '../lib/errors'
 
 // Match-details line-up. Players see the picked XI + subs on a pitch; managers
-// tap a slot to assign an available player (those who marked in / maybe), choose
-// a formation, and name the subs. Saved to the lineups table (admin-write RLS).
+// tap a slot to assign a player, choose a formation, and name the subs. The pool
+// is those who marked in / maybe, widening to the whole squad from kickoff
+// (useLineup). Saved to the lineups table (admin-write RLS).
+
+// What a player answered, as the picker shows it. "none" and "out" only reach
+// the pool from kickoff, when the whole squad is offered.
+const ANSWER_TAG = {
+  in: { label: 'In', cls: 'tag-in' },
+  maybe: { label: 'Maybe', cls: 'tag-maybe' },
+  none: { label: 'No answer', cls: '' },
+  out: { label: 'Said out', cls: 'tag-out' },
+}
+
 export default function LineupBoard({ fixture, isAdmin, open }) {
-  const { saved, pool, names, photos = {}, hasLineup, loading, error: loadError, refetch, save } = useLineup(fixture, open)
+  const { saved, pool, wholeSquad = false, names, photos = {}, hasLineup, loading, error: loadError, refetch, save } = useLineup(fixture, open)
   const [formation, setFormation] = useState(saved.formation)
   const [starters, setStarters] = useState(saved.starters)
   const [subs, setSubs] = useState(saved.subs)
@@ -20,6 +34,9 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   const [error, setError] = useState(null)
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState(null)
+  const [justSaved, setJustSaved] = useState(false)
+  const picker = useRef(null)
+  const slotButton = useRef(null)
 
   // Push the named line-up to the picked players (starters + subs). Uses the
   // admin-gated send-push function; fails gracefully if it's unavailable.
@@ -32,8 +49,8 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         body: {
           profileIds: ids,
           title: fixtureMatchup(fixture),
-          body: "Team news — you're named in the squad 👕. Tap for the line-up.",
-          url: '/fixtures',
+          body: "You're in the squad. View line-up.",
+          url: `/fixtures?mvf_fixture=${encodeURIComponent(fixture.id)}&view=lineup`,
         },
       })
       if (error) throw error
@@ -46,35 +63,77 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
     }
   }
 
-  // Sync local editor state whenever the saved line-up (re)loads.
+  // A reload after a failed save may return the previous XI. Keep the draft
+  // available for retry until the manager saves it or leaves the editor.
   useEffect(() => {
+    if (editing) return
     setFormation(saved.formation); setStarters(saved.starters); setSubs(saved.subs)
-  }, [saved])
+  }, [saved, editing])
 
   const placed = useMemo(() => new Set([...Object.values(starters).filter(Boolean), ...subs]), [starters, subs])
   const remaining = pool.filter((p) => !placed.has(p.id))
 
+  useEffect(() => {
+    if (active == null) return
+    picker.current?.focus({ preventScroll: true })
+    picker.current?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+  }, [active])
+
+  function openPicker(slot, button) {
+    slotButton.current = button
+    setActive(slot)
+  }
+  function closePicker() {
+    setActive(null)
+    slotButton.current?.focus({ preventScroll: true })
+    slotButton.current?.scrollIntoView?.({ block: 'nearest', behavior: 'instant' })
+  }
   function assign(id) {
+    haptic('tap')
     if (active === 'sub') setSubs((s) => [...s, id])
     else setStarters((st) => ({ ...st, [active]: id }))
-    setActive(null)
+    closePicker()
   }
-  function clearSlot(slot) { setStarters((st) => { const n = { ...st }; delete n[slot]; return n }); setActive(null) }
-  function removeSub(id) { setSubs((s) => s.filter((x) => x !== id)) }
+  function clearSlot(slot) {
+    haptic('tap')
+    setStarters((current) => {
+      const next = { ...current }
+      delete next[slot]
+      return next
+    })
+    closePicker()
+  }
+  function removeSub(id) {
+    haptic('tap')
+    setSubs((s) => s.filter((x) => x !== id))
+  }
 
   // Drag-and-drop: swap two filled slots, or move a player into an empty one.
   function swapSlots(from, to) {
+    haptic('tap')
     setActive(null)
     setStarters((st) => swapStarters(st, from, to))
   }
 
   async function onSave() {
-    setBusy(true); setError(null)
+    if (!navigator.onLine) {
+      setError("You're offline. Reconnect to save the line-up.")
+      return
+    }
+    setBusy(true); setError(null); setActive(null)
     const rows = stateToRows(fixture.id, { formation, starters, subs }, names)
-    const { error } = await save(rows)
-    setBusy(false)
-    if (error) setError(error.message)
-    else setEditing(false)
+    try {
+      const { error } = await save(rows)
+      if (error) throw error
+      haptic('success')
+      setJustSaved(true)
+      setEditing(false)
+    } catch (err) {
+      haptic('warn')
+      setError(friendlyError(err, "Couldn't save the line-up. Try again."))
+    } finally {
+      setBusy(false)
+    }
   }
 
   // "Done" is not "Save": leave the editor showing the SAVED line-up (the one
@@ -86,7 +145,7 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
   // First load only: once a line-up is on screen a reload (after a save) must
   // not blank the board.
-  if (loading && !hasLineup) return <p className="muted center mt-4">Loading the line-up…</p>
+  if (loading && !hasLineup && !editing) return <p className="muted center mt-4">Loading the line-up…</p>
 
   // A failed load leaves the hook with an EMPTY line-up, which is exactly what
   // "not picked yet" looks like. Say it failed instead: the squad was being told
@@ -98,29 +157,31 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
   if (loadError && !hasLineup && !editing) {
     return (
       <div className="mt-4">
-        <p className="field-error" role="alert">Couldn't load the line-up. Check your signal and have another go.</p>
+        <p className="field-error" role="alert">Couldn't load the line-up. Check your connection.</p>
         <button className="btn btn-ghost btn-block mt-3" onClick={() => refetch()}>Try again</button>
       </div>
     )
   }
 
   // ---- read-only (players, or admin not editing) ----
-  if (!isAdmin || !editing) {
+  if (!isAdmin || !editing || busy) {
+    const showPitch = busy ? placed.size > 0 : hasLineup
     return (
       <div className="mt-3">
-        {!hasLineup ? (
-          <div className="empty"><p className="empty-title">Line-up not picked yet</p>
-            <p>{isAdmin ? 'Pick your XI from the players who are in.' : 'The manager names the side closer to kickoff.'}</p></div>
+        <Toast message={justSaved ? 'Line-up saved.' : null} tone="success" onDismiss={() => setJustSaved(false)} />
+        {busy && <p role="status" className="save-progress">Saving line-up…</p>}
+        {!showPitch ? (
+          <div className="empty"><p className="empty-title">Line-up not picked yet</p></div>
         ) : (
           <>
-            <PitchView formation={formation} starters={starters} names={names} photos={photos} />
+            <PitchView teamKey={fixture.team?.key} formation={formation} starters={starters} names={names} photos={photos} />
             {subs.length > 0 && (
               <div className="mt-3">
                 <p className="kicker" style={{ color: 'var(--bone-mute)' }}>SUBS · {subs.length}</p>
                 <div className="col gap-2 mt-2">
                   {subs.map((id) => (
                     <div key={id} className="sub-line">
-                      {photos[id] ? <img className="sub-av" src={photos[id]} alt="" /> : <span className="sub-av mono">{initials(names[id])}</span>}
+                      {photos[id] ? <ClubImage sizes="40px" className="sub-av" src={photos[id]} alt="" /> : <span className="sub-av mono">{initials(names[id])}</span>}
                       <span>{names[id] || '—'}</span>
                     </div>
                   ))}
@@ -131,17 +192,17 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         )}
         {/* A reload that failed (after a save) leaves the board showing what was
             loaded before. Say so, and don't push a line-up we can't vouch for. */}
-        {loadError && hasLineup && (
+        {!busy && loadError && hasLineup && (
           <div className="row spread gap-2 mt-3" style={{ alignItems: 'center' }}>
-            <p className="field-error" role="alert">Couldn't refresh the line-up. This may not be the latest.</p>
+            <p className="field-error" role="alert">Couldn't refresh the line-up. Showing saved line-up.</p>
             <button type="button" className="chip" onClick={() => refetch()}>Try again</button>
           </div>
         )}
-        {isAdmin && (
+        {isAdmin && !busy && (
           hasLineup ? (
             <div className="col gap-2 mt-4">
               <button className="btn btn-primary btn-block" disabled={pushing || !!loadError} onClick={notifySquad}>
-                {pushing ? 'Sending…' : pushMsg || 'Push the line-up to the squad'}
+                {pushing ? 'Sending…' : pushMsg || 'Send line-up to squad'}
               </button>
               <button className="btn btn-ghost btn-block" onClick={() => setEditing(true)}>Edit the line-up</button>
             </div>
@@ -155,52 +216,53 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
 
   // ---- editor (admin) ----
   return (
-    <div className="mt-3">
+    <>
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
 
-      <p className="kicker"><span className="kicker-rule">FORMATION</span></p>
+      <p className="kicker mt-3"><span className="kicker-rule">FORMATION</span></p>
       <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
         {FORMATION_NAMES.map((f) => (
-          <button key={f} type="button" className="chip" aria-pressed={formation === f} onClick={() => setFormation(f)}>{f}</button>
+          <button key={f} type="button" className="chip mono" aria-pressed={formation === f} onClick={() => setFormation(f)}>{f}</button>
         ))}
       </div>
 
-      <p className="dim mt-3" style={{ fontSize: 13 }}>{filledCount(starters)}/11 picked · tap a shirt to fill it, drag one onto another to swap</p>
-      <PitchView formation={formation} starters={starters} names={names} photos={photos} onTapSlot={(slot) => setActive(slot)} onSwap={swapSlots} activeSlot={active} />
+      <p className="dim mt-3" style={{ fontSize: 'var(--type-sm)' }}>{filledCount(starters)}/11 picked · Tap a shirt to pick · Drag to swap</p>
+      <PitchView teamKey={fixture.team?.key} formation={formation} starters={starters} names={names} photos={photos} onTapSlot={openPicker} onSwap={swapSlots} activeSlot={active} />
 
       <div className="mt-4">
         <div className="row spread" style={{ alignItems: 'center' }}>
           <p className="kicker"><span className="kicker-rule">SUBS · {subs.length}</span></p>
-          <button type="button" className="chip" onClick={() => setActive('sub')}>+ Add sub</button>
+          <button type="button" className="chip" onClick={e => openPicker('sub', e.currentTarget)}>+ Add sub</button>
         </div>
         <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
-          {subs.length === 0 ? <span className="dim" style={{ fontSize: 13 }}>No subs named.</span>
+          {subs.length === 0 ? <span className="dim" style={{ fontSize: 'var(--type-sm)' }}>No subs named.</span>
             : subs.map((id) => (
               <button key={id} type="button" className="chip" onClick={() => removeSub(id)}>{names[id] || '—'} ✕</button>
             ))}
         </div>
       </div>
 
-      {/* Picker — the available pool (in/maybe) not already placed. */}
+      {/* Picker — the pool not already placed: in/maybe, or the whole squad from kickoff. */}
       {active != null && (
-        <div className="picker mt-4">
+        <div className="picker mt-4" ref={picker} tabIndex={-1} role="group" aria-label={active === 'sub' ? 'Pick a sub' : 'Pick a player'}>
           <div className="row spread" style={{ alignItems: 'center' }}>
             <p className="kicker"><span className="kicker-rule">{active === 'sub' ? 'PICK A SUB' : 'PICK A PLAYER'}</span></p>
-            <button type="button" className="chip" onClick={() => setActive(null)}>Close</button>
+            <button type="button" className="chip" onClick={closePicker}>Close</button>
           </div>
           {typeof active === 'number' && starters[active] && (
             <button type="button" className="btn btn-ghost btn-block mt-2" onClick={() => clearSlot(active)}
               style={{ color: 'var(--red-bright)' }}>Clear this slot</button>
           )}
+          {wholeSquad && <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>Whole squad · After kick-off</p>}
           {remaining.length === 0 ? (
-            <p className="dim mt-2" style={{ fontSize: 13 }}>Everyone available is on the sheet.</p>
+            <p className="dim mt-2" style={{ fontSize: 'var(--type-sm)' }}>{wholeSquad ? 'All players selected' : 'All available players selected'}</p>
           ) : (
             <div className="col gap-2 mt-2">
               {remaining.map((p) => (
                 <button key={p.id} type="button" className="card pick-row" onClick={() => assign(p.id)}>
-                  {p.photo_url ? <img className="pick-av" src={p.photo_url} alt="" /> : <span className="pick-av mono">{initials(p.name)}</span>}
+                  {p.photo_url ? <ClubImage sizes="40px" className="pick-av" src={p.photo_url} alt="" /> : <span className="pick-av mono">{initials(p.name)}</span>}
                   <span className="grow" style={{ textAlign: 'left' }}>{p.name}</span>
-                  <span className={'tag ' + (p.status === 'in' ? 'tag-in' : 'tag-maybe')}>{p.status === 'in' ? 'In' : 'Maybe'}</span>
+                  <span className={'tag ' + (ANSWER_TAG[p.status] ?? ANSWER_TAG.none).cls}><span className="status-light" aria-hidden="true" />{(ANSWER_TAG[p.status] ?? ANSWER_TAG.none).label}</span>
                 </button>
               ))}
             </div>
@@ -208,25 +270,23 @@ export default function LineupBoard({ fixture, isAdmin, open }) {
         </div>
       )}
 
-      <div className="row gap-2 mt-5">
-        <button className="btn btn-ghost grow" disabled={busy} onClick={onDone}>Done</button>
-        <button className="btn btn-primary grow" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save line-up'}</button>
+      <div className="row gap-2 sheet-actions">
+        <button className="btn btn-ghost grow" onClick={onDone}>Done</button>
+        <button className="btn btn-primary grow" onClick={onSave}>Save line-up</button>
       </div>
 
       <style>{`
-        .picker { border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; background: var(--coal); }
-        .pick-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--slate);
+        .picker { border: 1px solid var(--line-2); border-radius: var(--r-card); padding: var(--space-3); background: var(--coal); }
+        .pick-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--slate);
           color: var(--bone); border: 1px solid var(--line); }
         .pick-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none;
-          background: var(--coal); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600;
+          background: var(--coal); border: 1px solid var(--line-2); font-size: var(--type-xs); font-weight: 600;
           overflow: hidden; object-fit: cover; }
         img.pick-av { object-fit: cover; }
-        .sub-line { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-        .sub-av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none;
-          background: var(--slate); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600; overflow: hidden; object-fit: cover; }
         .tag-in { color: var(--green-bright); border-color: var(--green); }
         .tag-maybe { color: var(--amber); border-color: var(--amber); }
+        .tag-out { color: var(--red-bright); border-color: var(--red); }
       `}</style>
-    </div>
+    </>
   )
 }

@@ -3,7 +3,7 @@
 Run order (SQL editor, top to bottom), each as its own run:
 
 1. `migrations/0001_init_schema_and_rls.sql` — tables, helpers, triggers, RLS, grants.
-2. every later numbered migration in order, `0002_*` … `0038_*`, each as its own
+2. every later numbered migration in order, `0002_*` … `0039_*`, each as its own
    run. They are cumulative and the order matters. **Never re-run a migration
    older than the newest one already applied.** Several of them `alter policy`
    in place (0031 above all), so replaying one silently puts back policy bodies
@@ -24,6 +24,12 @@ needs it to be in place before a deploy.
 id and does nothing on any other database. A data fix on live goes in as a
 numbered file like this one, with the before-image and the undo in its header,
 rather than as an ad-hoc statement nobody can find afterwards.
+
+`0039_half_time_optional.sql` makes `results.ht_us` / `ht_them` nullable (NULL =
+half time not recorded) and adds a both-or-neither CHECK. It changes no rows.
+**Run it before the build that ships with it goes live** (safe: the old build
+never writes NULL). The other order works for a new result but refuses a save
+that *clears* a half time already stored. T32 in step 4 checks it landed.
 
 ## Two settings that live in the Dashboard, not in SQL
 The database cannot enforce these, so they are easy to lose and worth checking

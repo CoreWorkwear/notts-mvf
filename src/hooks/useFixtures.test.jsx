@@ -1,7 +1,7 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-const store = vi.hoisted(() => ({ tables: {}, reject: false, respErr: false, calls: 0, hold: false, held: [] }))
+const store = vi.hoisted(() => ({ tables: {}, reject: false, respErr: false, calls: 0, hold: false, held: [], write: vi.fn() }))
 vi.mock('../lib/supabase', () => {
   const make = (table) => {
     store.calls++
@@ -15,6 +15,7 @@ vi.mock('../lib/supabase', () => {
     const snapshot = JSON.parse(JSON.stringify(store.tables[table] ?? []))
     const gate = store.hold ? new Promise((r) => store.held.push(r)) : Promise.resolve()
     const q = {
+      upsert: (row) => store.write(row),
       then: (onF, onR) => gate.then(() => (store.reject
         ? Promise.reject(new TypeError('Load failed'))
         : Promise.resolve(store.respErr
@@ -29,7 +30,7 @@ vi.mock('../lib/supabase', () => {
 })
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }))
 
-import { useFixtures } from './useFixtures'
+import { useFixtures, saveFixtureAnswer } from './useFixtures'
 
 beforeEach(() => {
   store.reject = false
@@ -37,6 +38,7 @@ beforeEach(() => {
   store.calls = 0
   store.hold = false
   store.held = []
+  store.write.mockReset()
   store.tables = {
     fixtures: [{
       id: 'fix-1', match_date: '2026-12-01', kickoff: '13:00:00', home_away: 'Home',
@@ -51,6 +53,45 @@ beforeEach(() => {
     opponents: [],
     team_memberships: [],
   }
+})
+
+describe('an availability tap on a slow connection', () => {
+  test('the selection survives a stale read and route remount, and confirms before the next read finishes', async () => {
+    store.tables.team_memberships = [{ team_id: 't1', profiles: { id: 'u1', active: true, approved: true, is_player: true } }]
+    let finishWrite
+    store.write.mockImplementation(() => new Promise(resolve => { finishWrite = resolve }))
+    const first = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(first.result.current.loaded).toBe(true))
+    let saving
+    act(() => { saving = saveFixtureAnswer('fix-1', 'u1', 'in') })
+    expect(first.result.current.fixtures[0]).toMatchObject({ myStatus: 'in', availabilityPending: true, noReply: 0 })
+    first.unmount()
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+    expect(result.current.fixtures[0]).toMatchObject({ myStatus: 'in', availabilityPending: true })
+    await act(async () => { expect(await saveFixtureAnswer('fix-1', 'u1', 'out')).toBe(false) })
+    expect(store.write).toHaveBeenCalledTimes(1)
+
+    store.hold = true
+    act(() => { result.current.refetch() })
+    const calls = store.calls
+    await act(async () => { finishWrite({ error: null }); expect(await saving).toBe(true) })
+    expect(store.calls).toBe(calls)
+    expect(result.current.fixtures[0].availabilityPending).toBeFalsy()
+    await act(async () => { store.held.splice(0).forEach(release => release()) })
+    expect(result.current.fixtures[0]).toMatchObject({ myStatus: 'in', counts: { in: 1 }, noReply: 0 })
+  })
+
+  test('two rejected writes roll back the selected answer and reply count', async () => {
+    store.tables.team_memberships = [{ team_id: 't1', profiles: { id: 'u1', active: true, approved: true, is_player: true } }]
+    store.write.mockRejectedValue(new TypeError('Load failed'))
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+    await act(async () => { expect(await saveFixtureAnswer('fix-1', 'u1', 'maybe')).toBe(false) })
+    expect(store.write).toHaveBeenCalledTimes(2)
+    expect(result.current.fixtures[0]).toMatchObject({ myStatus: null, counts: { maybe: 0 }, noReply: 1 })
+    expect(result.current.fixtures[0].availabilityPending).toBeFalsy()
+  })
 })
 
 describe('useFixtures — one-to-one results embed', () => {
@@ -268,5 +309,64 @@ describe('useFixtures — counts and noReply are roster-based', () => {
     expect(f.counts.in).toBe(1)
     expect(f.replied).toBe(1)
     expect(f.noReply).toBe(1) // b — not 0
+  })
+})
+
+// `loaded`: has a load ever COMPLETED? Pages used "loading && list is empty" to
+// mean "first load", which is also true on every refetch of a season that
+// really has no fixtures: the page swapped to the Loader, unmounting an open
+// Add-a-fixture form, and a manager back from WhatsApp with the postcode found
+// it blank.
+describe('useFixtures — loaded', () => {
+  test('false until the first load completes, then true (even when the season is empty)', async () => {
+    store.tables.fixtures = []
+    const { result } = renderHook(() => useFixtures('s1'))
+    expect(result.current.loaded).toBe(false)
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(true)
+    expect(result.current.fixtures).toEqual([])
+  })
+
+  test('a first load that fails is not "loaded"', async () => {
+    store.respErr = true
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(false)
+    expect(result.current.error).toBeTruthy()
+  })
+
+  test('stays true through a later refetch, including one that fails', async () => {
+    const { result } = renderHook(() => useFixtures('s1'))
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+    store.respErr = true
+    await act(async () => { await result.current.refetch() })
+    expect(result.current.loaded).toBe(true)
+    expect(result.current.error).toBeTruthy()
+  })
+})
+
+// `loaded` answers for the season on screen. Carried over from another season
+// it made a failed load of THIS one read as an empty diary ("Nothing in the
+// diary yet", no error, no retry) after viewing a season with no fixtures.
+describe('useFixtures — loaded is per season', () => {
+  test('switching season: not loaded again until that season\u2019s own load completes', async () => {
+    const { result, rerender } = renderHook(({ s }) => useFixtures(s), { initialProps: { s: 's1' } })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+
+    store.hold = true
+    rerender({ s: 's2' })
+    expect(result.current.loaded).toBe(false)
+    await act(async () => { store.held.splice(0).forEach((r) => r()) })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+  })
+
+  test('a failed load of the season switched to is not "loaded"', async () => {
+    const { result, rerender } = renderHook(({ s }) => useFixtures(s), { initialProps: { s: 's1' } })
+    await waitFor(() => expect(result.current.loaded).toBe(true))
+
+    store.respErr = true
+    rerender({ s: 's2' })
+    await waitFor(() => expect(result.current.error).toBeTruthy())
+    expect(result.current.loaded).toBe(false)
   })
 })

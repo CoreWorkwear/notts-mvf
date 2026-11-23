@@ -66,24 +66,24 @@ export function isPermissionDenied(e) {
 // to the raw message so nothing is ever silently swallowed.
 export function friendlyError(e, fallback) {
   const d = describeError(e)
-  if (isClockSkew(e)) return "Your phone's clock looks wrong — set it to update automatically, then try again."
-  if (isNetworkError(e)) return "Couldn't reach the server — check your signal and give it another go."
-  if (isAuthStale(e)) return 'Your sign-in has gone stale — sign out and back in.'
-  if (isPermissionDenied(e)) return "You're not allowed to do that."
+  if (isClockSkew(e)) return "Set your phone's clock to automatic, then try again."
+  if (isNetworkError(e)) return "Connection failed. Check your connection and try again."
+  if (isAuthStale(e)) return 'Session expired. Sign out and sign in again.'
+  if (isPermissionDenied(e)) return "Permission denied."
   switch (d.code) {
-    case '23505': return "That one's already in — looks like a duplicate."
-    case '23503': return "That's still linked to something else — sort that first."
+    case '23505': return "This entry already exists."
+    case '23503': return "This entry is linked to another record."
     case '23502':
     case '23514':
-    case '22P02': return "Something's missing or not right — check the form and try again."
-    case 'PGRST116': return "Couldn't find that one — it may have been removed."
+    case '22P02': return "Check the form and try again."
+    case 'PGRST116': return "Record unavailable."
     default: break
   }
   if (/invalid login credentials/i.test(d.message)) return 'Wrong email or password.'
-  if (/email not confirmed/i.test(d.message)) return 'Confirm your email first — check your inbox.'
+  if (/email not confirmed/i.test(d.message)) return 'Check your inbox to confirm your email.'
   if (/already (been )?registered/i.test(d.message)) return "There's already an account with that email."
-  if (d.status === 429 || /rate limit|too many requests/i.test(d.message)) return 'Steady on — give it a minute and try again.'
-  if (d.status === 413 || /too large|exceeded the maximum allowed size/i.test(d.message)) return "That file's too big — try a smaller photo."
-  if (d.status != null && d.status >= 500) return 'The server had a wobble — try again in a moment.'
-  return fallback ?? (d.message && d.message !== 'Unknown error' ? d.message : 'Something went wrong — try again.')
+  if (d.status === 429 || /rate limit|too many requests/i.test(d.message)) return 'Too many requests. Try again in a minute.'
+  if (d.status === 413 || /too large|exceeded the maximum allowed size/i.test(d.message)) return "File too large. Choose a smaller photo."
+  if (d.status != null && d.status >= 500) return 'Server unavailable. Try again shortly.'
+  return fallback ?? (d.message && d.message !== 'Unknown error' ? d.message : 'Something went wrong. Try again.')
 }

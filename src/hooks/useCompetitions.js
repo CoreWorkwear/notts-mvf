@@ -9,6 +9,9 @@ export function useCompetitions(seasonId) {
   const { profile } = useAuth()
   const [competitions, setCompetitions] = useState([])
   const [loading, setLoading] = useState(true)
+  // A load of THIS season has completed at least once (see useFixtures).
+  const [loadedSeason, setLoadedSeason] = useState(null)
+  const loaded = !!seasonId && loadedSeason === seasonId
   const [error, setError] = useState(null)
   // Latest wins: a slower, older season's load must not overwrite the newer one.
   const reqRef = useRef(0)
@@ -29,6 +32,7 @@ export function useCompetitions(seasonId) {
       if (!fresh()) return
       if (fetchErr) throw fetchErr // failed load ≠ no competitions — catch keeps data + sets error
       setCompetitions(data ?? [])
+      setLoadedSeason(seasonId)
     } catch (e) {
       if (!fresh()) return
       logError('fetch', e ?? 'useCompetitions load failed', { hook: 'useCompetitions', seasonId })
@@ -57,5 +61,5 @@ export function useCompetitions(seasonId) {
     return res
   }
 
-  return { competitions, loading, error, refetch: load, save, remove }
+  return { competitions, loading, loaded, error, refetch: load, save, remove }
 }

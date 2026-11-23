@@ -58,3 +58,17 @@ describe('CalendarView — opening month', () => {
     expect(screen.getByText(label)).toBeInTheDocument()
   })
 })
+
+describe('CalendarView — a postponed game', () => {
+  const pp = { ...solo, id: 'p', postponed: true, status: 'postponed' }
+
+  test('is marked P-P in the list and its dot is not a live team dot', () => {
+    render(<CalendarView fixtures={[first, pp]} onOpen={vi.fn()} />)
+    const row = screen.getByText('Nottingham v Carlton').closest('button')
+    expect(row).toHaveTextContent('P-P')
+    expect(screen.getByRole('button', { name: '23' }).querySelector('.cal-dot.off')).not.toBeNull()
+    // the game that is on is untouched
+    expect(screen.getByText('Nottingham v Boston').closest('button')).not.toHaveTextContent('P-P')
+    expect(screen.getByRole('button', { name: '16' }).querySelector('.cal-dot.off')).toBeNull()
+  })
+})

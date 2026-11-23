@@ -3,7 +3,7 @@ import Sheet from './Sheet'
 import Toast from './Toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { fmtDateLong, fmtKO } from '../lib/format'
+import { fmtDateLong, fmtKO, hasKickedOff } from '../lib/format'
 import { MATCH_FEE } from '../lib/constants'
 import { buildFixtureCsv, csvFilename, downloadCsv } from '../lib/csv'
 import { isSquadMember, squadIds } from '../lib/players'
@@ -15,6 +15,8 @@ import { logError } from '../lib/logger'
 // list — the XI filling up, a big count, and a one-tap chase for the players who
 // haven't replied. For admins it also carries the weekly subs jobs (§10): a
 // paid/not-paid toggle per available player, and a per-fixture CSV export.
+// Once the game has kicked off nobody can answer any more (0034), so the chase
+// and the push nudge go; the subs stay, and gain anyone named in the line-up.
 export default function WhosInSheet({ open, onClose, fixture }) {
   const { user, isAdmin } = useAuth()
   const [groups, setGroups] = useState(null)
@@ -30,9 +32,14 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     // Open A then B quickly: A's late answer must not land under B's heading.
     let active = true
     setGroups(null); setError(null); setCopied(false)
+    // Whoever played owes subs, whatever they answered: a late call-up never
+    // said "in". Only asked for once the game has started.
+    const lineupQuery = hasKickedOff(fixture.match_date, fixture.kickoff)
+      ? supabase.from('lineups').select('profile_id, profiles(id, first_name, last_name, preferred)').eq('fixture_id', fixture.id)
+      : Promise.resolve({ data: [], error: null })
     ;(async () => {
       try {
-        const [availRes, rosterRes, payRes] = await Promise.all([
+        const [availRes, rosterRes, payRes, lineRes] = await Promise.all([
           supabase
             .from('availability')
             .select('status, profile:profiles(id, first_name, last_name, preferred, active, approved, is_player)')
@@ -42,10 +49,11 @@ export default function WhosInSheet({ open, onClose, fixture }) {
             .select('profiles!inner(id, first_name, last_name, active, approved, is_player)')
             .eq('team_id', fixture.team_id),
           supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
+          lineupQuery,
         ])
         if (!active) return
         // A failed fetch is an error, not "0 IN / no one's in yet".
-        const failed = availRes.error ?? rosterRes.error ?? payRes.error
+        const failed = availRes.error ?? rosterRes.error ?? payRes.error ?? lineRes.error
         if (failed) throw failed
 
         const paidById = Object.fromEntries((payRes.data ?? []).map((p) => [p.profile_id, p.paid]))
@@ -77,33 +85,61 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           if (!replied[p.id]) noReply.push(person(p, user))
         }
 
-        setGroups({ ...buckets, noReply })
+        // Named in the line-up but not down as "in". A row whose player has
+        // since been deleted has a name and no account: nothing to tick off.
+        const inIds = new Set(buckets.in.map((p) => p.id))
+        const alsoPlayed = []
+        for (const l of lineRes.data ?? []) {
+          const p = l.profiles
+          if (!p || inIds.has(p.id)) continue
+          inIds.add(p.id)
+          alsoPlayed.push({ ...person(p, user), paid: !!paidById[p.id] })
+        }
+
+        setGroups({ ...buckets, noReply, alsoPlayed })
       } catch (err) {
         if (!active) return
         logError('fetch', err, { where: 'WhosInSheet', fixtureId: fixture.id })
-        setError(friendlyError(err, "Couldn't load who's in — check your signal and try again."))
+        setError(friendlyError(err, "Couldn't load availability. Check your connection and retry."))
       }
     })()
     return () => { active = false }
-  }, [open, fixture, user, attempt])
+    // user?.id, not user: supabase-js hands over a new user object on every
+    // return to the foreground, and the sheet blanked and reloaded each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, fixture, user?.id, attempt])
 
   if (!fixture) return null
   const f = fixture
   const isCommunity = f.team?.key === 'community'
 
+  // The game has started: answers are shut, so there is nobody left to chase.
+  const kickedOff = hasKickedOff(f.match_date, f.kickoff)
+  // Everyone with subs to pay: the players who are in, plus (after kickoff)
+  // anyone named in the line-up who never said so.
+  const payers = groups ? [...groups.in, ...groups.alsoPlayed] : []
+
+  // `g &&`: a reload can null the groups while a write is in flight, and an
+  // updater that reads g.in on null throws inside render (the whole app goes).
+  const setPaid = (id, paid) => setGroups((g) => g && {
+    ...g,
+    in: g.in.map((p) => (p.id === id ? { ...p, paid } : p)),
+    alsoPlayed: g.alsoPlayed.map((p) => (p.id === id ? { ...p, paid } : p)),
+  })
+
   async function togglePaid(id, next) {
-    setGroups((g) => ({ ...g, in: g.in.map((p) => (p.id === id ? { ...p, paid: next } : p)) }))
+    setPaid(id, next)
     const { error } = await supabase
       .from('payments')
       .upsert({ fixture_id: f.id, profile_id: id, paid: next }, { onConflict: 'fixture_id,profile_id' })
     if (error) {
-      setGroups((g) => ({ ...g, in: g.in.map((p) => (p.id === id ? { ...p, paid: !next } : p)) }))
-      setToast("Couldn't save that payment — check your signal and give it another go.")
+      setPaid(id, !next)
+      setToast("Couldn't save payment. Check your connection and retry.")
     }
   }
 
   function exportCsv() {
-    const players = groups.in.map((p) => ({ name: p.name, preferred: p.preferred, paid: !!p.paid }))
+    const players = payers.map((p) => ({ name: p.name, preferred: p.preferred, paid: !!p.paid }))
     downloadCsv(csvFilename(f), buildFixtureCsv(f, players))
   }
 
@@ -116,13 +152,13 @@ export default function WhosInSheet({ open, onClose, fixture }) {
         body: {
           fixtureId: f.id, withAvailability: true,
           title: fixtureMatchup(f),
-          body: `${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO — you in?`,
+          body: `${fmtDateLong(f.match_date)} · ${fmtKO(f.kickoff)} KO · Confirm availability`,
         },
       })
       if (error) throw error
-      setPushMsg(`Pushed to ${data?.sent ?? 0}`)
+      setPushMsg(`Reminder sent to ${data?.sent ?? 0}`)
     } catch {
-      setPushMsg('Push unavailable (deploy send-push?)')
+      setToast("Couldn't send reminder. Check your connection and retry.")
     } finally {
       setPushing(false)
       setTimeout(() => setPushMsg(null), 2800)
@@ -133,8 +169,8 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     const names = groups.noReply.map((p) => p.first).join(', ')
     const matchup = fixtureMatchup(f)
     const msg =
-      `Players 👊 ${matchup} — ${fmtDateLong(f.match_date)}, ${fmtKO(f.kickoff)} KO at ${f.venue}.\n` +
-      `Still waiting on: ${names}.\nYou in? Give us a shout.`
+      `${matchup} · ${fmtDateLong(f.match_date)} · ${fmtKO(f.kickoff)} KO${f.venue ? ` · ${f.venue}` : ''}\n` +
+      `Awaiting replies: ${names}.\nPlease confirm your availability.`
     try {
       await navigator.clipboard.writeText(msg)
       setCopied(true)
@@ -144,14 +180,14 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     }
   }
 
-  const paidCount = groups?.in.filter((p) => p.paid).length ?? 0
+  const paidCount = payers.filter((p) => p.paid).length
 
   return (
     <Sheet open={open} onClose={onClose}>
       <Toast message={toast} onDismiss={() => setToast(null)} />
       <p className="kicker"><span className={'kicker-rule' + (isCommunity ? ' community' : '')}>WHO'S IN</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>{fixtureMatchup(f)}</h2>
-      <p className="mono muted" style={{ fontSize: 13 }}>{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO</p>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{fixtureMatchup(f)}</h2>
+      <p className="mono muted" style={{ fontSize: 'var(--type-sm)' }}>{fmtDateLong(f.match_date)} · {fmtKO(f.kickoff)} KO</p>
 
       {error ? (
         <div className="mt-5">
@@ -159,11 +195,11 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           <button className="btn btn-ghost btn-block mt-3" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
         </div>
       ) : !groups ? (
-        <p className="muted mt-5 center">Counting heads…</p>
+        <p className="muted mt-5 center">Loading availability…</p>
       ) : (
         <>
           <div className="ti-count">
-            <span className="display ti-num" key={groups.in.length}>{groups.in.length}</span>
+            <span className="mono ti-num" key={groups.in.length}>{groups.in.length}</span>
             <span className="kicker">IN</span>
           </div>
 
@@ -173,26 +209,21 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           <Group title="Can't make it" colour="var(--red-bright)" people={groups.out} />
           <Group title="Not replied" colour="var(--bone-mute)" people={groups.noReply} />
 
-          {groups.noReply.length > 0 && (
-            <button className="btn btn-primary btn-block mt-5" onClick={chase}>
-              {copied ? 'Copied — paste in WhatsApp ✓' : `Chase the ${groups.noReply.length} who've gone quiet`}
-            </button>
-          )}
-          {isAdmin && groups.in.length + groups.noReply.length > 0 && (
+          {!kickedOff && isAdmin && groups.in.length + groups.noReply.length > 0 && (
             <button className="btn btn-ghost btn-block mt-2" disabled={pushing} onClick={pushReminder}>
               {pushing ? 'Sending…' : pushMsg || 'Send push reminder'}
             </button>
           )}
 
           {/* Subs — admin only (HANDOVER §10) */}
-          {isAdmin && groups.in.length > 0 && (
+          {isAdmin && payers.length > 0 && (
             <div className="subs mt-5">
               <div className="row spread" style={{ alignItems: 'center' }}>
                 <p className="kicker"><span className="kicker-rule">SUBS · £{MATCH_FEE}</span></p>
                 <button className="chip" onClick={exportCsv}>Export CSV</button>
               </div>
               <div className="col gap-2 mt-3">
-                {groups.in.map((p) => (
+                {payers.map((p) => (
                   <div key={p.id} className="sub-row">
                     <span className="grow">{p.isMe ? 'You' : p.name}{p.preferred ? <span className="dim"> · {p.preferred}</span> : null}</span>
                     <button className={'chip' + (p.paid ? ' paid-on' : '')} aria-pressed={!!p.paid} onClick={() => togglePaid(p.id, !p.paid)}>
@@ -201,30 +232,37 @@ export default function WhosInSheet({ open, onClose, fixture }) {
                   </div>
                 ))}
               </div>
-              <p className="dim mt-2" style={{ fontSize: 12 }}>
-                {paidCount} of {groups.in.length} paid · £{paidCount * MATCH_FEE} collected
+              <p className="dim mt-2" style={{ fontSize: 'var(--type-caption)' }}>
+                {paidCount} of {payers.length} paid · £{paidCount * MATCH_FEE} collected
               </p>
+            </div>
+          )}
+          {!kickedOff && groups.noReply.length > 0 && (
+            <div className="sheet-actions">
+              <button className="btn btn-primary btn-block" onClick={chase}>
+                {copied ? 'Reminder copied' : `Copy WhatsApp reminder (${groups.noReply.length})`}
+              </button>
             </div>
           )}
         </>
       )}
 
       <style>{`
-        .ti-count { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 6px; }
-        .ti-num { font-size: 64px; line-height: 1; animation: pop var(--t-med) backwards; }
+        .ti-count { display: flex; align-items: baseline; gap: var(--space-2); margin: var(--space-4) 0 var(--space-1); }
+        .ti-num { font-size: var(--type-poster); line-height: 1; animation: pop var(--t-med) backwards; }
         @keyframes pop { from { opacity: 0; transform: scale(.7) } to { opacity: 1; transform: scale(1) } }
-        .ti-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
-        .ti-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px;
+        .ti-grid { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
+        .ti-slot { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); width: 56px;
           animation: fadeup var(--t-med) backwards; }
         .ti-av { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
-          font-family: var(--font-mono); font-weight: 600; font-size: 15px; color: var(--bone);
+          font-family: var(--font-mono); font-weight: 600; font-size: var(--type-body); color: var(--bone);
           background: var(--slate); border: 1.5px solid var(--av-accent); }
-        .ti-name { font-size: 11px; color: var(--bone-mute); text-align: center; line-height: 1.1;
+        .ti-name { font-size: var(--type-xs); color: var(--bone-mute); text-align: center; line-height: 1.1;
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 56px; }
-        .ti-empty { color: var(--bone-dim); font-size: 14px; margin-top: 8px; }
-        .grp { margin-top: 18px; }
-        .grp-people { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-        .sub-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .ti-empty { color: var(--bone-dim); font-size: var(--type-sm); margin-top: var(--space-2); }
+        .grp { margin-top: var(--space-4); }
+        .grp-people { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+        .sub-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--line); }
         .chip.paid-on { background: var(--green-dim-2); border-color: var(--green); color: var(--green-bright); }
       `}</style>
     </Sheet>
@@ -245,7 +283,7 @@ function person(p, user) {
 }
 
 function TeamSheet({ people, accent }) {
-  if (people.length === 0) return <p className="ti-empty">No one's in yet — be the first.</p>
+  if (people.length === 0) return <p className="ti-empty">No players available</p>
   return (
     <div className="ti-grid">
       {people.map((p, i) => (
@@ -261,9 +299,9 @@ function TeamSheet({ people, accent }) {
 function Group({ title, colour, people }) {
   return (
     <div className="grp">
-      <p className="kicker" style={{ color: colour }}>{title} · {people.length}</p>
+      <p className="kicker" style={{ color: colour }}><span className="status-light" aria-hidden="true" /> {title} · <span className="mono">{people.length}</span></p>
       {people.length === 0 ? (
-        <p className="dim" style={{ fontSize: 14, marginTop: 6 }}>—</p>
+        <p className="dim" style={{ fontSize: 'var(--type-sm)', marginTop: 'var(--space-1)' }}>—</p>
       ) : (
         <div className="grp-people">
           {people.map((p) => (

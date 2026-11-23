@@ -37,10 +37,10 @@ export default defineConfig({
         name: 'Nottinghamshire MvF',
         short_name: 'Notts MvF',
         description: 'Fixtures, availability, results and stats for Nottinghamshire MvF.',
-        theme_color: '#0c0f0d',
-        background_color: '#0c0f0d',
+        theme_color: '#F2F0E9',
+        background_color: '#F2F0E9',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         start_url: '/',
         scope: '/',
         icons: [
@@ -50,7 +50,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}', 'font-licences/*.txt'],
         // The not-found page for missing /assets/* files (public/assets/404.html)
         // must never be precached, or the SW would serve it as a 200.
         globIgnores: ['**/assets/404.html'],

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useReminders } from '../hooks/useReminders'
-import { OFFSET_CHOICES, CUTOFF_HOURS, offsetLabel } from '../lib/reminders'
+import { OFFSET_CHOICES } from '../lib/reminders'
 import Toast from '../components/Toast'
 import Loader from '../components/Loader'
 import PageHead from '../components/PageHead'
@@ -30,13 +30,13 @@ export default function Reminders() {
   const toggle = (setter) => (h) => setter((cur) => (cur.includes(h) ? cur.filter((x) => x !== h) : [...cur, h]).sort(sortDesc))
 
   async function onSave() {
-    if (availabilityEnabled && availabilityOffsets.length === 0) { setError('Availability nudges are on but have no times picked.'); return }
-    if (matchEnabled && matchOffsets.length === 0) { setError('Match reminders are on but have no times picked.'); return }
+    if (availabilityEnabled && availabilityOffsets.length === 0) { setError('Choose an availability reminder time.'); return }
+    if (matchEnabled && matchOffsets.length === 0) { setError('Choose a match reminder time.'); return }
     setBusy(true); setError(null); setNotice(null)
     const { error } = await save({ availabilityEnabled, matchEnabled, availabilityOffsets, matchOffsets })
     setBusy(false)
     if (error) setError(error.message)
-    else setNotice('Reminder settings saved 👍')
+    else setNotice('Reminder settings saved')
   }
 
   // Only the first load gets the Loader — a post-save refetch keeps the form up.
@@ -49,7 +49,6 @@ export default function Reminders() {
     <div className="page">
       <div className="empty mt-5" role="alert">
         <p className="empty-title">Couldn't load the reminders</p>
-        <p>Looks like a dodgy connection. Have another go.</p>
         <button className="btn btn-primary mt-3" onClick={refetch}>Try again</button>
       </div>
     </div>
@@ -60,19 +59,16 @@ export default function Reminders() {
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
       <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
       <PageHead kicker="REMINDERS" title="Auto reminders" />
-      <p className="muted mt-2" style={{ fontSize: 14 }}>
-        Two kinds of nudge, each with its own timings. Availability usually closes ~3 days out — times after that ( <b>*</b> ) are your call.
-      </p>
 
       <ReminderBlock
         title="Availability nudges"
-        who="Goes to players who've not replied or said maybe — chasing the undecided."
+        who="Recipients · Not replied or Maybe"
         enabled={availabilityEnabled} setEnabled={setAvailabilityEnabled}
         offsets={availabilityOffsets} onToggle={toggle(setAvailabilityOffsets)}
       />
       <ReminderBlock
         title="Match reminders"
-        who="Goes to players who said in or maybe — the match details before kickoff."
+        who="Recipients · In or Maybe"
         enabled={matchEnabled} setEnabled={setMatchEnabled}
         offsets={matchOffsets} onToggle={toggle(setMatchOffsets)}
       />
@@ -80,40 +76,36 @@ export default function Reminders() {
       <button className="btn btn-primary btn-block mt-4" disabled={busy} onClick={onSave}>
         {busy ? 'Saving…' : 'Save'}
       </button>
-      <p className="dim mt-3" style={{ fontSize: 12 }}>Reminders only reach players with notifications turned on.</p>
+      <p className="dim mt-3" style={{ fontSize: 'var(--type-caption)' }}>Delivery · Players with notifications on</p>
     </div>
   )
 }
 
 function ReminderBlock({ title, who, enabled, setEnabled, offsets, onToggle }) {
   return (
-    <div className="card mt-3" style={{ padding: 16 }}>
+    <div className="card mt-3" style={{ padding: 'var(--space-4)' }}>
       <div className="row spread" style={{ alignItems: 'flex-start' }}>
-        <div style={{ paddingRight: 12 }}>
+        <div style={{ paddingRight: 'var(--space-3)' }}>
           <span style={{ fontWeight: 600 }}>{title}</span>
-          <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>{who}</p>
+          <p className="dim" style={{ fontSize: 'var(--type-caption)', marginTop: 'var(--space-1)' }}>{who}</p>
         </div>
         <button className={'chip' + (enabled ? ' paid-on' : '')} aria-pressed={enabled} onClick={() => setEnabled((e) => !e)}>
           {enabled ? 'On ✓' : 'Off'}
         </button>
       </div>
 
-      <div className={'mt-3' + (enabled ? '' : ' dim')} style={enabled ? {} : { opacity: 0.5, pointerEvents: 'none' }}>
-        <p className="label">Send…</p>
+      <div className="mt-3">
+        <p className="label">Before kick-off</p>
         <div className="row gap-2 mt-2" style={{ flexWrap: 'wrap' }}>
           {OFFSET_CHOICES.map((c) => {
-            const discretionary = c.hours < CUTOFF_HOURS
             return (
-              <button key={c.hours} type="button" className="chip" aria-pressed={offsets.includes(c.hours)}
+              <button key={c.hours} type="button" className="chip" aria-pressed={offsets.includes(c.hours)} disabled={!enabled}
                 onClick={() => onToggle(c.hours)}>
-                {c.label} before{discretionary ? ' *' : ''}
+                {c.label} before
               </button>
             )
           })}
         </div>
-        <p className="dim mt-3" style={{ fontSize: 12 }}>
-          {offsets.length ? `Firing ${offsets.map(offsetLabel).join(', ')} before kickoff.` : 'No times picked.'}
-        </p>
       </div>
     </div>
   )

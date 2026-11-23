@@ -31,7 +31,7 @@ describe('NewsForm', () => {
     await userEvent.type(screen.getByLabelText('Message'), 'On the 4G this week')
     await userEvent.click(screen.getByRole('button', { name: /post & notify/i }))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
-    expect(screen.getByRole('alert')).toHaveTextContent(/push didn't go out/i)
+    expect(screen.getByRole('alert')).toHaveTextContent('Posted. Notification delivery failed.')
   })
 
   test('can post quietly without a push', async () => {
@@ -39,7 +39,7 @@ describe('NewsForm', () => {
     render(<NewsForm open onClose={() => {}} onPost={onPost} />)
     await userEvent.type(screen.getByLabelText('Headline'), 'Minor note')
     await userEvent.type(screen.getByLabelText('Message'), 'No need to ping')
-    await userEvent.click(screen.getByRole('button', { name: /push to everyone/i })) // toggle push off
+    await userEvent.click(screen.getByRole('button', { name: 'Notify members', pressed: true }))
     await userEvent.click(screen.getByRole('button', { name: /^post$/i }))
     await waitFor(() => expect(onPost).toHaveBeenCalledWith({ title: 'Minor note', body: 'No need to ping', push: false }))
   })

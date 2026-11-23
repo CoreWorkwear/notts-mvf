@@ -52,6 +52,12 @@ export function SeasonProvider({ children }) {
     return () => { active = false }
   }, [isAuthed, refreshSeasons])
 
+  useEffect(() => {
+    if (!isAuthed) return
+    window.addEventListener('online', refreshSeasons)
+    return () => window.removeEventListener('online', refreshSeasons)
+  }, [isAuthed, refreshSeasons])
+
   const season = seasons.find((s) => s.id === seasonId) ?? null
   return (
     <SeasonContext.Provider value={{ seasons, season, seasonId, setSeasonId, loading, error, refreshSeasons }}>

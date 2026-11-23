@@ -2,16 +2,50 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { rowsToState } from '../lib/lineup'
 import { squadIds } from '../lib/players'
+import { hasKickedOff } from '../lib/format'
 import { logError } from '../lib/logger'
 
 const EMPTY = { formation: '4-4-2', starters: {}, subs: [] }
+// The editor can unmount between the delete and insert. A reopened sheet
+// waits for that fixture's write before reading its side or offering another save.
+const pendingWrites = new Map()
+
+async function replaceLineup(fixtureId, rows) {
+  const snapshot = await supabase.from('lineups')
+    .select('fixture_id, profile_id, player_name, role, slot, position, formation')
+    .eq('fixture_id', fixtureId)
+  if (snapshot.error) throw snapshot.error
+  const removed = await supabase.from('lineups').delete().eq('fixture_id', fixtureId)
+  if (removed.error) throw removed.error
+  if (!rows.length) return
+
+  try {
+    const inserted = await supabase.from('lineups').insert(rows)
+    if (inserted.error) throw inserted.error
+  } catch (error) {
+    if (snapshot.data?.length) {
+      try {
+        const restored = await supabase.from('lineups').insert(snapshot.data)
+        if (restored.error) throw restored.error
+      } catch (restoreError) {
+        logError('write', restoreError, { hook: 'useLineup', op: 'save.restore', fixtureId })
+      }
+    }
+    throw error
+  }
+}
 
 // Line-up for one fixture: the saved selection (formation + starters + subs) and
-// the pool of available players (who marked themselves in / maybe) to pick from.
+// the pool of players to pick from. Before kickoff that is the squad members who
+// marked themselves in / maybe. From kickoff it is the WHOLE squad for that
+// team: answers are shut by then with no admin path (0034), so the in/maybe
+// rule left no way to field a player who turned up unannounced, and he got no
+// appearance (useClub counts appearances from lineups).
 // RLS: anyone who can see the fixture reads the line-up; admins write it.
 export function useLineup(fixture, open) {
   const [saved, setSaved] = useState(EMPTY)
-  const [pool, setPool] = useState([])     // [{ id, name, status }] in/maybe, in first
+  const [pool, setPool] = useState([])     // [{ id, name, status }] status: in | maybe | none | out, in that order
+  const [wholeSquad, setWholeSquad] = useState(false) // true once the pool is the whole squad (from kickoff)
   const [names, setNames] = useState({})   // id -> 'First Last' (covers pool + picked)
   const [photos, setPhotos] = useState({}) // id -> headshot url (covers pool + picked)
   const [hasLineup, setHasLineup] = useState(false)
@@ -30,26 +64,29 @@ export function useLineup(fixture, open) {
     const fresh = () => id === reqRef.current && fixtureId === fixtureRef.current
     // No fixture: resolve to an empty, non-loading state rather than a permanent
     // "Loading the line-up…".
-    if (!fixtureId) { setSaved(EMPTY); setHasLineup(false); setPool([]); setNames({}); setPhotos({}); setLoading(false); setError(null); return }
+    if (!fixtureId) { setSaved(EMPTY); setHasLineup(false); setPool([]); setWholeSquad(false); setNames({}); setPhotos({}); setLoading(false); setError(null); return }
     setLoading(true)
     setError(null)
     // Fail closed: a fixture with no resolvable team has no roster, so nobody is
     // pickable — better an empty pool for a moment than the wrong squad in it.
     const rosterQuery = fixture.team_id
       ? supabase.from('team_memberships')
-          .select('profiles!inner(id, active, approved, is_player)')
+          .select('profiles!inner(id, first_name, last_name, photo_url, active, approved, is_player)')
           .eq('team_id', fixture.team_id)
       : Promise.resolve({ data: [], error: null })
 
     try {
+      if (pendingWrites.has(fixtureId)) {
+        await pendingWrites.get(fixtureId)
+        if (!fresh()) return
+      }
       const [lineRes, availRes, rosterRes] = await Promise.all([
         supabase.from('lineups')
           .select('profile_id, player_name, role, slot, position, formation, profiles(first_name, last_name, photo_url)')
           .eq('fixture_id', fixtureId),
         supabase.from('availability')
           .select('status, profiles!inner(id, first_name, last_name, photo_url)')
-          .eq('fixture_id', fixtureId)
-          .in('status', ['in', 'maybe']),
+          .eq('fixture_id', fixtureId),
         rosterQuery,
       ])
       if (!fresh()) return
@@ -74,19 +111,27 @@ export function useLineup(fixture, open) {
       // only guard: lineups_admin_write does no team check.
       const roster = squadIds(rosterRes.data)
 
-      const rank = { in: 0, maybe: 1 }
-      const p = (availRes.data ?? [])
-        .filter((a) => a.profiles && roster.has(a.profiles.id))
-        .map((a) => {
-          nm[a.profiles.id] = `${a.profiles.first_name} ${a.profiles.last_name}`
-          ph[a.profiles.id] = a.profiles.photo_url ?? null
-          return { id: a.profiles.id, name: nm[a.profiles.id], photo_url: a.profiles.photo_url ?? null, status: a.status }
-        })
+      const answer = {}
+      for (const a of availRes.data ?? []) if (a.profiles && roster.has(a.profiles.id)) answer[a.profiles.id] = a.status
+
+      // From kickoff: everyone in the squad, whatever they answered. Before it:
+      // only those who said in or maybe.
+      // (A postponed game past its old slot never kicked off.)
+      const off = !!fixture.postponed || fixture.status === 'postponed'
+      const started = !off && !!fixture.match_date && hasKickedOff(fixture.match_date, fixture.kickoff)
+      const rank = { in: 0, maybe: 1, none: 2, out: 3 }
+      const p = (rosterRes.data ?? [])
+        .map((m) => m.profiles)
+        .filter((pr) => pr && roster.has(pr.id))
+        .map((pr) => ({ id: pr.id, name: `${pr.first_name} ${pr.last_name}`, photo_url: pr.photo_url ?? null, status: answer[pr.id] ?? 'none' }))
+        .filter((pl) => started || pl.status === 'in' || pl.status === 'maybe')
         .sort((a, b) => (rank[a.status] - rank[b.status]) || a.name.localeCompare(b.name))
+      for (const pl of p) { nm[pl.id] = pl.name; ph[pl.id] = pl.photo_url }
 
       setSaved(rowsToState(lineRes.data ?? []))
       setHasLineup((lineRes.data ?? []).length > 0)
       setPool(p)
+      setWholeSquad(started)
       setNames(nm)
       setPhotos(ph)
     } catch (e) {
@@ -96,40 +141,36 @@ export function useLineup(fixture, open) {
     } finally {
       if (fresh()) setLoading(false)
     }
-  }, [fixture?.id, fixture?.team_id])
+  }, [fixture?.id, fixture?.team_id, fixture?.match_date, fixture?.kickoff, fixture?.status, fixture?.postponed])
 
-  useEffect(() => { if (open) load() }, [open, load])
+  useEffect(() => {
+    if (open) load()
+    return () => { reqRef.current = reqRef.current + 1 }
+  }, [open, load])
 
-  // Replace the whole line-up (small set; simpler + race-free than diffing).
-  // delete-then-insert isn't atomic, so we snapshot what's there first: if the
-  // insert fails we put the old XI back rather than leave the fixture with
-  // nothing — and we ALWAYS reload afterwards so the board shows what the
-  // database actually holds, never a line-up that only exists on this phone.
   const save = useCallback(async (rows) => {
     const fixtureId = fixture?.id
     if (!fixtureId) return { error: new Error('No fixture to save a line-up for.') }
-    const snap = await supabase.from('lineups')
-      .select('fixture_id, profile_id, player_name, role, slot, position, formation')
-      .eq('fixture_id', fixtureId)
-    if (snap.error) return { error: snap.error }
-    const del = await supabase.from('lineups').delete().eq('fixture_id', fixtureId)
-    if (del.error) return { error: del.error }
-    let error = null
-    if (rows.length) {
-      const ins = await supabase.from('lineups').insert(rows)
-      if (ins.error) {
-        error = ins.error
-        logError('write', ins.error, { hook: 'useLineup', op: 'save', fixtureId })
-        if (snap.data?.length) {
-          // Best effort: restore the previous line-up.
-          const back = await supabase.from('lineups').insert(snap.data)
-          if (back.error) logError('write', back.error, { hook: 'useLineup', op: 'save.restore', fixtureId })
-        }
+    if (pendingWrites.has(fixtureId)) return { error: new Error('This line-up is already saving.') }
+    const ticket = ++reqRef.current
+    const writing = replaceLineup(fixtureId, rows).catch(error => {
+      logError('write', error, { hook: 'useLineup', op: 'save', fixtureId })
+      return error
+    })
+    pendingWrites.set(fixtureId, writing)
+    const error = await writing
+    pendingWrites.delete(fixtureId)
+    if (ticket === reqRef.current && fixtureId === fixtureRef.current) {
+      if (error) await load() // The write or snapshot restore may have partially landed.
+      else {
+        setSaved(rowsToState(rows))
+        setHasLineup(rows.length > 0)
+        setError(null)
+        setLoading(false)
       }
     }
-    await load()
-    return { error }
+    return { error: error ?? null }
   }, [fixture?.id, load])
 
-  return { saved, pool, names, photos, hasLineup, loading, error, save, refetch: load }
+  return { saved, pool, wholeSquad, names, photos, hasLineup, loading, error, save, refetch: load }
 }

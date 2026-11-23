@@ -1,3 +1,4 @@
+import ClubImage from './ClubImage'
 import { useMemo, useState } from 'react'
 import PitchView from './PitchView'
 import { depthPitchSlots, depthPitchStarters, positionDepth } from '../lib/squadList'
@@ -17,7 +18,7 @@ function DepthRow({ p }) {
   return (
     <div className="card sd-row">
       {p.photo_url
-        ? <img className="sd-av" src={p.photo_url} alt="" />
+        ? <ClubImage sizes="40px" className="sd-av" src={p.photo_url} alt="" />
         : <span className="sd-av mono">{initials(p)}</span>}
       <span className="sd-name">{fullName(p)}</span>
       <span className={'sd-tag mono' + (p.isPreferred ? ' pref' : '')}>{p.isPreferred ? 'Preferred' : 'Can play'}</span>
@@ -44,12 +45,12 @@ export default function SquadDepth({ players = [] }) {
       {/* The depth list sits ABOVE the pitch so both stay on screen. */}
       <div className="depth-panel">
         {!sel ? (
-          <p className="dim" style={{ fontSize: 13, margin: 0 }}>Tap a position to see who can play there.</p>
+          <p className="dim" style={{ fontSize: 'var(--type-sm)', margin: 0 }}>Select a position</p>
         ) : (
           <>
             <p className="kicker"><span className="kicker-rule">{sel.pos}</span> <span className="dp-count mono">{depth.length}</span></p>
             <h3 className="dp-title">{POS_LABEL[sel.pos] ?? sel.pos}</h3>
-            {depth.length === 0 && <p className="dim" style={{ fontSize: 13 }}>Nobody can play here yet.</p>}
+            {depth.length === 0 && <p className="dim" style={{ fontSize: 'var(--type-sm)' }}>No players in this position</p>}
             <div className="col gap-2 mt-2">
               {depth.map((p) => <DepthRow key={p.id} p={p} />)}
             </div>
@@ -57,7 +58,7 @@ export default function SquadDepth({ players = [] }) {
         )}
       </div>
 
-      <p className="dim mt-3" style={{ fontSize: 12 }}>First choice in each position. Tap a shirt for the depth.</p>
+      <p className="dim mt-3" style={{ fontSize: 'var(--type-caption)' }}>First-choice players</p>
       <div className="mt-2">
         <PitchView
           slots={slots}
@@ -71,16 +72,16 @@ export default function SquadDepth({ players = [] }) {
 
       <style>{`
         .depth-panel { background: var(--coal); border: 1px solid var(--line); border-radius: var(--r-card);
-          padding: 12px 14px; max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; }
-        .dp-count { color: var(--bone-mute); font-size: 12px; margin-left: 6px; }
-        .dp-title { font-family: var(--font-display); font-size: 20px; margin: 2px 0 0; }
-        .sd-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+          padding: var(--space-3) var(--space-3); max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; }
+        .dp-count { color: var(--bone-mute); font-size: var(--type-caption); margin-left: var(--space-1); }
+        .dp-title { font-family: var(--font-display); font-size: var(--type-lg); margin: var(--space-1) 0 0; }
+        .sd-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
         .sd-av { width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover;
           display: grid; place-items: center; background: var(--slate); border: 1px solid var(--line-2);
-          font-size: 12px; font-weight: 600; color: var(--bone-mute); }
+          font-size: var(--type-caption); font-weight: 600; color: var(--bone-mute); }
         .sd-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .sd-tag { flex: none; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
-          color: var(--bone-mute); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+        .sd-tag { flex: none; font-size: var(--type-xs); letter-spacing: .04em; text-transform: uppercase;
+          color: var(--bone-mute); border: 1px solid var(--line); border-radius: var(--r-input); padding: var(--space-1) var(--space-2); }
         .sd-tag.pref { color: var(--green-bright); border-color: var(--green); }
       `}</style>
     </div>

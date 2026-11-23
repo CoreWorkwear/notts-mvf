@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 
 // Capture setAvailability calls; assert each notification action persists ITS OWN
 // status (the bug report: "I'm in" must write 'in', never 'maybe').
@@ -24,6 +24,13 @@ beforeEach(() => {
 afterEach(() => { delete navigator.serviceWorker })
 
 describe('PushActions — notification action → availability status', () => {
+  test('shows confirmation when the tray action lands and preserves the current page', async () => {
+    window.history.replaceState(null, '', '/club')
+    render(<PushActions />)
+    swListeners.forEach((fn) => fn({ data: { type: 'mvf-avail', fixtureId: 'f2', status: 'in' } }))
+    expect(await screen.findByText(/availability saved/i)).toBeVisible()
+    expect(window.location.pathname).toBe('/club')
+  })
   test.each(['in', 'maybe', 'out'])('the cold-open URL path applies %s exactly', async (status) => {
     window.history.replaceState(null, '', `/fixtures?mvf_fixture=f1&mvf_avail=${status}`)
     render(<PushActions />)

@@ -8,6 +8,7 @@ export function useSponsors() {
   const { profile } = useAuth()
   const [sponsors, setSponsors] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loaded, setLoaded] = useState(false) // a load has completed at least once (see useFixtures)
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
@@ -22,6 +23,7 @@ export function useSponsors() {
         .order('name', { ascending: true })
       if (fetchErr) throw fetchErr // failed load ≠ no sponsors — catch keeps data + sets error
       setSponsors(data ?? [])
+      setLoaded(true)
     } catch (e) {
       logError('fetch', e ?? 'useSponsors load failed', { hook: 'useSponsors' })
       setError(e ?? new Error('load failed'))
@@ -53,7 +55,7 @@ export function useSponsors() {
     await load()
   }, [load])
 
-  return { sponsors, loading, error, save, remove, refetch: load }
+  return { sponsors, loading, loaded, error, save, remove, refetch: load }
 }
 
 // Active sponsors of a tier, e.g. byTier(sponsors, 'main').

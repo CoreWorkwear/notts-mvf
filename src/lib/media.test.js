@@ -38,7 +38,7 @@ describe('heroBackground', () => {
   })
   test('falls back to the team gradient (under the wash) with no photo', () => {
     expect(heroBackground({ pool: [], seed: 'x', gradient: 'var(--grad-community)' }))
-      .toBe('var(--hero-wash), var(--grad-community)')
+      .toBe('var(--kit-wash), var(--grad-community)')
   })
 })
 

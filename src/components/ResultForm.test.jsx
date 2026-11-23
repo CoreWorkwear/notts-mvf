@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event'
 import Sheet from './Sheet'
 import ResultForm from './ResultForm'
 
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ club: null }) }))
+
 // Capture every supabase write so we can assert the result was saved. `fail`
 // lets a test make one op answer with a response-level error (e.g. 'goals.delete').
 // `stored` is what a read-back finds: stored.results is the row (or null),
@@ -21,7 +23,7 @@ vi.mock('../lib/supabase', () => {
       return q
     },
     upsert: (...a) => { calls.push(['upsert', table, ...a]); return Promise.resolve({ error: fail[`${table}.upsert`] ?? null }) },
-    insert: (...a) => { calls.push(['insert', table, ...a]); return Promise.resolve({ error: fail[`${table}.insert`] ?? null }) },
+    insert: (...a) => { calls.push(['insert', table, ...a]); return stored.pendingInsert ?? Promise.resolve({ error: fail[`${table}.insert`] ?? null }) },
     delete: () => ({ eq: (...a) => { calls.push(['delete', table, ...a]); return Promise.resolve({ error: fail[`${table}.delete`] ?? null }) } }),
   })
   return { supabase: { from: (t) => make(t) } }
@@ -70,6 +72,37 @@ beforeEach(() => {
 })
 
 describe('ResultForm — log a result', () => {
+  test('previews the submitted score while the write is pending and returns the draft on failure', async () => {
+    const onSaved = vi.fn()
+    let settle
+    stored.pendingInsert = new Promise(resolve => { settle = resolve })
+    render(<ResultForm open fixture={FIX} squad={SQUAD} onClose={vi.fn()} onSaved={onSaved} />)
+    await userEvent.type(screen.getByLabelText('1st Team score'), '{selectall}3')
+    await userEvent.type(screen.getByLabelText('Carlton Town score'), '{selectall}1')
+    await userEvent.click(screen.getByRole('button', { name: 'Log result' }))
+    const pending = screen.getByRole('status', { name: 'Saving result' })
+    expect(pending).toHaveTextContent('3–1')
+    expect(pending).toHaveTextContent('Carlton Town')
+    expect(screen.queryByRole('spinbutton')).toBeNull()
+    expect(onSaved).not.toHaveBeenCalled()
+    await act(async () => settle({ error: new Error('Failed to fetch') }))
+    expect(screen.getByRole('alert')).toBeVisible()
+    expect(screen.getByLabelText('1st Team score')).toHaveValue(3)
+    expect(screen.getByLabelText('Carlton Town score')).toHaveValue(1)
+  })
+
+  test('a manager can pick scorer and assist by squad id, including two players with the same name', async () => {
+    const squad = [...SQUAD, { id: 'other', name: 'Joe Morris', first: 'Joe' }]
+    render(<ResultForm open fixture={FIX} squad={squad} onSaved={vi.fn()} onClose={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
+    await userEvent.click(screen.getByPlaceholderText('Scorer'))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Joe Morris' })[1])
+    await userEvent.click(screen.getByPlaceholderText('Assist (optional)'))
+    await userEvent.click(screen.getByRole('button', { name: 'Rich King' }))
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await waitFor(() => expect(calls.find(c => c[0] === 'insert' && c[1] === 'goals')?.[2][0])
+      .toMatchObject({ scorer_profile_id: 'other', assist_profile_id: 'p2' }))
+  })
   test('opens from the detail→log transition, STAYS open, fills, submits, saves', async () => {
     const onSaved = vi.fn()
     render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
@@ -86,8 +119,8 @@ describe('ResultForm — log a result', () => {
     // Fill the score.
     // Each box is labelled with the team it belongs to, so a test (like a
     // manager) can't mix up which score is which.
-    await userEvent.clear(screen.getByLabelText('XL 11s score'))
-    await userEvent.type(screen.getByLabelText('XL 11s score'), '3')
+    await userEvent.clear(screen.getByLabelText('1st Team score'))
+    await userEvent.type(screen.getByLabelText('1st Team score'), '3')
     await userEvent.clear(screen.getByLabelText('Carlton Town score'))
     await userEvent.type(screen.getByLabelText('Carlton Town score'), '1')
 
@@ -167,14 +200,15 @@ describe('ResultForm — editing keeps credits for players who have left', () =>
   test('with `everyone`, a former player resolves to their name and still saves by id', async () => {
     const onSaved = vi.fn()
     const everyone = [...SQUAD, { id: 'p-old', name: 'Old Boy', first: 'Old' }]
-    const { container } = render(
+    render(
       <ResultForm open fixture={playedByLeaver} squad={SQUAD} everyone={everyone} onClose={() => {}} onSaved={onSaved} />,
     )
     expect(screen.getByPlaceholderText('Scorer')).toHaveValue('Old Boy')
     expect(screen.getByPlaceholderText(/pick or type a name/i)).toHaveValue('Old Boy')
     // …but the pickers still only offer the active squad.
-    expect(container.querySelector('datalist#squad-names option[value="Old Boy"]')).toBeNull()
-    expect(container.querySelector('datalist#squad-names option[value="Joe Morris"]')).toBeTruthy()
+    await userEvent.click(screen.getByPlaceholderText('Assist (optional)'))
+    expect(screen.queryByRole('button', { name: 'Old Boy' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Joe Morris' })).toBeVisible()
 
     await userEvent.click(screen.getByRole('button', { name: /save result/i }))
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
@@ -226,18 +260,18 @@ describe('ResultForm — scorers are reconciled against the score', () => {
     await flush()
   }
   const setOurScore = async (n) => {
-    await userEvent.clear(screen.getByLabelText('XL 11s score'))
-    await userEvent.type(screen.getByLabelText('XL 11s score'), n)
+    await userEvent.clear(screen.getByLabelText('1st Team score'))
+    await userEvent.type(screen.getByLabelText('1st Team score'), n)
   }
 
   test('says how many goals still need a scorer', async () => {
     await openForm()
     await setOurScore('3')
-    expect(screen.getByRole('status')).toHaveTextContent(/3 of 3 goals still needs a scorer/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/scorers missing · 3 of 3/i)
 
     await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
     await userEvent.type(screen.getByPlaceholderText('Scorer'), 'Joe Morris')
-    expect(screen.getByRole('status')).toHaveTextContent(/2 of 3 goals still needs a scorer/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/scorers missing · 2 of 3/i)
   })
 
   test('an opened but empty scorer row does not count as accounted for', async () => {
@@ -245,7 +279,7 @@ describe('ResultForm — scorers are reconciled against the score', () => {
     await setOurScore('1')
     // A row exists, but the manager hasn't typed a name into it yet.
     await userEvent.click(screen.getByRole('button', { name: /add goal/i }))
-    expect(screen.getByRole('status')).toHaveTextContent(/1 of 1 goal still needs a scorer/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/scorers missing · 1 of 1/i)
   })
 
   test('the nudge clears once every goal has a scorer', async () => {
@@ -264,7 +298,7 @@ describe('ResultForm — scorers are reconciled against the score', () => {
     const scorers = screen.getAllByPlaceholderText('Scorer')
     await userEvent.type(scorers[0], 'Joe Morris')
     await userEvent.type(scorers[1], 'Rich King')
-    expect(screen.getByRole('status')).toHaveTextContent(/2 scorers named but the score says 1/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/scorers named · 2 for 1 goal/i)
   })
 
   test('the nudge never blocks the save — a nil-nil or an own goal still logs', async () => {
@@ -272,8 +306,8 @@ describe('ResultForm — scorers are reconciled against the score', () => {
     render(<StrictMode><Harness onSaved={onSaved} /></StrictMode>)
     await userEvent.click(screen.getByText('Log the result'))
     await flush()
-    await userEvent.clear(screen.getByLabelText('XL 11s score'))
-    await userEvent.type(screen.getByLabelText('XL 11s score'), '2')
+    await userEvent.clear(screen.getByLabelText('1st Team score'))
+    await userEvent.type(screen.getByLabelText('1st Team score'), '2')
     // Deliberately name nobody — the nudge is showing.
     expect(screen.getByRole('status')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /log result/i }))
@@ -314,7 +348,7 @@ describe('ResultForm — a new result never overwrites one that already exists',
     await openBlank(onSaved, onStale)
     await userEvent.click(screen.getByRole('button', { name: /log result/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/already has a result/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/result already logged/i)
     expect(screen.getByRole('alert')).toHaveTextContent(/results/i)
     expect(calls.find((c) => c[0] === 'delete' && c[1] === 'goals')).toBeFalsy()
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'goals')).toBeFalsy()
@@ -353,7 +387,7 @@ describe('ResultForm — a new result never overwrites one that already exists',
     const onSaved = vi.fn()
     await openBlank(onSaved)
     await userEvent.click(screen.getByRole('button', { name: /log result/i }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/already has a result/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/result already logged/i)
     expect(calls.find((c) => c[0] === 'delete' && c[1] === 'goals')).toBeFalsy()
     expect(onSaved).not.toHaveBeenCalled()
   })
@@ -401,5 +435,66 @@ describe('ResultForm — a new result never overwrites one that already exists',
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     expect(calls.find((c) => c[0] === 'upsert' && c[1] === 'results')).toBeTruthy()
     expect(calls.find((c) => c[0] === 'insert' && c[1] === 'results')).toBeFalsy()
+  })
+})
+
+// "Half time · optional" was prefilled 0–0 and always written, so every result
+// logged without it told the squad "HT 0–0". The columns were NOT NULL DEFAULT
+// 0 (migration 0039 makes them nullable). The form now leaves them out when
+// blank, which is right both before that migration runs and after.
+describe('ResultForm — half time is optional', () => {
+  const open = (fixture = FIX) => render(<ResultForm open fixture={fixture} squad={SQUAD} onClose={() => {}} onSaved={() => {}} />)
+  const ht = () => screen.getAllByRole('spinbutton', { name: /half-time score/i })
+  const saved = () => calls.find((c) => (c[0] === 'insert' || c[0] === 'upsert') && c[1] === 'results')[2]
+
+  test('a new result opens with half time blank, not 0–0', () => {
+    open()
+    expect(ht().map((i) => i.value)).toEqual(['', ''])
+  })
+
+  test('left blank, half time is not written at all', async () => {
+    open()
+    await userEvent.type(screen.getByRole('spinbutton', { name: '1st Team score' }), '{selectall}2')
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await flush()
+    expect(saved()).not.toHaveProperty('ht_us')
+    expect(saved()).not.toHaveProperty('ht_them')
+    expect(saved()).toMatchObject({ us: 2, them: 0 })
+  })
+
+  test('filled in, it is saved; one side left blank counts as nil', async () => {
+    open()
+    await userEvent.type(screen.getByRole('spinbutton', { name: '1st Team score' }), '{selectall}3')
+    await userEvent.type(ht()[0], '1')
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await flush()
+    expect(saved()).toMatchObject({ us: 3, them: 0, ht_us: 1, ht_them: 0 })
+  })
+
+  test('a half-time score higher than full time is refused before anything is written', async () => {
+    open()
+    await userEvent.type(screen.getByRole('spinbutton', { name: '1st Team score' }), '{selectall}1')
+    await userEvent.type(ht()[0], '2')
+    await userEvent.click(screen.getByRole('button', { name: /log result/i }))
+    await flush()
+    expect(screen.getByRole('alert')).toHaveTextContent(/half time/i)
+    expect(calls).toHaveLength(0)
+  })
+
+  test('editing a result that has no half time keeps it that way', async () => {
+    open({ ...FIX, result: { us: 2, them: 1, ht_us: null, ht_them: null, motm_profile_id: null, motm_name: null } })
+    expect(ht().map((i) => i.value)).toEqual(['', ''])
+    await userEvent.click(screen.getByRole('button', { name: /save|log result/i }))
+    await flush()
+    expect(saved()).not.toHaveProperty('ht_us')
+  })
+
+  test('editing one that has a half time shows it, and clearing it clears it', async () => {
+    open({ ...FIX, result: { us: 2, them: 1, ht_us: 1, ht_them: 1, motm_profile_id: null, motm_name: null } })
+    expect(ht().map((i) => i.value)).toEqual(['1', '1'])
+    await userEvent.clear(ht()[0]); await userEvent.clear(ht()[1])
+    await userEvent.click(screen.getByRole('button', { name: /save|log result/i }))
+    await flush()
+    expect(saved()).toMatchObject({ ht_us: null, ht_them: null })
   })
 })

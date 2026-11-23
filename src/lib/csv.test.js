@@ -11,7 +11,7 @@ describe('buildFixtureCsv', () => {
   test('header carries the fixture details (home team first)', () => {
     const csv = buildFixtureCsv(FIX, [])
     const lines = csv.split('\n')
-    expect(lines[0]).toContain('XL 11s v Carlton Town')
+    expect(lines[0]).toContain('1st Team v Carlton Town')
     expect(lines[1]).toContain('2026-03-08')
     expect(lines[1]).toContain('13:00 KO')
     expect(lines[1]).toContain('MvF XL National League')
@@ -20,7 +20,7 @@ describe('buildFixtureCsv', () => {
 
   test('away fixtures name the opponent first', () => {
     const csv = buildFixtureCsv({ ...FIX, home_away: 'Away' }, [])
-    expect(csv.split('\n')[0]).toContain('Carlton Town v XL 11s')
+    expect(csv.split('\n')[0]).toContain('Carlton Town v 1st Team')
   })
 
   test('one row per in player: name, preferred position, Paid Yes/No', () => {
@@ -40,7 +40,7 @@ describe('buildFixtureCsv', () => {
   })
 
   test('filename is slugged from team, opponent and date', () => {
-    expect(csvFilename(FIX)).toBe('nottsmvf_xl-11s_carlton-town_2026-03-08.csv')
+    expect(csvFilename(FIX)).toBe('nottsmvf_1st-team_carlton-town_2026-03-08.csv')
   })
 })
 

@@ -47,7 +47,7 @@ describe('SetNewPassword', () => {
 
     await waitFor(() => expect(h.updatePassword).toHaveBeenCalledWith('brand-new-one'))
     // confirmation toast shows first…
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/password changed/i))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/password changed/i))
     // …then recovery ends and the app takes over
     await waitFor(() => expect(h.endRecovery).toHaveBeenCalled(), { timeout: 2500 })
   })

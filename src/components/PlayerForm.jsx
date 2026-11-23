@@ -1,8 +1,10 @@
+import PreferredPosition from './PreferredPosition'
 import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
 import ImageUpload from './ImageUpload'
 import { supabase } from '../lib/supabase'
+import { teamLabel } from '../lib/teams'
 import { MIN_PASSWORD, POSITIONS } from '../lib/constants'
 import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
 
@@ -14,7 +16,7 @@ import { validatePlayer, diffMemberships, isSelf } from '../lib/players'
 // The squads list can't be trusted when it's empty — Players hands us [] if the
 // teams fetch failed. Saving an EDIT then would diff against nothing (see
 // diffMemberships), so the form refuses and says so instead of a clean save.
-const SQUADS_NOT_LOADED = "Squads didn't load — try again."
+const SQUADS_NOT_LOADED = "Squads didn't load."
 
 export default function PlayerForm({ open, onClose, onSaved, player, teams = [], currentUserId }) {
   const adding = !player
@@ -77,7 +79,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
   // not keys, so it reads as the club says them.
   const askedFor = (player?.requested_teams ?? [])
     .filter((k) => !teamKeys.includes(k))
-    .map((k) => teams.find((t) => t.key === k)?.label)
+    .map((k) => teamLabel(teams.find((t) => t.key === k)))
     .filter(Boolean)
 
   async function resetPassword() {
@@ -93,7 +95,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
   // goal/MOTM history stays under their name. Service-role Edge Function does it.
   async function deletePlayer() {
     const who = `${firstName} ${lastName}`.trim() || 'this player'
-    if (!confirm(`Permanently delete ${who}?\n\nThis removes their account and login for good. Their goals, assists and MOTM stay in the records under their name. This can't be undone.\n\nTo just take them out of the squad, use Inactive instead.`)) return
+    if (!confirm(`Permanently delete ${who}?\n\nTheir account and login will be permanently removed. Goals, assists and MOTM stay under their name.\n\nChoose Inactive to keep the account.`)) return
     setBusy(true); setError(null); setNotice(null)
     try {
       const { data, error } = await supabase.functions.invoke('admin-delete-player', { body: { id: player.id } })
@@ -143,7 +145,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
           body: { email: email.trim(), password, ...meta },
         })
         if (error) {
-          let msg = 'Could not create the player — check the connection and try again.'
+          let msg = 'Could not create the player. Check your connection and try again.'
           try {
             const body = await error.context?.json?.()
             if (body?.error) msg = body.error
@@ -197,7 +199,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
       <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />
       <p className="kicker"><span className="kicker-rule">{adding ? 'ADD PLAYER' : 'EDIT PLAYER'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>{adding ? 'New player' : `${firstName} ${lastName}`}</h2>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>{adding ? 'New player' : `${firstName} ${lastName}`}</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="row gap-2">
@@ -216,7 +218,7 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
             onChange={(e) => { setPhone(e.target.value); clearInvalid('phone') }} /></div>
 
         {adding && (
-          <div className="field"><label className="label">Starter password (hand this over)</label>
+          <div className="field"><label className="label">Starter password</label>
             <input className="input" value={password} aria-invalid={invalid.has('password') || undefined}
               onChange={(e) => { setPassword(e.target.value); clearInvalid('password') }} placeholder={`min ${MIN_PASSWORD} characters`} /></div>
         )}
@@ -224,12 +226,8 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
         <div className="row gap-2">
           <div className="field grow"><label className="label">Date of birth</label>
             <input className="input" type="date" value={dob ?? ''} onChange={(e) => setDob(e.target.value)} /></div>
-          <div className="field grow"><label className="label">Preferred position</label>
-            <select className="select" value={preferred ?? ''} onChange={(e) => setPreferred(e.target.value)}>
-              <option value="">—</option>
-              {POSITIONS.map((p) => <option key={p}>{p}</option>)}
-            </select></div>
         </div>
+        <PreferredPosition value={preferred} onChange={setPreferred} />
 
         {!adding && (
           <div className="row gap-2">
@@ -267,9 +265,6 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
             <button type="button" className="chip" aria-pressed={isPlayer} onClick={() => setIsPlayer(true)}>Squad player</button>
             <button type="button" className="chip" aria-pressed={!isPlayer} onClick={() => setIsPlayer(false)}>Supporter</button>
           </div>
-          <span className="dim" style={{ fontSize: 12 }}>
-            {isPlayer ? 'Picked for the squad and sets availability.' : 'App access only — follows fixtures & results, not in the squad.'}
-          </span>
         </div>
 
         {isPlayer && (
@@ -277,20 +272,20 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
             <div className="row gap-2">
               {teams.map((t) => (
                 <button type="button" key={t.id} className={'chip' + (t.key === 'community' ? ' community' : '')}
-                  aria-pressed={teamKeys.includes(t.key)} onClick={() => toggle(teamKeys, setTeamKeys, t.key)}>{t.label}</button>
+                  aria-pressed={teamKeys.includes(t.key)} onClick={() => toggle(teamKeys, setTeamKeys, t.key)}>{teamLabel(t)}</button>
               ))}
             </div>
             {squadsMissing && (
-              <p role="alert" style={{ fontSize: 13, color: 'var(--amber)', margin: 0 }}>
-                {SQUADS_NOT_LOADED}{!adding && ' Squad changes can’t be saved until they do.'}
+              <p role="alert" style={{ fontSize: 'var(--type-sm)', color: 'var(--amber)', margin: 0 }}>
+                {SQUADS_NOT_LOADED}{!adding && ' Squad editing unavailable.'}
               </p>
             )}
             {/* Signup no longer grants squads (0034) — everyone lands in the
                 reserves and the manager moves them up. Show what they asked
                 for so the request isn't lost between the two. */}
             {askedFor.length > 0 && (
-              <span className="dim" style={{ fontSize: 12 }}>
-                Asked for {askedFor.join(' and ')} when they signed up.
+              <span className="dim" style={{ fontSize: 'var(--type-caption)' }}>
+                Requested squad · {askedFor.join(' and ')}
               </span>
             )}
           </div>
@@ -308,14 +303,14 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
                   style={{ color: active ? 'var(--green-bright)' : 'var(--red-bright)' }}>
                   {active ? 'Active' : 'Inactive'}
                 </button>
-                {isPlayer && (
-                  <button type="button" className="chip" aria-pressed={approved} onClick={() => setApproved((a) => !a)}
-                    style={{ color: approved ? 'var(--green-bright)' : 'var(--amber)' }}>
-                    {approved ? 'Signed off ✓' : 'Pending sign-off'}
-                  </button>
-                )}
+                {/* Supporters are signed off too: it is what turns on their news
+                    pushes and photo upload (both check `approved`). */}
+                <button type="button" className="chip" aria-pressed={approved} onClick={() => setApproved((a) => !a)}
+                  style={{ color: approved ? 'var(--green-bright)' : 'var(--amber)' }}>
+                  {approved ? 'Signed off ✓' : 'Pending sign-off'}
+                </button>
               </div>
-              {self && <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>You can't change your own role or deactivate yourself.</p>}
+              {self && <p className="dim" style={{ fontSize: 'var(--type-caption)', marginTop: 'var(--space-1)' }}>You can't change your own role or deactivate yourself.</p>}
             </div>
 
             <button type="button" className="btn btn-ghost btn-block" disabled={busy} onClick={resetPassword}>Reset password</button>
@@ -328,9 +323,11 @@ export default function PlayerForm({ open, onClose, onSaved, player, teams = [],
           </>
         )}
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>
-          {busy ? 'Saving…' : adding ? 'Create player' : 'Save changes'}
-        </button>
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>
+            {busy ? 'Saving…' : adding ? 'Create player' : 'Save changes'}
+          </button>
+        </div>
       </form>
     </Sheet>
   )

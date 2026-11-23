@@ -57,3 +57,19 @@ describe('useNews.post — the pushed flag tells the truth', () => {
     expect(sb.writes.filter((w) => w.op === 'update')).toEqual([])
   })
 })
+
+describe('useNews — loaded', () => {
+  test('false until the first load completes, true after, even with no posts', async () => {
+    sb.reset({ announcements: [] })
+    const { result } = renderHook(() => useNews())
+    expect(result.current.loaded).toBe(false)
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(true)
+  })
+  test('a failed first load is not "loaded"', async () => {
+    sb.failWith('announcements', { message: 'boom' })
+    const { result } = renderHook(() => useNews())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.loaded).toBe(false)
+  })
+})

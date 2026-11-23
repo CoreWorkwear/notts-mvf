@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { fixtureConcluded } from '../lib/format'
 import { firstRow } from '../lib/embed'
 import { squadIdsByTeam } from '../lib/players'
+import { saveDiary } from '../lib/fixtureDiary'
 import { logError } from '../lib/logger'
 
 // A focus/visibility refetch this soon after the last load started is skipped
@@ -25,32 +26,71 @@ export const FIXTURE_COLUMNS = [
 // allocating per fixture and keeps referential equality stable.
 const EMPTY_SQUAD = new Set()
 
+// A tap can outlive its sheet or route. Share just the in-flight answers,
+// scoped to the player and match, so every entry point sees the same choice.
+let pendingAnswers = new Map()
+const pendingSnapshot = () => pendingAnswers
+function subscribePending(update) {
+  window.addEventListener('mvf-answer-pending', update)
+  return () => window.removeEventListener('mvf-answer-pending', update)
+}
+function markPending(key, status) {
+  pendingAnswers = new Map(pendingAnswers)
+  if (status) pendingAnswers.set(key, status)
+  else pendingAnswers.delete(key)
+  window.dispatchEvent(new Event('mvf-answer-pending'))
+}
+
+function withMyStatus(fixture, status) {
+  if (fixture.myStatus === status) return fixture
+  if (!fixture.inViewerSquad) return { ...fixture, myStatus: status }
+  const counts = { ...fixture.counts }
+  if (fixture.myStatus in counts) counts[fixture.myStatus]--
+  if (status in counts) counts[status]++
+  const replied = counts.in + counts.maybe + counts.out
+  return { ...fixture, myStatus: status, counts, replied, noReply: Math.max(0, fixture.rosterSize - replied) }
+}
+
 // Loads everything the Fixtures screen needs for a season. RLS scopes the
 // rows to the viewer's club (the old eligibility gate is gone — every active
 // member sees every fixture). We enrich each fixture with the viewer's own
 // availability, the in/maybe/out tally, and the not-replied count (derived
 // from the approved active roster for that team).
-export function useFixtures(seasonId) {
+export function useFixtures(seasonId, seasonLabel = '') {
   const { user } = useAuth()
-  const [fixtures, setFixtures] = useState([])
+  const [savedFixtures, setFixtures] = useState([])
+  const pending = useSyncExternalStore(subscribePending, pendingSnapshot)
+  const fixtures = useMemo(() => !pending.size ? savedFixtures : savedFixtures.map(f => {
+    const choice = pending.get(`${user?.id}:${f.id}`)
+    return choice ? { ...withMyStatus(f, choice), availabilityPending: true } : f
+  }), [savedFixtures, pending, user?.id])
   const [teams, setTeams] = useState([])
   const [opponents, setOpponents] = useState([])
   const [loading, setLoading] = useState(true)
+  // Has a load of THIS season ever completed? "loading && nothing in the list"
+  // is not the same question: it is also true on every refetch of a season that
+  // really is empty, and a page that swaps to its Loader on that unmounts an
+  // open form. Kept per season: carried over from another one, it made a failed
+  // load of this season read as an empty diary.
+  const [loadedSeason, setLoadedSeason] = useState(null)
+  const loaded = !!seasonId && loadedSeason === seasonId
   const [error, setError] = useState(null)
   const lastLoadStart = useRef(0)
   // Latest-wins: only the most recent load may apply its response. A slower,
   // OLDER response landing after a newer one used to overwrite it — on a phone
   // waking its radio, the foreground refetch would arrive after the post-tap
   // refetch and revert the player's In to "—" (the DB said in; the screen didn't).
-  const reqId = useRef(0)
+  const activeRead = useRef(null)
 
   const load = useCallback(async () => {
     // No season yet — before one resolves, or if the seasons fetch itself
     // failed. Don't sit on the "Pulling the fixtures…" loader forever: resolve
     // to an empty, non-loading state so the screen renders.
-    if (!seasonId) { reqId.current++; setFixtures([]); setLoading(false); setError(null); return }
-    const id = ++reqId.current
-    const isCurrent = () => id === reqId.current
+    if (!seasonId) { activeRead.current = null; setFixtures([]); setLoading(false); setError(null); return }
+    // Each read owns a distinct map. Only the latest read can update the UI.
+    const commits = new Map()
+    activeRead.current = commits
+    const isCurrent = () => commits === activeRead.current
     lastLoadStart.current = Date.now()
     setLoading(true)
     setError(null)
@@ -106,10 +146,11 @@ export function useFixtures(seasonId) {
         }
         const replied = counts.in + counts.maybe + counts.out
         const rosterSize = roster.size
-        return {
+        const row = {
           ...f,
           counts,
           myStatus: mine,
+          inViewerSquad: roster.has(user?.id),
           replied,
           noReply: Math.max(0, rosterSize - replied),
           rosterSize,
@@ -118,9 +159,12 @@ export function useFixtures(seasonId) {
           concluded: fixtureConcluded(f.match_date, f.kickoff),
           pinnedUrl: firstRow(f.pinned)?.url ?? null,
         }
+        return commits.has(f.id) ? withMyStatus(row, commits.get(f.id)) : row
       })
 
+      saveDiary(user?.id, enriched, seasonLabel)
       setFixtures(enriched)
+      setLoadedSeason(seasonId)
       setTeams((teamRes.data ?? []).sort((a, b) => Number(b.is_first_team) - Number(a.is_first_team)))
       setOpponents(oppRes.data ?? [])
     } catch (e) {
@@ -131,11 +175,17 @@ export function useFixtures(seasonId) {
       logError('fetch', e ?? 'useFixtures load failed', { hook: 'useFixtures', seasonId })
       if (isCurrent()) setError(e ?? new Error('load failed'))
     } finally {
-      if (isCurrent()) setLoading(false)
+      if (isCurrent()) {
+        activeRead.current = null
+        setLoading(false)
+      }
     }
-  }, [seasonId, user?.id])
+  }, [seasonId, seasonLabel, user?.id])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => { activeRead.current = null }
+  }, [load])
 
   // First-cut realtime: refetch when the tab regains focus (HANDOVER §7).
   // On mobile/installed PWAs the window `focus` event is unreliable, so we also
@@ -148,31 +198,27 @@ export function useFixtures(seasonId) {
   useEffect(() => {
     const refresh = () => { if (Date.now() - lastLoadStart.current > FOCUS_REFETCH_MIN_MS) load() }
     const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
-    const onApplied = () => load()
+    const onApplied = ({ detail }) => {
+      // PushActions does not carry the committed row. Re-read it from Supabase.
+      if (!detail) { load(); return }
+      if (detail.profileId !== user?.id) return
+      // A season read in progress may predate the write. Replay the committed
+      // answer on that response without issuing another four queries.
+      activeRead.current?.set(detail.fixtureId, detail.status)
+      setFixtures(rows => rows.map(f => f.id === detail.fixtureId ? withMyStatus(f, detail.status) : f))
+    }
+    window.addEventListener('online', load)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', onVisible)
     // A push-notification availability action just committed → show the new value.
     window.addEventListener('mvf-availability-applied', onApplied)
     return () => {
+      window.removeEventListener('online', load)
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('mvf-availability-applied', onApplied)
     }
-  }, [load])
-
-  // Optimistically reflect the viewer's own availability tap in local state so
-  // the control moves instantly; the post-write refetch reconciles with the
-  // server, and the caller re-applies the previous status if the write fails.
-  const applyMyStatus = useCallback((fixtureId, status) => {
-    setFixtures((prev) => prev.map((f) => {
-      if (f.id !== fixtureId || f.myStatus === status) return f
-      const counts = { ...f.counts }
-      if (f.myStatus in counts) counts[f.myStatus]--
-      if (status in counts) counts[status]++
-      const replied = counts.in + counts.maybe + counts.out
-      return { ...f, myStatus: status, counts, replied, noReply: Math.max(0, f.rosterSize - replied) }
-    }))
-  }, [])
+  }, [load, user?.id])
 
   // A fixture stays in Fixtures until kickoff + 4h (London). A logged result
   // moves it to Results immediately. "past" here = concluded scheduled games
@@ -180,7 +226,26 @@ export function useFixtures(seasonId) {
   const upcoming = fixtures.filter((f) => !f.concluded && !f.hasResult)
   const past = fixtures.filter((f) => f.concluded && !f.hasResult && !f.postponed)
 
-  return { fixtures, upcoming, past, teams, opponents, loading, error, refetch: load, applyMyStatus }
+  return { fixtures, upcoming, past, teams, opponents, loading, loaded, error, refetch: load }
+}
+
+export async function saveFixtureAnswer(fixtureId, profileId, status) {
+  const key = `${profileId}:${fixtureId}`
+  if (pendingAnswers.has(key)) return false
+  markPending(key, status)
+  const write = () => setAvailability(fixtureId, profileId, status).catch(error => ({ error }))
+  try {
+    let { error } = await write()
+    if (error) ({ error } = await write())
+    if (error) {
+      logError('write', error, { op: 'setAvailability', fixtureId, status })
+      return false
+    }
+    window.dispatchEvent(new CustomEvent('mvf-availability-applied', { detail: { fixtureId, profileId, status } }))
+    return true
+  } finally {
+    markPending(key, null)
+  }
 }
 
 // Set (upsert) the current user's availability for a fixture. RLS enforces

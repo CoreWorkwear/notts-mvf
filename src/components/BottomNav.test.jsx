@@ -23,3 +23,9 @@ describe('BottomNav', () => {
     expect(screen.queryByText('Players')).not.toBeInTheDocument()
   })
 })
+
+test('the manager can identify and return to the Manage hub from Players', () => {
+  h.admin = true
+  render(<MemoryRouter initialEntries={['/players']}><BottomNav /></MemoryRouter>)
+  expect(screen.getByRole('link', { name: 'Manage' })).toHaveAttribute('aria-current', 'location')
+})

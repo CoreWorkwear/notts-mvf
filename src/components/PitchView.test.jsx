@@ -51,17 +51,26 @@ describe('PitchView drag-and-drop', () => {
     fireEvent.pointerDown(s0, { clientX: 10, clientY: 10, pointerId: 1 })
     fireEvent.pointerMove(s0, { clientX: 90, clientY: 90, pointerId: 1 })
     fireEvent.pointerUp(s0, { clientX: 90, clientY: 90, pointerId: 1 })
+    fireEvent.click(s0, { detail: 1 })
     expect(onSwap).toHaveBeenCalledWith(0, 5)
     expect(onTapSlot).not.toHaveBeenCalled()
   })
 
-  test('a tap (no real movement) opens the picker, not a swap', () => {
+  test('a tap opens the picker on the native click, after the finger lifts', () => {
     const { container, onSwap, onTapSlot } = renderEditor()
     const s0 = slot(container, 0)
     fireEvent.pointerDown(s0, { clientX: 10, clientY: 10, pointerId: 1 })
     fireEvent.pointerUp(s0, { clientX: 12, clientY: 11, pointerId: 1 })
-    expect(onTapSlot).toHaveBeenCalledWith(0)
+    expect(onTapSlot).not.toHaveBeenCalled()
+    fireEvent.click(s0, { detail: 1 })
+    expect(onTapSlot).toHaveBeenCalledWith(0, s0)
     expect(onSwap).not.toHaveBeenCalled()
+  })
+
+  test('keyboard and assistive technology activation opens a shirt without a pointer', () => {
+    const { container, onTapSlot } = renderEditor()
+    fireEvent.click(slot(container, 0), { detail: 0 })
+    expect(onTapSlot).toHaveBeenCalledWith(0, slot(container, 0))
   })
 
   test('dropping back on the same slot does nothing', () => {

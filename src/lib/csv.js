@@ -1,6 +1,6 @@
 import { fmtKO } from './format'
 import { MATCH_FEE } from './constants'
-import { teamMatchName } from './teams'
+import { teamLabel, teamMatchName } from './teams'
 
 // Per-fixture CSV export (HANDOVER §10), built client-side. Header line(s) with
 // the fixture details, then one row per player marked IN: full name, preferred
@@ -41,7 +41,7 @@ export function buildFixtureCsv(fixture, players) {
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 export function csvFilename(fixture) {
-  return `nottsmvf_${slug(fixture.team?.label)}_${slug(fixture.opponent?.name)}_${fixture.match_date}.csv`
+  return `nottsmvf_${slug(teamLabel(fixture.team))}_${slug(fixture.opponent?.name)}_${fixture.match_date}.csv`
 }
 
 // Trigger a client-side download (no server needed).

@@ -1,3 +1,4 @@
+import PreferredPosition from './PreferredPosition'
 import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
@@ -83,8 +84,7 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
   return (
     <Sheet open={open} onClose={onClose}>
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
-      <p className="kicker"><span className="kicker-rule">YOUR DETAILS</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>Edit your details</h2>
+      <h2 className="display" style={{ fontSize: 'var(--type-title)' }}>Edit your details</h2>
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
         <div className="row gap-2">
@@ -103,12 +103,8 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
         <div className="row gap-2">
           <div className="field grow"><label className="label">Date of birth</label>
             <input className="input" type="date" value={dob ?? ''} onChange={(e) => setDob(e.target.value)} /></div>
-          <div className="field grow"><label className="label">Preferred position</label>
-            <select className="select" value={preferred ?? ''} onChange={(e) => setPreferred(e.target.value)}>
-              <option value="">—</option>
-              {POSITIONS.map((p) => <option key={p}>{p}</option>)}
-            </select></div>
         </div>
+        <PreferredPosition value={preferred} onChange={setPreferred} />
 
         <div className="field"><label className="label">Positions you play</label>
           <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
@@ -124,9 +120,11 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
             <input className="input" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
         </div>
 
-        <p className="dim" style={{ fontSize: 12 }}>Your login. The manager can change it.</p>
+        <p className="dim" style={{ fontSize: 'var(--type-caption)' }}>Only a manager can change your sign-in email.</p>
 
-        <button className="btn btn-primary btn-block mt-2" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+        <div className="sheet-actions">
+          <button className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+        </div>
       </form>
     </Sheet>
   )

@@ -1,3 +1,5 @@
+import Loader from './Loader'
+import LoadIssue from './LoadIssue'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -10,7 +12,7 @@ import Toast from './Toast'
 // Admin seasons + rollover (BUILD-LIST A3).
 export default function SeasonsPanel() {
   const { profile } = useAuth()
-  const { seasons, seasonId, setSeasonId, refreshSeasons } = useSeason()
+  const { seasons, seasonId, setSeasonId, refreshSeasons, error, loading } = useSeason()
   const [editing, setEditing] = useState(null)
   const [open, setOpen] = useState(false)
   const [toast, setToast] = useState(null)
@@ -47,15 +49,18 @@ export default function SeasonsPanel() {
       await refreshSeasons()
       setSeasonId(id)
     } catch (err) {
-      setToast(friendlyError(err, "Couldn't switch the current season — give it another go."))
+      setToast(friendlyError(err, "Couldn't change the current season. Try again."))
     }
   }
 
   const openAdd = () => { setEditing(null); setOpen(true) }
   const openEdit = (s) => { setEditing(s); setOpen(true) }
 
+  if (loading && !seasons.length && !open) return <Loader label="Loading the seasons…" />
+  if (error && !seasons.length && !open) return <LoadIssue subject="the seasons" retry={refreshSeasons} />
   return (
     <div className="mt-4">
+      {error && <LoadIssue subject="the seasons" retry={refreshSeasons} stale />}
       <Toast message={toast} onDismiss={() => setToast(null)} />
       <button className="btn btn-primary btn-block" onClick={openAdd}>+ Start a new season</button>
 
@@ -79,15 +84,15 @@ export default function SeasonsPanel() {
       <SeasonForm open={open} season={editing} onClose={() => setOpen(false)} onSave={onSave} />
 
       <style>{`
-        .spn-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--coal);
+        .spn-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-3); background: var(--coal);
           color: var(--bone); border: 1px solid var(--line); }
         .spn-current { border-color: var(--line-2); }
         .spn-main { flex: 1; background: none; border: none; color: var(--bone); text-align: left; }
-        .spn-label { display: block; font-family: var(--font-display); font-weight: 600; font-size: 17px; }
-        .spn-badge { font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; margin-left: 8px;
-          color: var(--green-bright); border: 1px solid var(--green); border-radius: 5px; padding: 1px 5px; vertical-align: middle; }
-        .spn-dates { font-size: 12px; color: var(--bone-mute); margin-top: 3px; display: block; }
-        .spn-actions { display: flex; gap: 6px; flex: none; }
+        .spn-label { display: block; font-family: var(--font-display); font-weight: 600; font-size: var(--type-lead); }
+        .spn-badge { font-family: var(--font-body); font-size: var(--type-xs); letter-spacing: .08em; margin-left: var(--space-2);
+          color: var(--green-bright); border: 1px solid var(--green); border-radius: var(--r-input); padding: var(--space-1) var(--space-1); vertical-align: middle; }
+        .spn-dates { font-size: var(--type-caption); color: var(--bone-mute); margin-top: var(--space-1); display: block; }
+        .spn-actions { display: flex; gap: var(--space-1); flex: none; }
       `}</style>
     </div>
   )

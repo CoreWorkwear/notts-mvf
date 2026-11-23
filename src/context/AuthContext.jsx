@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, hasStoredSession } from '../lib/supabase'
 import { canSetAvailability, accountStatus, respondBlock } from '../lib/players'
+import { forgetDiary } from '../lib/fixtureDiary'
 import { disablePush } from '../lib/push'
 import { logError } from '../lib/logger'
 
-const AuthContext = createContext(null)
+export const AuthContext = createContext(null)
 
 const MANAGER_VIEW_KEY = 'mvf:managerView'
 // Session-scoped: recovery must survive a reload / iOS tab discard between
@@ -20,6 +21,16 @@ export function AuthProvider({ children }) {
   // what the per-fixture availability gate compares against (0034).
   const [teamIds, setTeamIds] = useState([])
   const [loading, setLoading] = useState(true)
+  // No session in hand, but one still in storage: the access token had expired
+  // and the refresh has not got through (no signal, or slower than the safety
+  // timer). That is "not restored yet", NOT "signed out" — the app shows a
+  // reconnect screen for it instead of asking a signed-in player to sign in.
+  const [reconnecting, setReconnectingState] = useState(false)
+  // The player chose the sign-in form over waiting. The slow answers (a refresh
+  // can sit in backoff for most of a minute) must not put the reconnect screen
+  // back over what they are typing: only a session, or a real sign-out, resets it.
+  const choseSignIn = useRef(false)
+  const setReconnecting = useCallback((on) => setReconnectingState(on && !choseSignIn.current), [])
   const [passwordRecovery, setPasswordRecoveryState] = useState(() => {
     try { return sessionStorage.getItem(RECOVERY_KEY) === '1' } catch { return false }
   })
@@ -83,8 +94,8 @@ export function AuthProvider({ children }) {
       if (h.get('error') || h.get('error_code')) {
         const code = `${h.get('error_code') || ''} ${h.get('error') || ''}`
         setAuthNotice(/otp_expired|access_denied/.test(code)
-          ? 'That reset link has expired or already been used — request a fresh one below.'
-          : ((h.get('error_description') || '').replace(/\+/g, ' ') || 'Something went wrong with that link — try again.'))
+          ? 'Reset link expired or already used. Request a new link.'
+          : ((h.get('error_description') || '').replace(/\+/g, ' ') || 'Link unavailable. Try again.'))
         window.history.replaceState(null, '', window.location.pathname + window.location.search)
       }
     } catch { /* hash parsing is best-effort */ }
@@ -93,7 +104,14 @@ export function AuthProvider({ children }) {
     // (slow cold-start network / a token refresh that errors), we STILL release the
     // UI: every path below releases on resolve OR reject, and the safety timer is
     // a backstop for the rare case nothing settles at all.
-    const safety = setTimeout(() => { if (active) setLoading(false) }, 6000)
+    let restored = false // has getSession() answered yet, either way?
+    const safety = setTimeout(() => {
+      if (!active) return
+      // Still waiting on the session itself (a refresh on a weak signal can take
+      // far longer than this): don't let the released UI read it as signed out.
+      if (!restored && hasStoredSession()) setReconnecting(true)
+      setLoading(false)
+    }, 6000)
     const release = () => { if (active) { clearTimeout(safety); setLoading(false) } }
 
     // The splash is held until the PROFILE is known, not just the session:
@@ -113,24 +131,45 @@ export function AuthProvider({ children }) {
     }
 
     supabase.auth.getSession()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return
+        restored = true
         setSession(data.session)
+        // An expired token whose refresh failed comes back as { session: null,
+        // error } with the session still stored. Only a refused refresh token
+        // removes it, and that one really is signed out.
+        const stranded = !data.session && hasStoredSession()
+        setReconnecting(stranded)
+        if (stranded) logError('auth', error ?? 'session not restored', { op: 'sessionRestore' })
         // A persisted recovery flag with NO session behind it (the recovery
         // session expired while the tab was away) would strand the app on the
         // set-password screen with nothing to update — drop it.
         if (!data.session) setPasswordRecovery(false)
         loadThenRelease(data.session?.user?.id, 'sessionRestore')
       })
-      .catch((e) => { logError('auth', e ?? 'session restore failed', { op: 'sessionRestore' }); release() })
+      .catch((e) => {
+        restored = true
+        logError('auth', e ?? 'session restore failed', { op: 'sessionRestore' })
+        if (active && hasStoredSession()) setReconnecting(true)
+        release()
+      })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       // Clicking a reset-password email lands here with a recovery session —
       // flag it so the app shows the set-new-password screen, not the app.
+      if (event === 'SIGNED_OUT') forgetDiary()
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       setSession(s)
-      // TOKEN_REFRESHED changes nothing profile-shaped: skip the reload.
-      if (event === 'TOKEN_REFRESHED') return
+      if (s || event === 'SIGNED_OUT') choseSignIn.current = false
+      // A session in hand ends any wait for one. With none, it depends on
+      // storage: SIGNED_OUT has cleared it (signed out), an empty
+      // INITIAL_SESSION after a failed refresh has not (still reconnecting).
+      setReconnecting(!s && hasStoredSession())
+      // TOKEN_REFRESHED changes nothing profile-shaped: skip the reload — but
+      // only when this user's profile IS loaded. After a cold start whose first
+      // refresh failed, TOKEN_REFRESHED is the only event that ever arrives, and
+      // skipping it left the app up with profile=null until the next foreground.
+      if (event === 'TOKEN_REFRESHED' && loadedFor.current === s?.user?.id) return
       if (!s) { loadedFor.current = null; loadProfile(undefined); release(); return }
       // USER_UPDATED (e.g. a password change) may carry profile-shaped changes.
       if (event === 'USER_UPDATED') loadedFor.current = null
@@ -141,7 +180,34 @@ export function AuthProvider({ children }) {
       setTimeout(() => { if (active) loadThenRelease(s.user?.id, 'profileLoad') }, 0)
     })
     return () => { active = false; clearTimeout(safety); sub.subscription.unsubscribe() }
-  }, [loadProfile])
+  }, [loadProfile, setPasswordRecovery, setReconnecting])
+
+  // "Try again" on the reconnect screen. A refresh that gets through also fires
+  // TOKEN_REFRESHED (handled above); this covers the answers that fire nothing.
+  // Resolves true once a session is in hand.
+  const retryRestore = useCallback(async () => {
+    let res
+    try { res = await supabase.auth.getSession() } catch (e) { res = { data: { session: null }, error: e } }
+    const s = res?.data?.session ?? null
+    if (!s) {
+      // Gone from storage = the server refused the refresh token: signed out
+      // for real, so let the sign-in form through. Otherwise stay put.
+      if (!hasStoredSession()) setReconnecting(false)
+      return false
+    }
+    setSession(s)
+    choseSignIn.current = false
+    setReconnecting(false)
+    const uid = s.user?.id
+    if (uid && loadedFor.current !== uid && inflightFor.current !== uid) {
+      inflightFor.current = uid
+      loadProfile(uid)
+        .then(() => { loadedFor.current = uid })
+        .catch((e) => logError('auth', e ?? 'profile load failed', { op: 'retryRestore' }))
+        .finally(() => { if (inflightFor.current === uid) inflightFor.current = null })
+    }
+    return true
+  }, [loadProfile, setReconnecting])
 
   // --- auth actions -------------------------------------------------------
   async function signIn(email, password) {
@@ -196,6 +262,12 @@ export function AuthProvider({ children }) {
     teamIds,
     loading,
     isAuthed: !!session,
+    reconnecting: !session && reconnecting,
+    retryRestore,
+    // Their call: they would rather sign in than wait. The stored session is
+    // left alone (signing in replaces it; if its refresh lands first, that
+    // account simply comes back up).
+    signInInstead: () => { choseSignIn.current = true; setReconnectingState(false) },
     // isRealAdmin = the actual DB role (the truth). isAdmin = the EFFECTIVE,
     // view-aware flag every UI gate reads: an admin only sees management UI when
     // manager view is on. Security never depends on either — RLS does that.

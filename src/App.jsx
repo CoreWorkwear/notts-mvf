@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { MotionConfig, AnimatePresence, motion } from 'framer-motion'
-import { pageTransition } from './lib/motion'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { MotionConfig } from 'framer-motion'
 import { breadcrumb } from './lib/breadcrumbs'
 import { safeAppPath } from './lib/navigation'
 import { useAuth } from './context/AuthContext'
+import OfflineDiary from './components/OfflineDiary'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
 import Loader from './components/Loader'
@@ -33,10 +33,13 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'))
 const Competitions = lazy(() => import('./pages/Competitions'))
 
 export default function App() {
-  const { loading, isAuthed, isAdmin, profile, passwordRecovery } = useAuth()
+  const { loading, isAuthed, isAdmin, profile, passwordRecovery, reconnecting } = useAuth()
 
   if (loading) return <Loader label="Loading…" />
   if (passwordRecovery) return <SetNewPassword />
+  // Signed in on this phone, but the session could not be refreshed yet (no
+  // signal at the ground). Not the sign-in form: there is nothing to type.
+  if (!isAuthed && reconnecting) return <Reconnect />
   if (!isAuthed) return <Auth />
 
   // Admin-only routes fall back to Fixtures for players. Not knowing yet is
@@ -49,13 +52,48 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <RouteBreadcrumbs />
-        <ScrollToTop />
+        <RouteScroll />
         <PushNavigate />
         <Header />
-        <AnimatedRoutes adminOnly={adminOnly} />
+        <OfflineDiary />
+        <AppRoutes adminOnly={adminOnly} />
         <BottomNav />
       </BrowserRouter>
     </MotionConfig>
+  )
+}
+
+// Shown in place of the sign-in form when a stored session is waiting on a
+// token refresh. supabase-js keeps retrying on its own and the app appears the
+// moment one lands; the button is for the player who would rather not wait.
+// How long "Try again" waits before handing the button back. supabase-js can
+// sit in refresh backoff for most of a minute on a dead signal; the attempt
+// carries on underneath and still brings the app up if it lands.
+const RETRY_PATIENCE_MS = 8000
+
+function Reconnect() {
+  const { retryRestore, signInInstead } = useAuth()
+  const [busy, setBusy] = useState(false)
+  async function again() {
+    setBusy(true)
+    let timer
+    try {
+      await Promise.race([
+        Promise.resolve(retryRestore()).catch(() => false),
+        new Promise((r) => { timer = setTimeout(r, RETRY_PATIENCE_MS) }),
+      ])
+    } finally { clearTimeout(timer); setBusy(false) }
+  }
+  return (
+    <div className="page">
+      <OfflineDiary />
+      <div className="empty mt-5" role="alert">
+        <p className="empty-title">Can't reach the club</p>
+        <p>Still signed in. Check your connection.</p>
+        <button className="btn btn-primary mt-3" disabled={busy} onClick={again}>{busy ? 'Trying…' : 'Try again'}</button>
+        <div><button className="btn btn-ghost mt-2" onClick={signInInstead}>Sign in instead</button></div>
+      </div>
+    </div>
   )
 }
 
@@ -67,15 +105,53 @@ function RouteBreadcrumbs() {
   return null
 }
 
-// Land at the top of a new screen. Scrolled halfway down Fixtures and tapping
-// Results used to drop you into the middle of the results list. Instant, not
-// smooth: the content has already been replaced, so animating the scroll would
-// just be a slide through someone else's page.
-function ScrollToTop() {
-  const { pathname } = useLocation()
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' })
-  }, [pathname])
+// Back can return while a short loading state still occupies a long list.
+// Restore the history entry when the list grows, or hand control straight
+// back to the player if they start interacting in the meantime.
+function RouteScroll() {
+  const { key, pathname } = useLocation()
+  const action = useNavigationType()
+  const positions = useRef(new Map())
+  const lastPath = useRef(null)
+
+  useLayoutEffect(() => {
+    const previous = history.scrollRestoration
+    history.scrollRestoration = 'manual'
+    return () => { history.scrollRestoration = previous }
+  }, [])
+
+  useLayoutEffect(() => {
+    const entries = positions.current
+    const top = lastPath.current === pathname ? window.scrollY : action === 'POP' ? entries.get(key) ?? 0 : 0
+    lastPath.current = pathname
+    let waiting = false
+    let observer
+    function save() {
+      if (!waiting) entries.set(key, window.scrollY)
+    }
+    function stop() {
+      waiting = false
+      observer?.disconnect()
+    }
+    function restore() {
+      window.scrollTo({ top, behavior: 'instant' })
+      waiting = window.scrollY < top - 1
+      if (!waiting) stop()
+    }
+    restore()
+    if (waiting && window.ResizeObserver) {
+      observer = new ResizeObserver(restore)
+      observer.observe(document.querySelector('main'))
+    }
+    window.addEventListener('scroll', save, { passive: true })
+    const interruptions = ['pointerdown', 'wheel', 'keydown']
+    for (const event of interruptions) window.addEventListener(event, stop, { passive: true })
+    return () => {
+      stop()
+      window.removeEventListener('scroll', save)
+      for (const event of interruptions) window.removeEventListener(event, stop)
+    }
+  }, [action, key, pathname])
   return null
 }
 
@@ -98,15 +174,11 @@ function PushNavigate() {
   return null
 }
 
-// Route content crossfades + drifts up on navigation (DESIGN-SYSTEM §5). The
-// header, bottom nav and sponsor strip live outside the transition so only the
-// page body moves. Keyed on pathname so AnimatePresence sees each route swap.
-function AnimatedRoutes({ adminOnly }) {
+function AppRoutes({ adminOnly }) {
   const location = useLocation()
   return (
     <main>
-      <AnimatePresence mode="wait">
-        <motion.div key={location.pathname} {...pageTransition}>
+      <div key={location.pathname}>
           <Suspense fallback={<Loader label="Loading…" />}>
           <Routes location={location}>
             <Route path="/fixtures" element={<Fixtures />} />
@@ -127,8 +199,7 @@ function AnimatedRoutes({ adminOnly }) {
             <Route path="*" element={<Navigate to="/fixtures" replace />} />
           </Routes>
           </Suspense>
-        </motion.div>
-      </AnimatePresence>
+        </div>
       <SponsorStrip />
     </main>
   )

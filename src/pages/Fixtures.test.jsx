@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -15,7 +15,7 @@ const resultForm = vi.hoisted(() => ({ props: null }))
 
 vi.mock('../context/AuthContext', () => ({ useAuth: () => auth.state }))
 vi.mock('../context/SeasonContext', () => ({ useSeason: () => ({ seasonId: 's1', error: null, refreshSeasons: vi.fn() }) }))
-vi.mock('../hooks/useFixtures', () => ({ useFixtures: () => fx.state, setAvailability: vi.fn(async () => ({ error: null })) }))
+vi.mock('../hooks/useFixtures', () => ({ useFixtures: () => fx.state, saveFixtureAnswer: vi.fn(async () => true) }))
 vi.mock('../hooks/useCompetitions', () => ({ useCompetitions: () => ({ competitions: [] }) }))
 vi.mock('../hooks/useMedia', () => ({ usePhotoPool: () => [] }))
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
@@ -29,9 +29,14 @@ vi.mock('../lib/supabase', () => {
 vi.mock('../components/FixtureHero', () => ({ default: ({ fixture, onOpenDetail }) => <div>HERO {fixture.id}<button onClick={onOpenDetail}>OPEN-DETAIL</button></div> }))
 vi.mock('../components/FixtureStrip', () => ({ default: ({ fixture }) => <div>STRIP {fixture.id}</div> }))
 // Honours canLogResult, like the real sheet: the button is the thing under test.
-vi.mock('../components/FixtureDetail', () => ({ default: ({ open, canLogResult, onLogResult }) => (
+const detailProps = vi.hoisted(() => ({ last: null }))
+vi.mock('../components/FixtureDetail', () => ({ default: (props) => {
+  detailProps.last = props
+  const { open, canLogResult, onLogResult } = props
+  return (
   open ? (canLogResult ? <button onClick={onLogResult}>LOG-RESULT</button> : <span>DETAIL-OPEN</span>) : null
-) }))
+  )
+} }))
 vi.mock('../components/FixtureForm', () => ({ default: () => null }))
 // The calendar is the one view that lists EVERY game of the season, played ones included.
 vi.mock('../components/CalendarView', () => ({ default: ({ fixtures, onOpen }) => (
@@ -57,22 +62,42 @@ beforeEach(() => {
   auth.state = { ...playerAuth }
   db.profiles = []; db.error = null
   resultForm.props = null
-  fx.state = { upcoming: [], past: [], teams: [], opponents: [], fixtures: [], loading: false, error: null, refetch: vi.fn(), applyMyStatus: vi.fn() }
+  fx.state = { upcoming: [], past: [], teams: [], opponents: [], fixtures: [], loading: false, error: null, refetch: vi.fn() }
 })
 
 const renderPage = () => render(<MemoryRouter><Fixtures /></MemoryRouter>)
+// An admin's page also loads the squad list for the result form: let it land.
+const settled = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+
+test('the 1st Team filter selects fixtures stored under the xl key', async () => {
+  auth.state = { ...playerAuth, teamKeys: ['xl', 'community'] }
+  const games = [fixture('red', 'xl'), fixture('green', 'community')]
+  fx.state = { ...fx.state, fixtures: games, upcoming: games, teams: games.map((game) => game.team) }
+  renderPage()
+  await userEvent.click(screen.getByRole('tab', { name: '1st Team' }))
+  expect(screen.getByText('HERO red')).toBeInTheDocument()
+  expect(screen.queryByText('STRIP green')).toBeNull()
+})
+
+test('a reminder opens the addressed fixture and requests focus on its answer, even when another fixture leads', async () => {
+  const games = [fixture('first', 'community'), fixture('second', 'community')]
+  fx.state = { ...fx.state, loaded: true, fixtures: games, upcoming: games }
+  render(<MemoryRouter initialEntries={['/fixtures?mvf_fixture=second']}><Fixtures /></MemoryRouter>)
+  await waitFor(() => expect(detailProps.last?.fixture?.id).toBe('second'))
+  expect(detailProps.last.focusAnswer).toBe(true)
+})
 
 describe('Fixtures — no phantom "sign you off" banner before the profile has loaded', () => {
   test('profile=null (still loading) shows no account banner', () => {
     auth.state = { ...playerAuth, profile: null, canRespond: false, accountStatus: 'active', respondBlockFor: () => 'unknown' }
     renderPage()
-    expect(screen.queryByText(/sign you off/i)).toBeNull()
+    expect(screen.queryByText(/awaiting manager approval/i)).toBeNull()
   })
 
   test('a genuinely pending player still gets the banner', () => {
     auth.state = { ...playerAuth, profile: { id: 'u1', approved: false }, canRespond: false, accountStatus: 'pending' }
     renderPage()
-    expect(screen.getByText(/sign you off/i)).toBeInTheDocument()
+    expect(screen.getByText(/awaiting manager approval/i)).toBeInTheDocument()
   })
 })
 
@@ -93,6 +118,67 @@ describe('Fixtures — the status line counts only games this player can answer'
   })
 })
 
+// A season with no fixtures yet is exactly when the manager is adding them. The
+// page used "loading && no fixtures" to mean "first load", so every refetch
+// (returning to the app refetches) swapped it for the Loader and unmounted the
+// open Add-a-fixture form; it came back blank.
+describe('Fixtures — an empty season does not go back to the Loader on a refetch', () => {
+  const adminAuth = { ...playerAuth, isAdmin: true, profile: { id: 'u1', role: 'admin', approved: true, active: true, is_player: true } }
+
+  test('refetching with the load already done once: the page (and its Add button) stays', async () => {
+    auth.state = adminAuth
+    fx.state = { ...fx.state, loading: true, loaded: true }
+    renderPage()
+    await settled()
+    expect(screen.getByRole('button', { name: 'Add a fixture' })).toBeInTheDocument()
+    expect(screen.queryByText(/loading fixtures/i)).toBeNull()
+  })
+
+  test('a refetch that fails leaves the page up too, not the full-screen error', async () => {
+    auth.state = adminAuth
+    fx.state = { ...fx.state, loaded: true, error: { message: 'Load failed' } }
+    renderPage()
+    await settled()
+    expect(screen.getByRole('button', { name: 'Add a fixture' })).toBeInTheDocument()
+    expect(screen.queryByText(/couldn't load fixtures/i)).toBeNull()
+    // ...but it does not pass the stale page off as fresh.
+    expect(screen.getByRole('status')).toHaveTextContent(/couldn't refresh/i)
+  })
+
+  test('the very first load still gets the Loader, and a first load that fails still says so', () => {
+    fx.state = { ...fx.state, loading: true, loaded: false }
+    const first = renderPage()
+    expect(screen.getByText(/loading fixtures/i)).toBeInTheDocument()
+    first.unmount()
+
+    fx.state = { ...fx.state, loading: false, loaded: false, error: { message: 'Load failed' } }
+    renderPage()
+    expect(screen.getByText(/couldn't load fixtures/i)).toBeInTheDocument()
+  })
+})
+
+describe("Fixtures — the hero is the viewer's next game", () => {
+  const ft1 = fixture('ft1', 'xl'), co1 = fixture('co1', 'community'), ft2 = fixture('ft2', 'xl')
+  const communityOnly = (f) => (f?.team?.key === 'xl' ? 'other-team' : null)
+
+  test('a Community-only player with a First Team game first: the hero is his own game', () => {
+    fx.state = { ...fx.state, upcoming: [ft1, co1, ft2], fixtures: [ft1, co1, ft2] }
+    auth.state = { ...playerAuth, respondBlockFor: communityOnly }
+    renderPage()
+    expect(screen.getByText(/HERO co1/)).toBeInTheDocument()
+    // The games he can only watch are still listed, in date order, and not twice.
+    expect(screen.getAllByText(/STRIP /).map((n) => n.textContent)).toEqual(['STRIP ft1', 'STRIP ft2'])
+  })
+
+  test("the manager still leads with the club's next game", async () => {
+    fx.state = { ...fx.state, upcoming: [ft1, co1], fixtures: [ft1, co1] }
+    auth.state = { ...playerAuth, isAdmin: true, respondBlockFor: communityOnly }
+    renderPage()
+    await settled()
+    expect(screen.getByText(/HERO ft1/)).toBeInTheDocument()
+  })
+})
+
 describe('Fixtures — logging a result needs the squad list (stats key by profile_id)', () => {
   const adminAuth = { ...playerAuth, isAdmin: true, profile: { id: 'u1', role: 'admin', approved: true, active: true, is_player: true } }
 
@@ -104,7 +190,7 @@ describe('Fixtures — logging a result needs the squad list (stats key by profi
     renderPage()
     await userEvent.click(screen.getByText('OPEN-DETAIL'))
     await userEvent.click(screen.getByText('LOG-RESULT'))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/squad list didn't load/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't load squad/i)
     expect(screen.queryByText('RESULT-FORM-OPEN')).toBeNull()
 
     // Signal's back: the next tap re-fetches and opens the form.
@@ -146,6 +232,12 @@ describe('Fixtures — a game that already has a result cannot be logged again f
 
   test('played and logged: the sheet opens but offers no "Log the result"', async () => {
     await openFromCalendar(fixture('done', 'xl', { match_date: '2020-01-05', hasResult: true, concluded: true }))
+    expect(screen.getByText('DETAIL-OPEN')).toBeInTheDocument()
+    expect(screen.queryByText('LOG-RESULT')).toBeNull()
+  })
+
+  test('postponed and past its old slot: there is no result to log', async () => {
+    await openFromCalendar(fixture('pp', 'xl', { match_date: '2020-01-05', status: 'postponed', postponed: true, concluded: true }))
     expect(screen.getByText('DETAIL-OPEN')).toBeInTheDocument()
     expect(screen.queryByText('LOG-RESULT')).toBeNull()
   })

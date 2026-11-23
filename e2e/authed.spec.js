@@ -9,8 +9,12 @@ import { signIn, ADMIN, PLAYER } from './helpers.js'
 test.describe('admin', () => {
   test.skip(!ADMIN.email, 'set E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD to run')
 
-  test('signs in and lands on Fixtures', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await signIn(page, ADMIN.email, ADMIN.password)
+    await page.getByRole('button', { name: 'Manager view' }).click()
+  })
+
+  test('signs in and lands on Fixtures', async ({ page }) => {
     await expect(page.getByRole('button', { name: /add a fixture/i })).toBeVisible()
   })
 
@@ -23,7 +27,6 @@ test.describe('admin', () => {
   // only a real browser catches this: assert it is PINNED TO THE VIEWPORT after
   // scrolling, not merely present.
   test('the bottom nav stays pinned to the viewport after scrolling', async ({ page }) => {
-    await signIn(page, ADMIN.email, ADMIN.password)
     const nav = page.locator('.bottom-nav')
     await expect(nav).toBeVisible()
     await expect(nav).toHaveCSS('position', 'fixed')
@@ -39,21 +42,19 @@ test.describe('admin', () => {
   })
 
   test('adds a fixture and it appears in the list (the 3×-broken bug)', async ({ page }) => {
-    await signIn(page, ADMIN.email, ADMIN.password)
     await page.getByRole('button', { name: /add a fixture/i }).click()
     const stamp = `E2E-${Date.now()}`
+    await page.getByRole('group', { name: 'Team' }).getByRole('button', { name: 'Community' }).click()
     // New opponent (free-text), venue, a far-future date so it lands in upcoming.
     await page.getByPlaceholder('New opponent name').fill(stamp)
     await page.getByPlaceholder(/harvey hadden/i).fill('E2E Park')
-    await page.locator('input[type="date"]').fill('2027-05-01')
+    await page.locator('input[type="date"]').fill(new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10))
     await page.getByRole('button', { name: /^add fixture$/i }).click()
     // The sheet closes and the new game shows in the fixtures surface.
     await expect(page.getByText(stamp)).toBeVisible({ timeout: 10_000 })
   })
 
   test('logs a result and the game moves to Results', async ({ page }) => {
-    await signIn(page, ADMIN.email, ADMIN.password)
-
     // Add a PAST-dated fixture so it's already concluded → "needs a result".
     const stamp = `E2E-RES-${Date.now()}`
     const past = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10)
@@ -69,23 +70,26 @@ test.describe('admin', () => {
     await page.getByRole('button', { name: new RegExp(stamp) }).click() // the needs-a-result row
 
     // Log 3–1 and save.
-    await page.getByLabel('Our score').fill('3')
-    await page.getByLabel('Their score').fill('1')
+    await page.getByRole('spinbutton', { name: '1st Team score', exact: true }).fill('3')
+    await page.getByRole('spinbutton', { name: stamp + ' score', exact: true }).fill('1')
     await page.getByRole('button', { name: /^log result$/i }).click()
 
-    // It saved and moved to Results — the form closed and a Won result is shown.
-    await expect(page.getByRole('button', { name: /^log result$/i })).toBeHidden()
-    await expect(page.getByText('Won')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('dialog')).toBeHidden()
+    const result = page.getByRole('button', { name: new RegExp(stamp) })
+    await expect(result).toContainText(/3\s*[–−-]\s*1/)
   })
 })
 
 test.describe('player', () => {
+  // The failed-read journey intercepts the fixture API. Service-worker-owned
+  // requests bypass Playwright routing on a controlled WebKit reload.
+  test.use({ serviceWorkers: 'block' })
   test.skip(!PLAYER.email, 'set E2E_PLAYER_EMAIL / E2E_PLAYER_PASSWORD to run')
 
   test('sets availability from the hero and the UI updates immediately', async ({ page }) => {
     await signIn(page, PLAYER.email, PLAYER.password)
     const inBtn = page.getByRole('button', { name: /^i'm in$/i }).first()
-    await inBtn.click({ force: true }) // hero/weather still settling; we test the write+re-render, not layout
+    await inBtn.tap()
     // Immediate reflection — the bug class in §2.2/§3.4 (write OK, UI stale).
     await expect(page.getByText(/saved|you're down as in/i)).toBeVisible({ timeout: 8_000 })
   })
@@ -100,11 +104,11 @@ test.describe('player', () => {
     // cold render — exactly the cold-start path users hit.
     await page.route('**/rest/v1/fixtures*', (r) => r.abort())
     await page.reload()
-    await expect(page.getByText(/couldn't pull the fixtures/i)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText(/pulling the fixtures/i)).toBeHidden() // no infinite loader
+    await expect(page.getByText(/couldn't load fixtures/i)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('status', { name: 'Loading fixtures…' })).toBeHidden()
     // Recovery: stop failing, hit Try again, the fixtures surface loads.
     await page.unroute('**/rest/v1/fixtures*')
     await page.getByRole('button', { name: /try again/i }).click()
-    await expect(page.getByText(/couldn't pull the fixtures/i)).toBeHidden({ timeout: 15_000 })
+    await expect(page.getByText(/couldn't load fixtures/i)).toBeHidden({ timeout: 15_000 })
   })
 })

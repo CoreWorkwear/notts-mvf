@@ -1,101 +1,180 @@
-/* ============================================================================
-   Notts MvF — design tokens + base
-   Single source of truth (DESIGN-SYSTEM.md). Don't re-derive colours per
-   component. Dark-first, charcoal base + red (XL/first team) & green
-   (Community/reserves) as the only two accents. Light theme is an on-brand
-   alternate under [data-theme="light"]; dark is the default.
-   ============================================================================ */
-
+/* Notts MvF Hardware grounds. The bootstrap resolves the device preference before paint. */
 :root {
-  /* BASE — near-black charcoal, faint cool/green undertone (DARK = default) */
-  --ink:      #0c0f0d;   /* app background */
-  --coal:     #141815;   /* raised surface / cards */
-  --slate:    #1c211e;   /* higher surface / inputs / muted badge bg */
-  --line:     #2a2f2b;   /* borders, dividers */
-  --line-2:   #3a423c;   /* hover/active borders, grab handles */
+  color-scheme: light;
+  --surface: #F2F0E9;
+  --surface-raised: #FAF9F5;
+  --surface-input: var(--surface-raised);
+  --text: #202820;
+  --text-muted: #555F54;
+  --text-secondary: var(--text-muted);
+  --border-strong: #667064;
+  --team-xl: #C51C36;
+  --team-community: #127650;
+  --status-maybe: #755511;
+  --on-action: #FAF9F5;
+  --action-edge: #153D28;
+  --border: color-mix(in srgb, var(--border-strong) 32%, var(--surface-raised));
+  --surface-subtle: color-mix(in srgb, var(--text) 7%, var(--surface-raised));
+  --status-in: var(--team-community);
+  --status-out: var(--team-xl);
+  --status-live: var(--status-in);
+  --status-failed: var(--status-out);
+  --status-pending: var(--status-maybe);
+  --action-fill: var(--team-community);
+  --action-hover: color-mix(in srgb, var(--action-fill) 94%, var(--text));
+  --focus: var(--text);
+  --award: var(--status-maybe);
+  --award-ink: #2A2000;
+  --award-fill: #E7C578;
 
-  /* Themed surfaces that swap (translucent header/nav, modal scrim, shadow) */
-  --glass:     rgba(12,15,13,.72);
-  --scrim:     rgba(0,0,0,.55);
-  --card-shadow: 0 8px 24px -16px rgba(0,0,0,.8);
+  /* Club artwork and photo surfaces are independent of the chosen ground. */
+  --kit-xl: #E11D2A;
+  --kit-community: #2FA84F;
+  --white: #FFFFFF;
+  --charcoal: #141A12;
+  --warm-white: #FAF9F5;
+  --on-photo: var(--warm-white);
+  --on-photo-muted: #ECEDE7;
+  --poster-control: #1C2419;
+  --poster-green: #86DDB8;
+  --poster-red: #F8ADB5;
+  --poster-secondary: var(--on-photo-muted);
+  --poster-amber: #E7C578;
+  --photo-overlay: rgb(12 18 14 / .8);
+  --photo-edge: rgb(250 249 245 / .45);
+  --grad-xl: linear-gradient(150deg, #C51C36, #72162E);
+  --grad-community: linear-gradient(150deg, #127650, #12452E);
+  --kit-wash: linear-gradient(150deg, rgb(8 16 12 / .12), rgb(8 16 12 / .65));
+  --hero-wash: linear-gradient(0deg, rgb(8 16 12 / .96), rgb(8 16 12 / .91) 28%, rgb(8 16 12 / .79) 48%, rgb(8 16 12 / .66) 63%, rgb(8 16 12 / .03) 80%);
+  --pitch-wash: color-mix(in srgb, var(--team-community) 8%, var(--surface-raised));
+  --weather-cloud: #C7D0D8;
+  --weather-cloud-edge: #AAB4BD;
+  --weather-sun: #FFC83D;
+  --weather-lightning: #E0A91F;
+  --weather-rain: #5BA4E6;
+  --weather-snow: #DFF1FF;
+  --weather-wind: #DFE8F0;
 
-  /* First Team (key 'xl') — red, the lead accent */
-  --red:        #E11D2A;
-  --red-bright: #FF3340;
-  --red-dim:    rgba(225,29,42,0.14);
-  --red-dim-2:  rgba(225,29,42,0.24);
+  --shadow-ink: rgb(10 13 9 / .25);
+  --shadow-deep: rgb(10 13 9 / .4);
+  --shadow-sheet: 0 -12px 40px var(--shadow-ink);
+  --shadow-float: 0 5px 20px rgb(10 13 9 / .13);
+  --shine: transparent;
+  --glass: var(--surface-raised);
+  --scrim: rgb(10 13 9 / .60);
+  --card-shadow: none;
+  --chrome-blur: none;
+  --panel-blur: none;
+  --red-dim: color-mix(in srgb, var(--team-xl) 6%, var(--surface-raised));
+  --red-dim-2: color-mix(in srgb, var(--team-xl) 10%, var(--surface-raised));
+  --green-dim: color-mix(in srgb, var(--team-community) 6%, var(--surface-raised));
+  --green-dim-2: color-mix(in srgb, var(--team-community) 10%, var(--surface-raised));
+  --amber-dim: color-mix(in srgb, var(--status-maybe) 9%, var(--surface-raised));
+  --coal-hover: var(--surface-subtle);
+  --slate-hover: var(--surface-subtle);
+  --ink: var(--surface);
+  --coal: var(--surface-raised);
+  --slate: var(--surface-input);
+  --line: var(--border);
+  --line-2: var(--border-strong);
+  --bone: var(--text);
+  --bone-mute: var(--text-secondary);
+  --bone-dim: var(--text-muted);
+  --red: var(--team-xl);
+  --green: var(--team-community);
+  --red-bright: var(--team-xl);
+  --green-bright: var(--team-community);
+  --amber: var(--status-maybe);
+  --gold: var(--award);
 
-  /* Community — RESERVES — green */
-  --green:        #2FA84F;
-  --green-bright: #44D268;
-  --green-dim:    rgba(47,168,79,0.14);
-  --green-dim-2:  rgba(47,168,79,0.24);
+  --font-body: 'Instrument Sans', system-ui, sans-serif;
+  --font-display: var(--font-body);
+  --font-serif: var(--font-body);
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  /* TEXT — warm off-white, never pure #fff for body */
-  --bone:      #F2F0EC;
-  --bone-mute: #9aa39c;
-  --bone-dim:  #5d655f;
+  /* A four-point grid, independent of type enlargement. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-14: 56px;
+  --space-16: 64px;
+  --space-24: 96px;
+  --target: var(--space-12);
+  --gutter: var(--space-4);
+  --header-min: var(--space-14);
 
-  /* FUNCTIONAL accents (distinct from brand red/green) */
-  --gold:      #E8B53F;   /* golden boot, MOTM only */
-  --amber:     #F5A623;   /* "maybe", warnings, FORM ERRORS (never red) */
-  --amber-dim: rgba(245,166,35,0.14);
-
-  /* Team gradients (poster heroes / detail headers only) */
-  --grad-xl:        linear-gradient(150deg, #E11D2A 0%, #7d0f17 100%);
-  --grad-community: linear-gradient(150deg, #2FA84F 0%, #12401f 100%);
-  --hero-wash:      linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.55));
-
-  /* Fonts */
-  --font-display: 'Clash Display', sans-serif;
-  --font-body:    'Hanken Grotesk', system-ui, sans-serif;
-  --font-mono:    'Geist Mono', ui-monospace, monospace;
-  --font-serif:   'Instrument Serif', serif;
-
-  /* Radii */
-  --r-input:  12px;
-  --r-card:   15px;
-  --r-hero:   19px;
-  --r-sheet:  24px;
-
-  /* Motion */
-  --ease:   cubic-bezier(.2,.8,.2,1);
-  --t-fast: 150ms var(--ease);
-  --t-med:  220ms var(--ease);
+  /* Root-relative sizes keep the phone’s text and zoom preferences. */
+  --type-xs: .75rem;
+  --type-caption: var(--type-xs);
+  --type-sm: .875rem;
+  --type-body: 1rem;
+  --type-lead: 1.125rem;
+  --type-lg: 1.25rem;
+  --type-title: 1.375rem;
+  --type-display: 1.625rem;
+  --type-poster: 1.875rem;
+  --type-score: var(--type-poster);
+  --type-scoreboard: var(--type-poster);
+  --r-input: 10px;
+  --r-card: 14px;
+  --r-hero: 20px;
+  --r-sheet: 24px;
+  --r-pill: 9999px;
+  --motion-press: 70ms;
+  --motion-quick: 140ms;
+  --motion-base: 220ms;
+  --motion-sheet: 340ms;
+  --ease-settle: cubic-bezier(.2,.9,.3,1);
+  --ease-spring: cubic-bezier(.2,.9,.3,1.25);
+  --ease-sheet: cubic-bezier(.32,.72,0,1);
+  --ease: var(--ease-settle);
+  --t-fast: var(--motion-quick) var(--ease-settle);
+  --t-med: var(--motion-base) var(--ease-settle);
 
   /* Safe areas (notches / home indicator) */
   --safe-t: env(safe-area-inset-top, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
 
   --maxw: 780px;
+  --nav-gap: var(--space-2);
 }
 
-/* LIGHT THEME — on-brand alternate. Warm off-white base, charcoal text; the
-   red/green brand accents and gradients are unchanged so identity holds. */
-[data-theme="light"] {
-  --ink:      #F3F1EC;   /* app background — warm off-white */
-  --coal:     #FFFFFF;   /* cards */
-  --slate:    #EBE8E1;   /* inputs / muted badge bg */
-  --line:     #DEDAD1;
-  --line-2:   #C7C2B7;
+/* Keep the blur on the two small chrome strips. The opaque token also
+   covers browsers and accessibility settings that turn translucency off. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass: color-mix(in srgb, var(--surface-raised) 88%, transparent); --chrome-blur: blur(12px); }
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  :root { --glass: var(--surface-raised); --chrome-blur: none; }
+}
 
-  --bone:      #181C19;  /* primary text — charcoal */
-  --bone-mute: #59615A;  /* secondary */
-  --bone-dim:  #8A918A;  /* tertiary / placeholders */
-
-  --red-dim:    rgba(225,29,42,0.12);
-  --green-dim:  rgba(47,168,79,0.12);
-  --amber-dim:  rgba(245,166,35,0.16);
-
-  --glass:     rgba(243,241,236,.72);
-  --scrim:     rgba(20,18,15,.4);
-  --card-shadow: 0 6px 18px -14px rgba(0,0,0,.22);
+[data-ground="dark"] {
+  color-scheme: dark;
+  --surface: #141A12;
+  --surface-raised: #1C2419;
+  --text: #ECEADF;
+  --text-muted: #A9AE9B;
+  --border-strong: #7E8A78;
+  --team-xl: #F38A99;
+  --team-community: #64C7A3;
+  --status-maybe: #E7C578;
+  --on-action: #102516;
+  --action-edge: #284530;
 }
 
 /* Reset ------------------------------------------------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; }
-html, body, #root { height: 100%; }
+html, body, #root { min-height: 100%; }
+body, #root { min-height: 100vh; min-height: 100dvh; }
 
 body {
   font-family: var(--font-body);
@@ -116,130 +195,81 @@ a { color: inherit; }
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
 
-/* Type helpers ------------------------------------------------------------ */
-.display { font-family: var(--font-display); font-weight: 700; line-height: .9; letter-spacing: -.01em; }
-.serif   { font-family: var(--font-serif); }
-.mono    { font-family: var(--font-mono); }
-
-/* Eyebrow / kicker — mono, the signature label */
-.kicker {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: var(--bone-mute);
+/* Type and controls */
+.display { font-family: var(--font-display); font-weight: 700; line-height: 1.2; letter-spacing: -.035em; }
+.serif { font-family: var(--font-body); }
+.mono, code, time, input[type="number"], input[type="time"], input[type="date"] {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
 }
-/* Coloured baseline rule under a kicker — the bespoke signal */
-.kicker-rule { display: inline-block; padding-bottom: 4px; border-bottom: 2px solid var(--red); }
-.kicker-rule.community { border-color: var(--green); }
+.kicker { font-size: var(--type-xs); line-height: 1rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--text-muted); }
+.kicker-rule { display: inline-block; padding-bottom: var(--space-1); border-bottom: 2px solid var(--team-xl); }
+.kicker-rule.community { border-color: var(--team-community); }
+.grain { display: none; }
 
-/* Grain overlay (DESIGN-SYSTEM §3) --------------------------------------- */
-.grain {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: .04;
-  mix-blend-mode: soft-light;
-}
-[data-theme="light"] .grain { opacity: .025; mix-blend-mode: multiply; }
-
-/* Invalid form fields — red highlight (client request; note DESIGN-SYSTEM
-   originally specced amber for errors). */
-.input[aria-invalid="true"], .select[aria-invalid="true"] {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px var(--red-dim);
-}
-
-/* Buttons ----------------------------------------------------------------- */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  border: none; border-radius: var(--r-input);
-  padding: 13px 18px; font-size: 15px; font-weight: 600;
-  transition: transform var(--t-fast), background var(--t-fast), border-color var(--t-fast);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4); font-size: var(--type-body); font-weight: 650;
+  border: 1px solid var(--border-strong); border-radius: var(--r-input);
+  transition: transform var(--motion-press) var(--ease-settle), background var(--t-fast);
 }
-.btn:active { transform: scale(.97); }
-/* No coloured halo under the button. A red glow bleeding out of a red button
-   reads as a neon sticker, and at this size it was the brightest thing on the
-   screen after the button itself. Depth comes from a neutral shadow and a hint
-   of a top highlight, the way a real raised surface behaves. */
-.btn-primary {
-  background: var(--red); color: #fff;
-  box-shadow: 0 1px 2px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.12);
+.btn:not(:disabled):active { transform: scale(.98); }
+.btn-primary { min-height: var(--header-min); background: var(--action-fill); color: var(--on-action); border-color: var(--action-edge); }
+.btn-ghost { background: var(--surface-raised); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:not(:disabled):hover { background: var(--action-hover); }
+  .btn-ghost:not(:disabled):hover { background: var(--surface-subtle); }
 }
-.btn-primary:hover { background: var(--red-bright); }
-.btn-ghost { background: var(--slate); color: var(--bone-mute); border: 1px solid var(--line); }
-.btn-ghost:hover { border-color: var(--line-2); color: var(--bone); }
 .btn-block { width: 100%; }
-.btn:disabled { opacity: .5; pointer-events: none; }
+.btn:disabled, .chip:disabled, .input:disabled, .select:disabled {
+  opacity: 1; cursor: default; background: var(--surface); color: var(--text-muted); border: 1px dashed var(--border-strong);
+}
+.status-light { display: inline-block; width: var(--space-2); height: var(--space-2); background: currentColor; border-radius: var(--r-pill); flex: none; }
 
-/* Inputs ------------------------------------------------------------------ */
-.field { display: flex; flex-direction: column; gap: 6px; }
-.label { font-size: 13px; color: var(--bone-mute); font-weight: 500; }
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.label { font-size: var(--type-sm); color: var(--text-muted); font-weight: 500; }
 .input, .select {
-  background: var(--slate);
-  border: 1px solid var(--line);
-  color: var(--bone);
-  border-radius: var(--r-input);
-  padding: 12px 14px;
-  font-size: 16px; /* stops iOS zoom */
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-  width: 100%;
+  width: 100%; background: var(--surface-input); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--r-input);
+  padding: var(--space-3); font-size: var(--type-body);
 }
-.input::placeholder { color: var(--bone-dim); }
-.input:focus, .select:focus {
-  outline: none;
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px var(--red-dim);
+.input::placeholder { color: var(--text-muted); }
+.input[aria-invalid="true"], .select[aria-invalid="true"] { border-color: var(--status-failed); border-inline-start-width: 3px; }
+.input:focus-visible, .select:focus-visible, .appearance-picker:focus-within {
+  outline: 2px solid var(--focus); outline-offset: 2px;
 }
-.field-error { color: var(--amber); font-size: 13px; }
+.field-error { color: var(--status-failed); font-size: var(--type-sm); }
 
-/* Chips ------------------------------------------------------------------- */
-/* Linear register, not pill-shaped badges. A 999px radius filled with saturated
-   brand colour is the loudest thing we can draw, and it was being spent on
-   filters, multi-selects and secondary buttons — so everything shouted equally
-   and nothing led. Now: small radius, a raised neutral surface when on, brand
-   colour kept for the one primary action on the screen and for the two places
-   where the colour IS the information (team red / Community green). */
 .chip {
-  border: 1px solid var(--line); background: transparent; color: var(--bone-mute);
-  border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 500;
-  letter-spacing: -.005em;
+  border: 1px solid var(--border-strong); border-radius: var(--r-pill);
+  background: var(--surface-raised); color: var(--text-muted); padding: var(--space-2) var(--space-3);
+  font-size: var(--type-sm); font-weight: 500;
   transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
 }
 @media (hover: hover) and (pointer: fine) {
-  .chip:hover { background: var(--slate); border-color: var(--line-2); color: var(--bone); }
+  .chip:not(:disabled):hover { background: var(--surface-subtle); color: var(--text); }
 }
-.chip[aria-pressed="true"] {
-  background: var(--slate); color: var(--bone); border-color: var(--line-2);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
-}
-/* Team colour is information, so it survives the restyle — as a coloured label
-   on the raised surface rather than a saturated fill. */
-.chip.xl[aria-pressed="true"] { color: var(--red-bright); border-color: var(--red); }
-.chip.community[aria-pressed="true"] { color: var(--green-bright); border-color: var(--green); }
+.chip[aria-pressed="true"] { background: var(--surface-subtle); color: var(--text); border-color: currentColor; font-weight: 700; }
+.chip.xl[aria-pressed="true"] { color: var(--team-xl); }
+.chip.community[aria-pressed="true"] { color: var(--team-community); }
 
 /* Segmented control (Segmented.jsx) -------------------------------------- */
 .seg {
   display: inline-flex; align-items: stretch;
-  background: var(--slate);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 2px;
+  background: var(--surface-subtle);
+  padding: 2px; border-radius: var(--r-input); gap: 2px;
 }
 .seg-item {
   position: relative;
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none;
-  border-radius: 7px;
+  border-radius: var(--r-input);
   color: var(--bone-mute);
-  font-family: inherit; font-size: 13px; font-weight: 500;
-  padding: 6px 13px;
+  font-family: inherit; font-size: var(--type-sm); font-weight: 500;
+  padding: var(--space-1) var(--space-3);
   white-space: nowrap;
   transition: color var(--t-fast);
 }
-.seg-sm .seg-item { font-size: 12px; padding: 5px 10px; }
+.seg-sm .seg-item { font-size: var(--type-caption); padding: var(--space-1) var(--space-2); }
 .seg-item:hover { color: var(--bone); }
 .seg-item.on { color: var(--bone); }
 .seg-item.on.accent-xl { color: var(--red-bright); }
@@ -248,77 +278,82 @@ input, select, textarea { font-family: inherit; }
 .seg-thumb {
   position: absolute; inset: 0;
   z-index: 0;
-  border-radius: 7px;
+  border-radius: var(--r-input);
   background: var(--coal);
-  border: 1px solid var(--line-2);
-  box-shadow: 0 1px 2px rgba(0,0,0,.35);
+  box-shadow: 0 1px 3px var(--shadow-ink);
 }
 .seg-label { position: relative; z-index: 1; }
-[data-theme="light"] .seg-thumb { box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 
 /* Card + the team-colour spine ------------------------------------------- */
 .card {
   background: var(--coal);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
-  box-shadow: var(--card-shadow);
 }
 .spine { position: relative; overflow: hidden; }
 .spine::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
-  background: var(--grad-xl);
+  background: var(--team-xl);
 }
-.spine.community::before { background: var(--grad-community); }
+.spine.community::before { background: var(--team-community); }
 
 /* Sticky header ----------------------------------------------------------- */
 .app-header {
   position: sticky; top: 0; z-index: 50;
-  height: calc(58px + var(--safe-t)); padding-top: var(--safe-t);
-  display: flex; align-items: center; gap: 6px;
-  padding-inline: 14px;
+  min-height: calc(var(--header-min) + var(--safe-t)); padding-top: var(--safe-t);
+  display: flex; align-items: center; gap: var(--space-1);
+  padding-left: max(var(--space-2), var(--safe-l)); padding-right: max(var(--space-2), var(--safe-r));
   background: var(--glass);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: var(--chrome-blur); -webkit-backdrop-filter: var(--chrome-blur);
   border-bottom: 1px solid var(--line);
 }
-/* The brand never wraps and never shrinks below its text; it still flex-grows to
-   push the controls right. The season picker keeps a fixed, readable width and
-   the header icons sit tight so everything fits one line even for admins (who
-   get the extra manager-view toggle). */
-.wordmark { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -.01em;
-  white-space: nowrap; min-width: max-content; }
-.app-header .season-select { padding: 6px 8px; font-size: 12px; flex: none; }
-.app-header .nav-item { padding: 6px 6px; }
-/* When the wordmark must give way (very narrow phones; or admins on a phone, who
-   carry the extra manager-view icon) hide its TEXT but keep the element so its
-   flex-grow still pushes the controls to the right. The crest carries the brand. */
-@media (max-width: 360px) { .wordmark { font-size: 0; } }
-@media (max-width: 430px) { .app-header.admin .wordmark { font-size: 0; } }
+/* The crest carries the accessible club name. Show the accompanying wordmark
+   only when the space left by the actual controls can hold the entire name. */
+.wordmark { font-family: var(--font-display); font-weight: 700; font-size: var(--type-body); letter-spacing: -.035em;
+  white-space: nowrap; min-width: 0; container: club-wordmark / inline-size; }
+.wordmark > span { visibility: hidden; }
+@container club-wordmark (min-width: 5em) {
+  .wordmark > span { visibility: visible; }
+}
+.season-picker { position: relative; min-width: 0; max-width: 100%; }
+.season-picker svg { pointer-events: none; position: absolute; inset-inline-end: var(--space-2); top: 50%; transform: translateY(-50%); }
+.app-header .season-select {
+  appearance: none; -webkit-appearance: none; width: 100%;
+  padding: var(--space-1) var(--space-8) var(--space-1) var(--space-3);
+  border-color: var(--border); border-radius: var(--r-pill); background: transparent;
+}
+.app-header .nav-item { padding: var(--space-1) var(--space-1); }
+.app-header .wordmark { margin-inline-start: var(--space-2); }
 
 /* Bottom tab nav ---------------------------------------------------------- */
 .bottom-nav {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-  max-width: var(--maxw); margin: 0 auto;
+  position: fixed; left: max(var(--space-3), var(--safe-l)); right: max(var(--space-3), var(--safe-r));
+  bottom: calc(var(--safe-b) + var(--nav-gap)); z-index: 50;
+  max-width: 34rem; margin: 0 auto;
   display: flex; justify-content: space-around;
-  padding: 8px 6px calc(8px + var(--safe-b));
+  padding: var(--space-1);
   background: var(--glass);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid var(--line);
+  backdrop-filter: var(--chrome-blur); -webkit-backdrop-filter: var(--chrome-blur);
+  border-radius: var(--r-hero);
+  box-shadow: var(--shadow-float);
 }
 .nav-item {
   background: none; border: none; color: var(--bone-mute);
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 6px 8px; flex: 1; transition: color var(--t-fast);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
+  padding: var(--space-1) var(--space-2); flex: 1; transition: color var(--t-fast);
 }
-.nav-item .nav-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
-.nav-item.active { color: var(--red); }
+.nav-item .nav-label { font-family: var(--font-body); font-size: var(--type-xs); letter-spacing: .08em; text-transform: uppercase; }
+.nav-item.active { color: var(--text); }
 
-.page { padding: 18px 18px calc(96px + var(--safe-b)); }
+.page { padding: var(--gutter) max(var(--gutter), var(--safe-r)) calc(var(--space-24) + var(--safe-b)) max(var(--gutter), var(--safe-l)); }
 
 /* Bottom sheet ------------------------------------------------------------ */
 .sheet-backdrop {
-  position: fixed; inset: 0; z-index: 100;
+  position: fixed; inset: var(--viewport-top, 0) 0 auto; z-index: 100;
+  height: 100vh; height: var(--viewport-height, 100dvh);
+  padding: var(--safe-t) var(--safe-r) 0 var(--safe-l);
   background: var(--scrim);
-  backdrop-filter: blur(2px);
+  backdrop-filter: var(--panel-blur);
   display: flex; align-items: flex-end; justify-content: center;
   animation: fade var(--t-fast);
 }
@@ -327,21 +362,31 @@ input, select, textarea { font-family: inherit; }
   width: 100%; max-width: var(--maxw);
   border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   border: 1px solid var(--line); border-bottom: none;
-  max-height: 92vh; overflow-y: auto; overscroll-behavior: contain;
-  padding: 10px 18px calc(24px + var(--safe-b));
-  /* Entrance spring is owned by Framer (Sheet.jsx); backdrop still fades via CSS. */
+  box-shadow: var(--shadow-sheet);
+  max-height: 100%; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-2) var(--gutter) calc(var(--space-4) + var(--safe-b));
 }
-.grab-handle { width: 40px; height: 4px; border-radius: 99px; background: var(--line-2); margin: 6px auto 14px; }
+.grab-handle { width: 40px; height: 4px; border-radius: 99px; background: var(--line-2); margin: var(--space-1) auto var(--space-3); }
 @media (min-width: 720px) {
   .sheet-backdrop { align-items: center; }
-  .sheet { min-width: 680px; border-radius: var(--r-sheet); border-bottom: 1px solid var(--line); }
+  .sheet { max-width: min(100%, var(--maxw)); border-radius: var(--r-sheet); border-bottom: 1px solid var(--line); }
+}
+
+.sheet-actions {
+  position: sticky; bottom: calc(-1 * (var(--space-4) + var(--safe-b))); z-index: 2;
+  padding: var(--space-2) 0 calc(var(--space-2) + var(--safe-b));
+  background: var(--surface-raised); border-top: 1px solid var(--border);
+}
+@media (max-height: 32em) {
+  .app-header { position: relative; }
+  .sheet-backdrop { align-items: flex-end; }
 }
 
 /* Empty states (first-class, club voice) --------------------------------- */
 .empty {
-  text-align: center; padding: 56px 24px; color: var(--bone-mute);
+  text-align: center; padding: var(--space-14) var(--space-6); color: var(--bone-mute);
 }
-.empty .empty-title { font-family: var(--font-display); font-size: 22px; color: var(--bone); margin-bottom: 6px; }
+.empty .empty-title { font-family: var(--font-display); font-size: var(--type-title); color: var(--bone); margin-bottom: var(--space-1); }
 
 /* Animations -------------------------------------------------------------- */
 @keyframes fade   { from { opacity: 0 } to { opacity: 1 } }
@@ -352,16 +397,94 @@ input, select, textarea { font-family: inherit; }
    reduced motion via <MotionConfig>. The CSS .stagger helper has been retired. */
 
 @media (prefers-reduced-motion: reduce) {
+  :root { --motion-press: 0ms; --motion-quick: 0ms; --motion-base: 0ms; --motion-sheet: 0ms; }
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
 
 /* Small utilities --------------------------------------------------------- */
 .row { display: flex; align-items: center; }
 .col { display: flex; flex-direction: column; }
-.gap-2 { gap: 8px } .gap-3 { gap: 12px } .gap-4 { gap: 16px }
-.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mt-5{margin-top:24px}
+.gap-2 { gap: var(--space-2) } .gap-3 { gap: var(--space-3) } .gap-4 { gap: var(--space-4) }
+.mt-2{margin-top:var(--space-2)}.mt-3{margin-top:var(--space-3)}.mt-4{margin-top:var(--space-4)}.mt-5{margin-top:var(--space-6)}
 .muted { color: var(--bone-mute); }
 .dim { color: var(--bone-dim); }
 .center { text-align: center; }
 .spread { justify-content: space-between; }
 .grow { flex: 1; }
+
+/* iOS Dynamic Type supplies the root size. Body and display faces remain the club's. */
+@supports (font: -apple-system-body) {
+  html { font: -apple-system-body; }
+}
+/* WebKit otherwise keeps its landscape text inflation after returning to
+   portrait. Dynamic Type and reader zoom still scale the root and rem units. */
+html { overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+button, input, select, textarea { font-size: inherit; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+:where(button, .btn, .nav-item, .chip, .seg-item, .tab, input:not([type="checkbox"],[type="radio"]), select) {
+  min-height: var(--target);
+}
+.btn, .chip, .seg-item, .tab, .nav-item { justify-content: center; }
+.btn, .chip, .seg-item { min-width: var(--target); }
+.seg { max-width: 100%; flex-wrap: wrap; }
+.seg-item { white-space: normal; flex: 1 1 auto; }
+.app-header { gap: 0; flex-wrap: wrap; }
+.appearance-picker { position: relative; width: var(--target); min-height: var(--target); flex: none; display: grid; place-items: center; border-radius: var(--r-input); color: var(--text-muted); overflow: hidden; }
+.appearance-picker span { display: flex; pointer-events: none; }
+.appearance-picker select { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; opacity: 0; }
+.app-header .nav-item { min-width: var(--target); }
+.app-header .season-select { font-size: var(--type-body); min-width: 0; max-width: 100%; }
+.bottom-nav { justify-content: flex-start; overflow-x: auto; scrollbar-width: thin; }
+.bottom-nav .nav-item { flex: 1 0 auto; min-width: var(--target); text-decoration: none; padding-inline: var(--space-1); }
+.nav-item .nav-label { letter-spacing: 0; text-transform: none; text-align: center; white-space: nowrap; }
+.page-head { flex-wrap: wrap; }
+.page-head .page-title { font-size: var(--type-poster); }
+.page { padding-bottom: calc(var(--nav-height, var(--space-16)) + var(--safe-b) + var(--nav-gap) + var(--space-6)); }
+.ph-aside { max-width: 100%; }
+.grow { min-width: 0; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+}
+.snap-rail {
+  display: grid; grid-auto-flow: column; grid-auto-columns: min(87%, 24rem);
+  align-items: start; gap: var(--space-3); overflow-x: auto;
+  scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+  scrollbar-width: thin; padding-block-end: var(--space-2);
+}
+.snap-rail > * { min-inline-size: 0; scroll-snap-align: start; }
+.snap-rail:focus-visible { outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .btn:not(:disabled):active { transform: none; }
+}
+@media (max-width: 22em) {
+  .app-header .wordmark { display: none; }
+  .app-header .season-picker { flex: 1 0 8ch; min-width: 8ch; }
+  .page-head .page-title { font-size: var(--type-display); }
+}
+
+.toast {
+  position: fixed; z-index: 200; top: calc(var(--space-3) + var(--safe-t));
+  left: max(var(--gutter), var(--safe-l)); right: max(var(--gutter), var(--safe-r));
+  margin-inline: auto; width: fit-content; max-width: min(100%, var(--maxw));
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  border: 1px solid var(--border-strong); border-radius: var(--r-input);
+  box-shadow: var(--shadow-float); background: var(--surface-raised);
+  color: var(--text); font-size: var(--type-body); font-weight: 600;
+}
+.toast-error { border-inline-start: var(--space-1) solid var(--status-failed); }
+.toast-success { border-inline-start: var(--space-1) solid var(--status-in); }
+.toast button {
+  color: inherit; background: transparent; border: 0;
+  min-width: var(--target); min-height: var(--target); font-size: var(--type-title);
+}
+.loading-strip { padding: var(--space-6) var(--gutter); color: var(--text-secondary); }
+.skeleton-lines { margin-top: var(--space-3); display: grid; gap: var(--space-2); }
+.skeleton-lines i { display: block; width: 86%; height: var(--space-3); border-radius: var(--r-input); background: var(--surface-subtle); }
+.skeleton-lines i:nth-child(2) { width: 68%; }
+.skeleton-lines i:last-child { width: 52%; }
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-lines { animation: reveal-skeleton var(--t-med) 800ms backwards; }
+  @keyframes reveal-skeleton { from { opacity: 0; } to { opacity: 1; } }
+}

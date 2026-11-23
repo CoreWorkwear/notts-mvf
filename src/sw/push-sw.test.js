@@ -39,6 +39,13 @@ const TAB = String.fromCharCode(9)
 const windowClient = () => ({ focus: vi.fn(() => Promise.resolve()), postMessage: vi.fn() })
 
 describe('push → notification', () => {
+  test('adds Maybe when the platform has room for three actions', async () => {
+    vi.stubGlobal('Notification', { maxActions: 3 })
+    try {
+      await fire('push', { data: { json: () => ({ fixtureId: 'f1', withAvailability: true }) } })
+      expect(registration.showNotification.mock.calls[0][1].actions.map(a => a.action)).toEqual(['in', 'out', 'maybe'])
+    } finally { vi.unstubAllGlobals() }
+  })
   test('an availability nudge shows the two actions Chrome renders, tagged per kind per fixture, and renotifies', async () => {
     await fire('push', { data: { json: () => ({ title: 'Sunday?', body: 'In or out', fixtureId: 'f1', withAvailability: true, url: '/fixtures' }) } })
     const [title, opts] = registration.showNotification.mock.calls[0]
@@ -61,6 +68,16 @@ describe('push → notification', () => {
 })
 
 describe('notificationclick', () => {
+  test('tapping the reminder body opens the particular game, including on browsers without tray actions', async () => {
+    const data = { url: '/fixtures', fixtureId: 'next-away' }
+    const c = windowClient()
+    clients.matchAll.mockResolvedValue([c])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data } })
+    expect(c.postMessage).toHaveBeenCalledWith({ type: 'mvf-navigate', url: '/fixtures?mvf_fixture=next-away' })
+    clients.matchAll.mockResolvedValue([])
+    await fire('notificationclick', { action: '', notification: { close: vi.fn(), data } })
+    expect(clients.openWindow).toHaveBeenCalledWith('/fixtures?mvf_fixture=next-away')
+  })
   test('an inline In/Out tap with the app open posts the availability to the page and focuses it', async () => {
     const c = windowClient()
     clients.matchAll.mockResolvedValue([c])

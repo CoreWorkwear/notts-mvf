@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, afterEach } from 'vitest'
-import { hasKickedOff, fixtureConcluded, todayISO, relativeWhen, parseDate, fmtDate, fmtKO } from './format'
+import { hasKickedOff, fixtureConcluded, todayISO, relativeWhen, parseDate, fmtDate, fmtKO, addDaysISO } from './format'
 
 // The match lifecycle keystone. Fixtures store a London wall-clock date +
 // kickoff; "now" must be read in London too, so GMT↔BST is right without any
@@ -68,5 +68,18 @@ describe('parsing + formatting', () => {
   test('fmtKO trims seconds and tolerates null', () => {
     expect(fmtKO('13:00:00')).toBe('13:00')
     expect(fmtKO(null)).toBe('')
+  })
+})
+
+describe('addDaysISO', () => {
+  test('steps forward and back across month and year ends', () => {
+    expect(addDaysISO('2026-10-07', 7)).toBe('2026-10-14')
+    expect(addDaysISO('2026-10-07', -14)).toBe('2026-09-23')
+    expect(addDaysISO('2026-12-28', 7)).toBe('2027-01-04')
+    expect(addDaysISO('2027-03-01', -1)).toBe('2027-02-28')
+  })
+  test('a clock change does not move the date (BST ends 25 Oct 2026)', () => {
+    expect(addDaysISO('2026-10-24', 1)).toBe('2026-10-25')
+    expect(addDaysISO('2026-10-25', 1)).toBe('2026-10-26')
   })
 })

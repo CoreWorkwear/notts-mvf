@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { setAvailability } from '../hooks/useFixtures'
 import { syncPush } from '../lib/push'
 import { logError } from '../lib/logger'
+import { friendlyError } from '../lib/errors'
+import Toast from './Toast'
 
 // Applies an availability choice made from a push notification's inline action
 // (HANDOVER §4 / UX-AND-IA §4). Two paths from the service worker:
@@ -10,6 +12,7 @@ import { logError } from '../lib/logger'
 //   - app opened cold  → URL ?mvf_fixture=…&mvf_avail=in|maybe|out
 export default function PushActions() {
   const { user } = useAuth()
+  const [notice, setNotice] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -19,29 +22,38 @@ export default function PushActions() {
     // previous status (looked like "I'm in" set Maybe). Fire once the write lands.
     const announce = () => window.dispatchEvent(new CustomEvent('mvf-availability-applied'))
 
-    // The write can fail out of sight (no Fixtures view open to show anything),
-    // so at least record it — an ignored failure here silently loses the tap.
-    const apply = (fixtureId, status) =>
-      setAvailability(fixtureId, user.id, status)
-        .then(({ error }) => { if (error) logError('write', error, { op: 'pushAction', fixtureId, status }) })
-        .catch((e) => logError('write', e ?? 'push action failed', { op: 'pushAction', fixtureId, status }))
+    async function apply(fixtureId, status) {
+      if (!navigator.onLine) {
+        setNotice({ tone: 'error', text: "You're offline. Reconnect to answer the fixture." })
+        return
+      }
+      try {
+        const { error } = await setAvailability(fixtureId, user.id, status)
+        if (error) throw error
+        setNotice({ tone: 'success', text: `Availability saved · ${status === 'out' ? "can't make it" : status}.` })
+        announce()
+      } catch (e) {
+        logError('write', e ?? 'push action failed', { op: 'pushAction', fixtureId, status })
+        setNotice({ tone: 'error', text: friendlyError(e, "Couldn't save your answer. Open the fixture to try again.") })
+      }
+    }
 
     const params = new URLSearchParams(window.location.search)
     const fx = params.get('mvf_fixture')
     const av = params.get('mvf_avail')
     if (fx && ['in', 'maybe', 'out'].includes(av)) {
-      apply(fx, av).finally(() => {
-        announce()
-        params.delete('mvf_fixture'); params.delete('mvf_avail')
-        const q = params.toString()
-        window.history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : ''))
-      })
+      // Consume synchronously so StrictMode's second mount cannot replay it,
+      // or a slow response replace a different route the player has since opened.
+      params.delete('mvf_fixture'); params.delete('mvf_avail')
+      const q = params.toString()
+      window.history.replaceState(window.history.state, '', window.location.pathname + (q ? `?${q}` : '') + window.location.hash)
+      apply(fx, av)
     }
 
     const onMsg = (e) => {
       const d = e.data
       if (d && d.type === 'mvf-avail' && d.fixtureId && ['in', 'maybe', 'out'].includes(d.status)) {
-        apply(d.fixtureId, d.status).finally(announce)
+        apply(d.fixtureId, d.status)
       } else if (d && d.type === 'mvf-navigate' && typeof d.url === 'string') {
         // A tapped news / line-up notification with the app open. This
         // component sits outside the router, so re-broadcast for App to route.
@@ -65,5 +77,5 @@ export default function PushActions() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
-  return null
+  return <Toast message={notice?.text} tone={notice?.tone} onDismiss={() => setNotice(null)} />
 }

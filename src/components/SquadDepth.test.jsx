@@ -12,16 +12,12 @@ const PLAYERS = [
 ]
 
 function renderDepth() {
-  const r = render(<SquadDepth players={PLAYERS} />)
-  // jsdom has no pointer capture; the pitch's tap handler calls it.
-  r.container.querySelectorAll('[data-slot]').forEach((el) => { if (!el.setPointerCapture) el.setPointerCapture = () => {} })
-  return r
+  return render(<SquadDepth players={PLAYERS} />)
 }
 
 const tapPos = (container, pos) => {
   const shirt = [...container.querySelectorAll('[data-slot]')].find((s) => s.querySelector('.shirt-pos')?.textContent === pos)
-  fireEvent.pointerDown(shirt, { clientX: 10, clientY: 10, pointerId: 1 })
-  fireEvent.pointerUp(shirt, { clientX: 11, clientY: 10, pointerId: 1 }) // no real move = a tap
+  fireEvent.click(shirt)
   return shirt
 }
 
@@ -39,7 +35,7 @@ describe('SquadDepth (§4.2)', () => {
 
   test('starts with a hint and no list until a position is tapped', () => {
     renderDepth()
-    expect(screen.getByText(/tap a position/i)).toBeInTheDocument()
+    expect(screen.getByText(/select a position/i)).toBeInTheDocument()
     expect(document.querySelector('.sd-row')).toBeNull()
   })
 

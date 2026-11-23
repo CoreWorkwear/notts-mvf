@@ -19,7 +19,9 @@ export default function Segmented({ options, value, onChange, id, className = ''
     const next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null
     if (next === null) return
     e.preventDefault()
-    onChange(options[(next + options.length) % options.length].key)
+    const index = (next + options.length) % options.length
+    onChange(options[index].key)
+    e.currentTarget.querySelectorAll('[role="tab"]')[index]?.focus()
   }
 
   return (

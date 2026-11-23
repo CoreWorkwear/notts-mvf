@@ -9,6 +9,7 @@ export function useNews() {
   const { profile, user } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loaded, setLoaded] = useState(false) // a load has completed at least once (see useFixtures)
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
@@ -21,6 +22,7 @@ export function useNews() {
         .order('created_at', { ascending: false })
       if (fetchErr) throw fetchErr // failed load ≠ no news — catch keeps data + sets error
       setItems(data ?? [])
+      setLoaded(true)
     } catch (e) {
       logError('fetch', e ?? 'useNews load failed', { hook: 'useNews' })
       setError(e ?? new Error('load failed'))
@@ -68,5 +70,5 @@ export function useNews() {
     await load()
   }, [load])
 
-  return { items, loading, error, post, remove, refetch: load }
+  return { items, loading, loaded, error, post, remove, refetch: load }
 }

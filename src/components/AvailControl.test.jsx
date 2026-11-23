@@ -12,6 +12,12 @@ beforeEach(() => {
 })
 
 describe('AvailControl — only a write that actually landed is announced', () => {
+  test('a selected key has a tick and the same accessible action name', () => {
+    render(<AvailControl value="maybe" onChange={vi.fn()} />)
+    const response = screen.getByRole('button', { name: 'Maybe' })
+    expect(response).toHaveAttribute('aria-pressed', 'true')
+    expect(response.querySelector('[aria-hidden="true"]')).toHaveTextContent('✓')
+  })
   // Fixtures.handleSetAvail resolves `false` (by design, not a throw) when the
   // write failed after retrying. The buzz must never say "done" for something
   // that did not land — for a player who tapped and pocketed the phone, the

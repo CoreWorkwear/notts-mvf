@@ -18,7 +18,8 @@ import { useEffect, useState } from 'react'
 //     so however you happen to be holding it counts as level.
 //  3. The axes swap when the phone rotates — landscape gamma is portrait beta.
 //
-// Returns { x, y } in -1..1 (null when inactive), the state, and the asker.
+// Delivers normalised samples directly to the poster's motion values. The
+// settings screen only needs the permission state, so never attaches a sensor.
 const PREF_KEY = 'mvf-tilt'
 const GRANT_KEY = 'mvf-tilt-granted'
 
@@ -31,12 +32,11 @@ export const setTiltEnabled = (on) => write(PREF_KEY, on ? 'on' : 'off')
 export const tiltSupported = () =>
   typeof window !== 'undefined' && !!window.DeviceOrientationEvent
 
-export function useDeviceTilt({ enabled = true, max = 22 } = {}) {
-  const [tilt, setTilt] = useState(null)
+export function useDeviceTilt({ enabled = true, max = 22, onSample } = {}) {
   const [state, setState] = useState('idle') // idle | needs-permission | on | unavailable
 
   useEffect(() => {
-    if (!enabled || !tiltEnabled()) { setTilt(null); setState('idle'); return }
+    if (!enabled || !tiltEnabled()) { setState('idle'); return }
     if (!tiltSupported()) { setState('unavailable'); return }
     if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
       // iOS. A grant we already recorded lets us attach without another prompt.
@@ -47,7 +47,7 @@ export function useDeviceTilt({ enabled = true, max = 22 } = {}) {
   }, [enabled])
 
   useEffect(() => {
-    if (state !== 'on') return
+    if (state !== 'on' || !onSample) return
 
     let rest = null
     const clamp = (v) => Math.max(-1, Math.min(1, v / max))
@@ -62,7 +62,7 @@ export function useDeviceTilt({ enabled = true, max = 22 } = {}) {
       const rawY = landscape ? -e.gamma : e.beta
 
       if (rest === null) { rest = { x: rawX, y: rawY }; return }
-      setTilt({ x: clamp(rawX - rest.x), y: clamp(rawY - rest.y) })
+      onSample(clamp(rawX - rest.x), clamp(rawY - rest.y))
     }
     // Rotating the handset makes the old rest position meaningless.
     const relevel = () => { rest = null }
@@ -72,9 +72,9 @@ export function useDeviceTilt({ enabled = true, max = 22 } = {}) {
     return () => {
       window.removeEventListener('deviceorientation', onOrient)
       window.removeEventListener('orientationchange', relevel)
-      setTilt(null)
+      onSample(0, 0)
     }
-  }, [state, max])
+  }, [state, max, onSample])
 
   // Must be called from a real user gesture (iOS refuses otherwise).
   async function requestTilt() {
@@ -90,5 +90,5 @@ export function useDeviceTilt({ enabled = true, max = 22 } = {}) {
     }
   }
 
-  return { tilt, state, requestTilt }
+  return { state, requestTilt }
 }

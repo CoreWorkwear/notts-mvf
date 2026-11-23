@@ -28,6 +28,17 @@ beforeEach(() => {
 })
 
 describe('Reminders page — independent periods per type', () => {
+  test('an off reminder keeps its saved times and disables its time controls', async () => {
+    render(<Reminders />)
+    const match = within(block('Match reminders'))
+    const time = match.getByRole('button', { name: /1 day before/i })
+    expect(time).toBeDisabled()
+    expect(time).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(toggleIn('Match reminders'))
+    expect(time).toBeEnabled()
+    expect(time).toHaveAttribute('aria-pressed', 'true')
+  })
+
   test('saves each type with its own offsets', async () => {
     render(<Reminders />)
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }))
@@ -76,7 +87,7 @@ describe('Reminders page — independent periods per type', () => {
     render(<Reminders />)
     await userEvent.click(toggleIn('Match reminders')) // turn match on, but it has no times
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/match reminders are on but have no times/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/choose a match reminder time/i)
     expect(save).not.toHaveBeenCalled()
   })
 })

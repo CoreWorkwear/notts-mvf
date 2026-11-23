@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useOpponents } from '../hooks/useOpponents'
 import { sortStandings } from '../lib/stats'
-import { teamMatchName } from '../lib/teams'
+import { teamLabel, teamMatchName } from '../lib/teams'
 import { friendlyError } from '../lib/errors'
 
 // Manual league table, per COMPETITION / per season (§1.5). View shows pos, team,
@@ -24,14 +24,25 @@ export default function LeagueTablePanel({ table, competitions = [], teams = [],
     if (comps.length && !comps.some((c) => c.id === competitionId)) setCompetitionId(comps[0].id)
   }, [comps, competitionId])
 
-  const ourNames = new Set(teams.flatMap((t) => [teamMatchName(t), t.label]).filter(Boolean))
-  const rows = sortStandings(table.filter((r) => r.competition_id === competitionId))
+  // The manual table stores plain text. Resolve an old club squad label to its
+  // competitive name and leave the names supplied for opponents alone.
+  const clubNames = new Map(teams.map((team) => [teamLabel(team), teamMatchName(team)]))
+  const ourNames = new Set(clubNames.values())
+  const opponentNames = new Set(opponents.map((opponent) => opponent.name))
+  const currentTable = table.filter((row) => row.competition_id === competitionId).map((row) => {
+    if (opponentNames.has(row.team_name)) return row
+    const matchName = clubNames.get(teamLabel({ label: row.team_name }))
+    return matchName && matchName !== row.team_name
+      ? { ...row, team_name: matchName, storedName: row.team_name }
+      : row
+  })
+  const rows = sortStandings(currentTable)
 
   if (comps.length === 0) {
     return (
       <div className="empty mt-5">
         <p className="empty-title">No competitions yet</p>
-        <p>{isAdmin ? 'Add a league or cup in Manage → Competitions, then build its table here.' : 'The manager sets up competitions and their tables.'}</p>
+        {isAdmin && <p>Manage → Competitions</p>}
       </div>
     )
   }
@@ -54,8 +65,7 @@ export default function LeagueTablePanel({ table, competitions = [], teams = [],
 
       {rows.length === 0 ? (
         <div className="empty mt-4">
-          <p className="empty-title">Table's empty</p>
-          <p>{isAdmin ? 'Pop the division in from the league site — it stays manual.' : "The manager keeps this current from the league's own source."}</p>
+          <p className="empty-title">No table entries</p>
         </div>
       ) : (
         <table className="lt mt-3">
@@ -85,15 +95,15 @@ export default function LeagueTablePanel({ table, competitions = [], teams = [],
           open={editing} onClose={() => setEditing(false)} onSaved={onSaved}
           competition={competitions.find((c) => c.id === competitionId)} seasonId={seasonId}
           opponents={opponents} ourNames={[...ourNames]}
-          rows={table.filter((r) => r.competition_id === competitionId)}
+          rows={currentTable}
         />
       )}
 
       <style>{`
-        .lt { width: 100%; border-collapse: collapse; font-size: 14px; }
-        .lt th { text-align: center; font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em;
-          text-transform: uppercase; color: var(--bone-dim); padding: 8px 6px; border-bottom: 1px solid var(--line); }
-        .lt td { text-align: center; padding: 11px 6px; border-bottom: 1px solid var(--line); }
+        .lt { width: 100%; border-collapse: collapse; font-size: var(--type-sm); }
+        .lt th { text-align: center; font-family: var(--font-mono); font-size: var(--type-xs); letter-spacing: .06em;
+          text-transform: uppercase; color: var(--bone-dim); padding: var(--space-2) var(--space-1); border-bottom: 1px solid var(--line); }
+        .lt td { text-align: center; padding: var(--space-3) var(--space-1); border-bottom: 1px solid var(--line); }
         .lt .lt-team { text-align: left; font-family: var(--font-body); }
         .lt-pts { font-weight: 700; }
         .lt-ours { background: var(--slate); }
@@ -114,12 +124,12 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
     if (!open) return
     setError(null)
     setDraft(rows.length
-      ? rows.map((r) => ({ team_name: r.team_name, played: r.played, won: r.won, drawn: r.drawn, lost: r.lost, gf: r.gf, ga: r.ga, pts: r.pts }))
+      ? rows.map((r) => ({ ...r }))
       : [{ team_name: '', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const setCell = (i, k, v) => setDraft((d) => d.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)))
+  const patchRow = (i, changes) => setDraft((d) => d.map((row, idx) => (idx === i ? { ...row, ...changes } : row)))
   const addRow = () => setDraft((d) => [...d, { team_name: '', played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 }])
   const rmRow = (i) => setDraft((d) => d.filter((_, idx) => idx !== i))
 
@@ -135,7 +145,8 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
         .filter((r) => r.team_name.trim())
         .map((r) => ({
           club_id: profile.club_id, season_id: seasonId, competition_id: competition.id,
-          team_name: r.team_name.trim(),
+          // An edit to points or goals preserves the stored name on historical rows.
+          team_name: r.storedName ?? r.team_name.trim(),
           played: +r.played || 0, won: +r.won || 0, drawn: +r.drawn || 0, lost: +r.lost || 0,
           gf: +r.gf || 0, ga: +r.ga || 0, pts: +r.pts || 0,
         }))
@@ -144,7 +155,7 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
         if (error) throw error
       }
       onSaved(); onClose()
-    } catch (err) { setError(friendlyError(err, "Couldn't save the table — give it another go.")) } finally { setBusy(false) }
+    } catch (err) { setError(friendlyError(err, "Couldn't save the table. Try again.")) } finally { setBusy(false) }
   }
 
   const N = ['played', 'won', 'drawn', 'lost', 'gf', 'ga', 'pts']
@@ -153,8 +164,7 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
   return (
     <Sheet open={open} onClose={onClose}>
       <p className="kicker"><span className="kicker-rule">{competition?.name ?? 'TABLE'}</span></p>
-      <h2 className="display mt-2" style={{ fontSize: 24 }}>Edit the table</h2>
-      <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Straight off the league's own site. GD sorts itself.</p>
+      <h2 className="display mt-2" style={{ fontSize: 'var(--type-title)' }}>Edit the table</h2>
 
       {/* Pick from your saved opponents or your own team names, or free-type. */}
       <datalist id="lt-teamnames">
@@ -164,16 +174,16 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
 
       <div className="col gap-2 mt-4">
         {draft.map((r, i) => (
-          <div key={i} className="card lte-row" style={{ padding: 10 }}>
+          <div key={i} className="card lte-row" style={{ padding: 'var(--space-2)' }}>
             <div className="row gap-2">
-              <input className="input grow" placeholder="Team name" list="lt-teamnames" value={r.team_name} onChange={(e) => setCell(i, 'team_name', e.target.value)} />
+              <input className="input grow" placeholder="Team name" list="lt-teamnames" value={r.team_name} onChange={(e) => patchRow(i, { team_name: e.target.value, storedName: undefined })} />
               <button type="button" className="btn btn-ghost" onClick={() => rmRow(i)} aria-label="Remove row">✕</button>
             </div>
             <div className="lte-nums mt-2">
               {N.map((k) => (
                 <label key={k} className="lte-num">
                   <span className="mono">{LBL[k]}</span>
-                  <input className="input" type="number" min="0" value={r[k]} onChange={(e) => setCell(i, k, e.target.value)} />
+                  <input className="input" type="number" min="0" value={r[k]} onChange={(e) => patchRow(i, { [k]: e.target.value })} />
                 </label>
               ))}
             </div>
@@ -184,15 +194,17 @@ function LeagueTableEdit({ open, onClose, onSaved, competition, seasonId, rows, 
       <button type="button" className="chip mt-3" onClick={addRow}>+ Add a team</button>
       {/* Right above the Save button so it's on screen on a phone with a long division. */}
       {error && <p className="field-error mt-3" role="alert">{error}</p>}
-      <button className="btn btn-primary btn-block mt-3" disabled={busy} onClick={save}>
-        {busy ? 'Saving…' : 'Save table'}
-      </button>
+      <div className="sheet-actions">
+        <button className="btn btn-primary btn-block" disabled={busy} onClick={save}>
+          {busy ? 'Saving…' : 'Save table'}
+        </button>
+      </div>
 
       <style>{`
-        .lte-nums { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-        .lte-num { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-        .lte-num span { font-size: 10px; color: var(--bone-dim); }
-        .lte-num .input { width: 100%; text-align: center; padding: 8px 2px; font-family: var(--font-mono); font-size: 14px; }
+        .lte-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(4em, 100%), 1fr)); gap: var(--space-1); }
+        .lte-num { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+        .lte-num span { font-size: var(--type-xs); color: var(--bone-dim); }
+        .lte-num .input { width: 100%; text-align: center; padding: var(--space-2) var(--space-1); font-family: var(--font-mono); font-size: var(--type-sm); }
       `}</style>
     </Sheet>
   )

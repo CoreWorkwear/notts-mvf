@@ -102,6 +102,19 @@ describe('useResults — soft-deleted players still resolve on past results', ()
 // Two games on the same day (a rearranged midweek fixture on a Sunday, say)
 // were ordered arbitrarily — the later kickoff should list first.
 describe('useResults — ordering', () => {
+  test('a committed score immediately moves its fixture from needs-a-result into date order', async () => {
+    store.tables.fixtures.unshift(fixture({ id: 'later', match_date: '2026-02-01', result: null }))
+    const { result } = renderHook(() => useResults('season-1'))
+    await waitFor(() => expect(result.current.needsResult).toHaveLength(1))
+    const submitted = { ...result.current.needsResult[0], result: { us: 3, them: 1 }, goals: [] }
+    act(() => result.current.applySavedResult(submitted))
+    expect(result.current.needsResult).toEqual([])
+    expect(result.current.played.map(f => f.id)).toEqual(['later', 'fix-1'])
+    act(() => result.current.applySavedResult({ ...submitted, result: { us: 3, them: 2 } }))
+    expect(result.current.played).toHaveLength(2)
+    expect(result.current.played[0].result.them).toBe(2)
+  })
+
   test('fixtures are ordered by match_date DESC then kickoff DESC', async () => {
     const { result } = renderHook(() => useResults('season-1'))
     await waitFor(() => expect(result.current.loading).toBe(false))

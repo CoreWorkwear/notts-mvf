@@ -34,7 +34,7 @@ export async function currentSubscription() {
 // Ask permission, subscribe, and store the subscription on push_tokens.
 export async function enablePush(profileId) {
   if (!pushSupported) throw new Error("This device doesn't support push.")
-  if (!VAPID_PUBLIC) throw new Error('Push isn’t configured (missing VAPID key).')
+  if (!VAPID_PUBLIC) throw new Error('Match alerts are unavailable.')
   const perm = await Notification.requestPermission()
   if (perm !== 'granted') throw new Error('Notifications were blocked.')
 

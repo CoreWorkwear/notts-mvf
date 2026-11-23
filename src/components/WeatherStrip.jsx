@@ -57,43 +57,46 @@ export default function WeatherStrip({ fixture, light = false, detailed = false,
   // Big match-day weather panel (the expanded match-details version).
   if (card) {
     return (
-      <div className="wx-card">
-        <WeatherIcon category={wx.category} size={56} windy={wx.wind != null && wx.wind >= 16} />
-        <div className="wx-card-main">
-          <span className="wx-card-text">{wx.text}{fixture?.kickoff ? ` · at ${fmtKO(fixture.kickoff)} KO` : ''}</span>
-          <span className="wx-card-temp display">{actual}°</span>
-          {feels != null && <span className="wx-card-feels mono">Feels like {feels}°</span>}
-        </div>
-        <div className="wx-card-bits">
-          {wx.wind != null && <span className="wx-card-bit mono">💨 {wx.wind} mph</span>}
-          {wx.precip != null && <span className="wx-card-bit mono">💧 {wx.precip}% rain</span>}
+      <section className="mt-5" aria-label="Match-day weather">
+        <h3 className="kicker">Match-day weather</h3>
+        <div className="wx-card mt-2">
+          <WeatherIcon category={wx.category} size={56} windy={wx.wind != null && wx.wind >= 16} />
+          <div className="wx-card-main">
+            <span className="wx-card-text">{wx.text}{fixture?.kickoff ? ` · at ${fmtKO(fixture.kickoff)} KO` : ''}</span>
+            <span className="wx-card-temp display">{actual}°</span>
+            {feels != null && <span className="wx-card-feels mono">Feels like {feels}°</span>}
+          </div>
+          <div className="wx-card-bits">
+            {wx.wind != null && <span className="wx-card-bit mono">💨 {wx.wind} mph</span>}
+            {wx.precip != null && <span className="wx-card-bit mono">💧 {wx.precip}% rain</span>}
+          </div>
         </div>
         <style>{`
-          .wx-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px 14px;
-            background: var(--coal); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+          .wx-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-1) var(--space-3);
+            background: var(--coal); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--space-3) var(--space-4); }
           .wx-card-main { display: flex; flex-direction: column; }
-          .wx-card-text { font-size: 13px; color: var(--bone-mute); }
-          .wx-card-temp { font-size: 30px; line-height: 1; }
-          .wx-card-feels { font-size: 12px; color: var(--bone-dim); margin-top: 2px; }
-          .wx-card-bits { display: flex; flex-direction: column; gap: 4px; text-align: right; }
-          .wx-card-bit { font-size: 13px; color: var(--bone-mute); white-space: nowrap; }
+          .wx-card-text { font-size: var(--type-sm); color: var(--bone-mute); }
+          .wx-card-temp { font-size: var(--type-display); line-height: 1; }
+          .wx-card-feels { font-size: var(--type-caption); color: var(--bone-dim); margin-top: var(--space-1); }
+          .wx-card-bits { display: flex; flex-direction: column; gap: var(--space-1); text-align: right; }
+          .wx-card-bit { font-size: var(--type-sm); color: var(--bone-mute); white-space: nowrap; }
         `}</style>
-      </div>
+      </section>
     )
   }
 
   return (
     <span className={'wx' + (light ? ' wx-light' : '') + (detailed ? ' wx-detailed' : '')}
-      title={`${wx.text}${fixture?.kickoff ? ` at ${fmtKO(fixture.kickoff)} KO` : ''}`}>
+      role="group" aria-label={`${wx.text}${fixture?.kickoff ? ` at ${fmtKO(fixture.kickoff)} KO` : ''}`}>
       <WeatherIcon category={wx.category} size={detailed ? 30 : 20} windy={wx.wind != null && wx.wind >= 16} />
       {actual != null && <span className="wx-temp mono">{actual}°</span>}
       {detailed && feels != null && feels !== actual && <span className="wx-bit mono">feels {feels}°</span>}
       {wx.wind != null && <span className="wx-bit mono">💨 {wx.wind}mph</span>}
       {wx.precip != null && <span className="wx-bit mono">💧 {wx.precip}%</span>}
       <style>{`
-        .wx { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--bone-mute); }
-        .wx-light { color: rgba(255,255,255,.92); }
-        .wx-detailed { flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
+        .wx { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--type-caption); color: var(--bone-mute); }
+        .wx-light { color: var(--on-photo-muted); }
+        .wx-detailed { flex-wrap: wrap; gap: var(--space-1) var(--space-2); font-size: var(--type-sm); }
         .wx-temp { font-weight: 600; }
         .wx-bit { opacity: .9; }
       `}</style>

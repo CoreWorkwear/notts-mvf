@@ -25,10 +25,8 @@ export default function NotificationPrompt() {
     <>
       <Toast message={error} onDismiss={() => setError(null)} />
       <div className="notif-prompt" role="region" aria-label="Turn on notifications">
-        <span className="np-bell" aria-hidden="true">🔔</span>
         <div className="np-text">
-          <strong>Get match alerts</strong>
-          <span>New fixtures and reminders, one-tap In/Maybe/Out.</span>
+          <strong>Match alerts</strong>
         </div>
         <div className="np-actions">
           <button className="btn btn-ghost np-later" onClick={() => setDismissed(true)}>Not now</button>
@@ -37,22 +35,15 @@ export default function NotificationPrompt() {
       </div>
       <style>{`
         .notif-prompt {
-          position: fixed; left: 50%; transform: translateX(-50%);
-          bottom: calc(var(--nav-h, 64px) + var(--safe-b, 0px) + 10px);
-          z-index: 60; width: min(92vw, 460px);
-          display: flex; align-items: center; gap: 12px;
-          background: var(--coal); border: 1px solid var(--line-2);
-          border-left: 3px solid var(--red); border-radius: 14px; padding: 12px 14px;
-          box-shadow: 0 16px 38px -12px rgba(0,0,0,.7); animation: npIn var(--t-med) var(--ease);
+          display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3);
+          margin-block: var(--space-3); padding: var(--space-3);
+          background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-input);
         }
-        .np-bell { font-size: 22px; }
-        .np-text { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0; }
-        .np-text strong { font-size: 14px; }
-        .np-text span { font-size: 12px; color: var(--bone-mute); }
-        .np-actions { display: flex; gap: 6px; flex: none; }
-        .np-later { padding: 8px 10px; font-size: 13px; }
-        .np-on { padding: 8px 14px; font-size: 13px; }
-        @keyframes npIn { from { opacity: 0; transform: translate(-50%, 10px) } to { opacity: 1; transform: translate(-50%, 0) } }
+        .np-text { display: flex; flex-direction: column; line-height: 1.25; flex: 1 1 9rem; min-width: 0; }
+        .np-text strong { font-size: var(--type-sm); }
+        .np-actions { display: flex; gap: var(--space-1); flex: none; }
+        .np-later { padding: var(--space-2) var(--space-2); font-size: var(--type-sm); }
+        .np-on { padding: var(--space-2) var(--space-3); font-size: var(--type-sm); }
         @media (prefers-reduced-motion: reduce){ .notif-prompt { animation: none } }
       `}</style>
     </>

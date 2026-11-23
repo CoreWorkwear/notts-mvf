@@ -31,6 +31,41 @@ function topmostAt(locator) {
   })
 }
 
+// The sign-out confirm was a hand-rolled sheet rendered inside the header. The
+// header's backdrop-filter makes it the containing block for a fixed child, so
+// the "full-screen" backdrop was the header's own 57px and the sheet hung above
+// the top of the screen: no prompt, half of each button, nothing dimmed. Unit
+// tests could not see it (css:false). It is the only way to sign out.
+test.describe('the sign-out confirm', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInAsStubPlayer(page)
+    await page.goto('/you')
+    await expect(page.getByText(STUB.phone)).toBeVisible()
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page.getByRole('dialog')).toHaveCSS('transform', 'none')
+  })
+
+  test('shows its question and both answers on screen', async ({ page }) => {
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Sign out?')).toBeInViewport({ ratio: 1 })
+    await expect(dialog.getByRole('button', { name: 'Stay' })).toBeInViewport({ ratio: 1 })
+    await expect(dialog.getByRole('button', { name: 'Sign out' })).toBeInViewport({ ratio: 1 })
+  })
+
+  test('covers the header and the bottom nav', async ({ page }) => {
+    await expect.poll(() => topmostAt(page.locator('.app-header'))).toBe('the sheet')
+    await expect.poll(() => topmostAt(page.locator('.bottom-nav'))).toBe('the sheet')
+  })
+
+  test('Stay takes the tap and closes it', async ({ page }) => {
+    const stay = page.getByRole('dialog').getByRole('button', { name: 'Stay' })
+    await expect.poll(() => topmostAt(stay)).toBe('itself')
+    await stay.tap()
+    await expect(page.getByRole('dialog')).toBeHidden()
+    await expect(page.getByText(STUB.phone)).toBeVisible() // still signed in
+  })
+})
+
 test.describe('an open sheet sits above the app chrome', () => {
   test.beforeEach(async ({ page }) => {
     await signInAsStubPlayer(page)

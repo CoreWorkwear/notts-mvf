@@ -1,18 +1,16 @@
 import { useTheme } from '../context/ThemeContext'
 import { IconSun, IconMoon } from './Icons'
 
-// Compact theme switch for the header. Shows the icon of the theme you'd switch TO.
 export default function ThemeToggle() {
-  const { isLight, toggle } = useTheme()
+  const { preference, setPreference, isLight } = useTheme()
   return (
-    <button
-      className="nav-item"
-      style={{ flex: 'none', color: 'var(--bone-mute)' }}
-      onClick={toggle}
-      aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-      title={isLight ? 'Dark mode' : 'Light mode'}
-    >
-      {isLight ? <IconMoon /> : <IconSun />}
-    </button>
+    <label className="appearance-picker">
+      <span aria-hidden="true">{isLight ? <IconSun /> : <IconMoon />}</span>
+      <select aria-label="Appearance" value={preference} onChange={event => setPreference(event.target.value)}>
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
   )
 }

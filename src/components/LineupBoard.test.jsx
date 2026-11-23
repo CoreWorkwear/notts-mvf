@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const save = vi.fn().mockResolvedValue({ error: null })
@@ -82,12 +82,33 @@ describe('LineupBoard — a failed load is not "no line-up"', () => {
   test('read-only, after a reload that failed: the board says it may be stale and will not push it', () => {
     mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] }, error: new Error('Load failed'), refetch: vi.fn() }
     render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
-    expect(screen.getByRole('alert')).toHaveTextContent(/may not be the latest/i)
-    expect(screen.getByRole('button', { name: /push the line-up/i })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/showing saved line-up/i)
+    expect(screen.getByRole('button', { name: /send line-up to squad/i })).toBeDisabled()
   })
 })
 
 describe('LineupBoard', () => {
+  test('shows the submitted pitch immediately and retains the picks to retry a failed write', async () => {
+    let rejectSave
+    save.mockImplementationOnce(() => new Promise((_, reject) => { rejectSave = reject }))
+    const { rerender } = render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await userEvent.click(screen.getByRole('button', { name: /pick the line-up/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'GK, pick a player' }))
+    await userEvent.click(screen.getByRole('button', { name: /Joe Bloggs/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save line-up' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('Saving line-up')
+    expect(screen.getByText('Bloggs')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /send line-up|edit the line-up/i })).toBeNull()
+    // A reconciliation against the previously saved side must preserve the draft.
+    mock = { ...mock, saved: { formation: '4-4-2', starters: {}, subs: [] } }
+    rerender(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await act(async () => rejectSave(new Error('Failed to fetch')))
+    expect(screen.getByRole('alert')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'GK, Joe Bloggs' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Save line-up' })).toBeEnabled()
+  })
+
   test('a player sees an empty-state until the manager picks the side', () => {
     render(<LineupBoard fixture={{ id: 'f1' }} isAdmin={false} open />)
     expect(screen.getByText(/line-up not picked yet/i)).toBeInTheDocument()
@@ -121,18 +142,19 @@ describe('LineupBoard', () => {
     const fixture = { id: 'f1', team: { match_name: 'Nottingham' }, opponent: { name: 'Boston' }, home_away: 'Home' }
     render(<LineupBoard fixture={fixture} isAdmin open />)
 
-    await userEvent.click(screen.getByRole('button', { name: /push the line-up to the squad/i }))
+    await userEvent.click(screen.getByRole('button', { name: /send line-up to squad/i }))
     await waitFor(() => expect(invoke).toHaveBeenCalled())
     const [fn, opts] = invoke.mock.calls[0]
     expect(fn).toBe('send-push')
     expect(opts.body.profileIds.sort()).toEqual(['p1', 'p2'])
     expect(opts.body.title).toBe('Nottingham v Boston')
+    expect(opts.body.body).toBe("You're in the squad. View line-up.")
   })
 
   test('players never see the push button', () => {
     mock = { ...mock, hasLineup: true, saved: { formation: '4-4-2', starters: { 0: 'p1' }, subs: [] } }
     render(<LineupBoard fixture={{ id: 'f1' }} isAdmin={false} open />)
-    expect(screen.queryByRole('button', { name: /push the line-up/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /send line-up to squad/i })).not.toBeInTheDocument()
   })
 
   // "Done" is not "Save": leaving the editor without saving must show the SAVED
@@ -149,5 +171,31 @@ describe('LineupBoard', () => {
     expect(save).not.toHaveBeenCalled()
     expect(screen.queryByText(/SUBS · 1/)).not.toBeInTheDocument()
     expect(screen.queryByText('Sam Lee')).not.toBeInTheDocument()
+  })
+})
+
+// From kickoff the hook offers the whole squad (useLineup). The picker has to
+// say what each player answered: a "Maybe" tag on a man who said out, or who
+// never answered, would be a lie the manager picks from.
+describe('LineupBoard — the picker after kickoff', () => {
+  test('each player carries his real answer, and the hint says the whole squad is listed', async () => {
+    mock = {
+      ...mock, wholeSquad: true,
+      pool: [
+        { id: 'p1', name: 'Joe Bloggs', status: 'in' }, { id: 'p2', name: 'Sam Lee', status: 'maybe' },
+        { id: 'p4', name: 'Al Dunn', status: 'none' }, { id: 'p3', name: 'Tom Reid', status: 'out' },
+      ],
+      names: { p1: 'Joe Bloggs', p2: 'Sam Lee', p3: 'Tom Reid', p4: 'Al Dunn' },
+    }
+    render(<LineupBoard fixture={{ id: 'f1' }} isAdmin open />)
+    await userEvent.click(screen.getByRole('button', { name: /pick the line-up/i }))
+    await userEvent.click(screen.getByText('GK').closest('button'))
+
+    const tagFor = (name) => screen.getByText(name).closest('button').querySelector('.tag').textContent
+    expect(tagFor('Joe Bloggs')).toBe('In')
+    expect(tagFor('Sam Lee')).toBe('Maybe')
+    expect(tagFor('Al Dunn')).toBe('No answer')
+    expect(tagFor('Tom Reid')).toBe('Said out')
+    expect(screen.getByText(/whole squad/i)).toBeInTheDocument()
   })
 })

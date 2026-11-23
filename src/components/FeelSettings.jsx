@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { haptic, hapticsAvailable, hapticsEnabled, setHapticsEnabled } from '../lib/haptics'
 import { tiltSupported, tiltEnabled, setTiltEnabled, useDeviceTilt } from '../hooks/useDeviceTilt'
 
@@ -32,17 +32,16 @@ export default function FeelSettings() {
     setTiltEnabled(next)
     // iOS only grants the sensor from inside a user gesture, so this is the one
     // moment we can ask. Doing it here means the hero never has to.
-    if (next && tiltState === 'needs-permission') await requestTilt()
+    if (next) await requestTilt()
   }
 
   return (
     <div className="mt-5">
-      <p className="kicker">ON THIS PHONE</p>
+      <p className="kicker">This phone</p>
       <div className="col gap-2 mt-2">
         {showHaptics && (
           <Row
-            label="Haptics"
-            hint="A tap you can feel when your answer saves."
+            label="Touch feedback"
             on={haptics}
             onToggle={toggleHaptics}
           />
@@ -50,9 +49,7 @@ export default function FeelSettings() {
         {showTilt && (
           <Row
             label="Tilt the poster"
-            hint={tiltState === 'unavailable'
-              ? 'Your phone turned this down — allow motion access to use it.'
-              : 'The next-game poster leans as you tilt your phone.'}
+            hint={tiltState === 'unavailable' ? 'Allow motion access in device settings.' : undefined}
             on={tilt}
             onToggle={toggleTilt}
           />
@@ -60,16 +57,16 @@ export default function FeelSettings() {
       </div>
 
       <style>{`
-        .feel-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+        .feel-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3); }
         .feel-text { flex: 1; min-width: 0; }
-        .feel-label { font-weight: 600; font-size: 15px; }
-        .feel-hint { font-size: 12px; color: var(--bone-mute); margin-top: 2px; }
+        .feel-label { font-weight: 600; font-size: var(--type-body); }
+        .feel-hint { font-size: var(--type-caption); color: var(--bone-mute); margin-top: var(--space-1); }
         /* A real switch, not a chip pretending to be one — this is a setting you
            leave in a state, not an action you take. */
         .feel-switch {
-          flex: none; width: 46px; height: 28px; border-radius: 999px;
+          flex: none; width: var(--target); min-height: var(--target); height: auto; border-radius: 999px;
           background: var(--slate); border: 1px solid var(--line);
-          padding: 2px; display: flex; align-items: center;
+          padding: var(--space-1); display: flex; align-items: center;
           transition: background var(--t-fast), border-color var(--t-fast);
         }
         .feel-switch[aria-checked="true"] { background: var(--green-dim-2); border-color: var(--green); }
@@ -78,24 +75,26 @@ export default function FeelSettings() {
           background: var(--bone-mute);
           transition: transform var(--t-med), background var(--t-fast);
         }
-        .feel-switch[aria-checked="true"] .feel-knob { transform: translateX(18px); background: var(--green-bright); }
+        .feel-switch[aria-checked="true"] .feel-knob { transform: translateX(var(--space-4)); background: var(--green-bright); }
       `}</style>
     </div>
   )
 }
 
 function Row({ label, hint, on, onToggle }) {
+  const hintId = useId()
   return (
     <div className="card feel-row">
       <div className="feel-text">
         <div className="feel-label">{label}</div>
-        <div className="feel-hint">{hint}</div>
+        {hint && <div className="feel-hint" id={hintId}>{hint}</div>}
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={on}
         aria-label={label}
+        aria-describedby={hint ? hintId : undefined}
         className="feel-switch"
         onClick={onToggle}
       >

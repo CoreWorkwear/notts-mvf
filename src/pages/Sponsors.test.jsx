@@ -21,6 +21,7 @@ const ACME = { id: 's1', name: 'Acme Scaffolding', tier: 'main', active: true, l
 beforeEach(() => {
   state.sponsors = []
   state.loading = false
+  state.loaded = undefined // older tests model the hook without it
   state.error = null
   state.refetch = vi.fn()
 })
@@ -53,5 +54,20 @@ describe('Sponsors — a failed load is not "None yet."', () => {
     state.loading = true
     render(<Sponsors />)
     expect(screen.getByText('Acme Scaffolding')).toBeInTheDocument()
+  })
+})
+
+describe('Sponsors — an empty list does not go back to the Loader on a refetch', () => {
+  test('with one load already done the page stays up while it reloads', () => {
+    state.loaded = true
+    state.loading = true
+    render(<Sponsors />)
+    expect(screen.getByRole('button', { name: /add a sponsor/i })).toBeInTheDocument()
+  })
+  test('a refresh that fails with nothing listed keeps the page too', () => {
+    state.loaded = true
+    state.error = { message: 'boom' }
+    render(<Sponsors />)
+    expect(screen.getByRole('button', { name: /add a sponsor/i })).toBeInTheDocument()
   })
 })

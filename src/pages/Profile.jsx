@@ -1,7 +1,10 @@
+import InstallPrompt from '../components/InstallPrompt'
+import ClubImage from '../components/ClubImage'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { logError } from '../lib/logger'
+import { friendlyError } from '../lib/errors'
 import { TEAMS } from '../lib/constants'
 import NotificationToggle from '../components/NotificationToggle'
 import FeelSettings from '../components/FeelSettings'
@@ -43,7 +46,7 @@ export default function Profile() {
   const full = { ...profile, ...(priv ?? {}) }
   const openEdit = () => {
     if (privReady) { setEditing(true); return }
-    setError("Couldn't fetch your details — check your signal and try again.")
+    setError("Couldn't load your details. Try again.")
     setAttempt((a) => a + 1) // kick off another fetch for the next tap
   }
 
@@ -56,56 +59,61 @@ export default function Profile() {
 
       <div className="row gap-3 mt-2" style={{ alignItems: 'center' }}>
         {profile.photo_url
-          ? <img className="you-av" src={profile.photo_url} alt="" />
+          ? <ClubImage sizes="60px" loading="eager" className="you-av" src={profile.photo_url} alt="" />
           : <span className="you-av mono">{initials}</span>}
-        <h1 className="display" style={{ fontSize: 30 }}>
+        <h1 className="display" style={{ fontSize: 'var(--type-display)' }}>
           {profile.first_name} {profile.last_name}
         </h1>
       </div>
 
-      <div className="mt-3" style={{ maxWidth: 280 }}>
-        <ImageUpload
-          folder="players" shape="round" maxDim={512}
-          current={profile.photo_url}
-          label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
-          hint="A square head-and-shoulders shot works best."
-          onUploaded={async (url) => {
-            const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
-            if (error) { setError(error.message); logError('write', error, { op: 'avatar' }) }
-            else refreshProfile?.()
-          }}
-        />
-      </div>
+      {/* Storage only takes a headshot from an approved, active member. Offering
+          the button to anyone else got them a raw RLS refusal. */}
+      {profile.approved && profile.active ? (
+        <div className="mt-3" style={{ maxWidth: 280 }}>
+          <ImageUpload
+            folder="players" shape="round" maxDim={512}
+            current={profile.photo_url}
+            label={profile.photo_url ? 'Change your photo' : 'Add your photo'}
+            onUploaded={async (url) => {
+              const { error } = await supabase.from('profiles').update({ photo_url: url }).eq('id', profile.id)
+              if (error) { setError(friendlyError(error, "Couldn't save your photo. Try again.")); logError('write', error, { op: 'avatar' }) }
+              else refreshProfile?.()
+            }}
+          />
+        </div>
+      ) : profile.active ? (
+        <p className="dim mt-3" style={{ fontSize: 'var(--type-sm)' }}>Photo upload requires manager approval.</p>
+      ) : null}
       <style>{`.you-av { width: 60px; height: 60px; border-radius: 50%; flex: none; object-fit: cover;
         display: grid; place-items: center; background: var(--slate); border: 1px solid var(--line-2);
-        font-size: 20px; font-weight: 700; color: var(--bone-mute); }`}</style>
+        font-size: var(--type-lg); font-weight: 700; color: var(--bone-mute); }`}</style>
 
       <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
         {teamKeys.map((k) => (
-          <span key={k} className={'chip' + (k === 'community' ? ' community' : '')} aria-pressed="true">
+          <span key={k} className={'member-tag ' + k}>
             {TEAMS[k]?.label ?? k}
           </span>
         ))}
-        {isRealAdmin && <span className="chip" aria-pressed="true">Manager</span>}
+        {isRealAdmin && <span className="member-tag">Manager</span>}
       </div>
 
-      <div className="card mt-5" style={{ padding: 16 }}>
+      <dl className="card mt-5" style={{ padding: 'var(--space-4)' }}>
         <Row label="Email" value={full.email ?? '—'} />
-        <Row label="Phone" value={full.phone ?? '—'} />
-        <Row label="Date of birth" value={formatDob(full.dob)} />
-        <Row label="Positions" value={full.positions?.join(', ') || '—'} />
-        <Row label="Preferred" value={full.preferred || '—'} />
+        <Row label="Phone" value={full.phone ?? '—'} numeric />
+        <Row label="Date of birth" value={formatDob(full.dob)} numeric />
+        <Row label="Positions" value={full.positions?.join(', ') || '—'} numeric />
+        <Row label="Preferred" value={full.preferred || '—'} numeric />
         <Row label="Emergency contact" value={full.ec_name || '—'} />
-        <Row label="Emergency phone" value={full.ec_phone || '—'} last />
-      </div>
+        <Row label="Emergency phone" value={full.ec_phone || '—'} numeric />
+      </dl>
       <button className="btn btn-ghost btn-block mt-3" onClick={openEdit}>Edit your details</button>
-      <p className="dim mt-2" style={{ fontSize: 12 }}>Your login. The manager can change it.</p>
 
       <ProfileEdit open={editing} onClose={() => setEditing(false)} profile={full} onSaved={refreshProfile} />
 
       <p className="kicker mt-5"><span className="kicker-rule">NOTIFICATIONS</span></p>
       <div className="mt-3"><NotificationToggle /></div>
 
+      <InstallPrompt />
       <FeelSettings />
     </div>
   )
@@ -117,11 +125,9 @@ function formatDob(dob) {
   return `${d}/${m}/${y}`
 }
 
-function Row({ label, value, last }) {
-  return (
-    <div className="row spread" style={{ padding: '10px 0', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
-      <span className="muted" style={{ fontSize: 14 }}>{label}</span>
-      <span style={{ fontSize: 14 }}>{value}</span>
-    </div>
-  )
+function Row({ label, value, numeric }) {
+  return <div className="profile-field">
+    <dt className="muted">{label}</dt>
+    <dd className={numeric ? 'mono' : undefined}>{value}</dd>
+  </div>
 }
