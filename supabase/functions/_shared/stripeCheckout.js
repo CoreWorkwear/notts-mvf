@@ -123,6 +123,10 @@ export async function ensureCheckoutSession(stripe, attempt, customerId, now = D
       'allowed_payment_method_types[0]': 'card', 'allowed_payment_method_types[1]': 'pay_by_bank',
       expires_at: String(Math.floor(Date.parse(attempt.created_at) / 1000) + 24 * 3600),
     }
+    if (attempt.checkout_options_version === 2) {
+      body['saved_payment_method_options[payment_method_save]'] = 'enabled'
+      body['saved_payment_method_options[allow_redisplay_filters][0]'] = 'always'
+    }
     for (const [key, value] of Object.entries(checkoutMetadata(attempt))) {
       body[`metadata[${key}]`] = value
       body[`payment_intent_data[metadata][${key}]`] = value

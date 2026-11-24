@@ -94,6 +94,21 @@ describe('own player and provider scope', () => {
 })
 
 describe('durable hosted direct charge attempts', () => {
+  it('enables only explicit on-session opt-in saving and consented redisplay on new v2 attempts', async () => {
+    const direct = vi.fn(async () => session)
+    await ensureCheckoutSession(direct, { ...attempt, checkout_options_version: 2 }, 'cus_player', now)
+    const body = direct.mock.calls[0][1].body
+    expect(body['saved_payment_method_options[payment_method_save]']).toBe('enabled')
+    expect(body['saved_payment_method_options[allow_redisplay_filters][0]']).toBe('always')
+    expect(body.mode).toBe('payment')
+    expect(Object.keys(body).some(key => /setup_future_usage|off_session/.test(key))).toBe(false)
+  })
+  it('preserves the original idempotent body for old v1 attempts', async () => {
+    const direct = vi.fn(async () => session)
+    await ensureCheckoutSession(direct, { ...attempt, checkout_options_version: 1 }, 'cus_player', now)
+    expect(Object.keys(direct.mock.calls[0][1].body).some(key => key.startsWith('saved_payment_method_options'))).toBe(false)
+    expect(direct.mock.calls[0][1].idempotencyKey).toBe(`player-checkout:${id}`)
+  })
   it('double taps produce exactly the same customer/session idempotency and agreed parameters', async () => {
     const h = harness()
     const results = await Promise.all([h.run(), h.run()])

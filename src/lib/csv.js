@@ -29,6 +29,29 @@ export function buildBankAndCashCsv(entries) {
   return lines.join('\r\n')
 }
 
+export function buildStripePayoutCsv(payouts) {
+  const lines = ['Payout,Status,Date,Row,Player,Receipt reference,Method,Currency,Gross (GBP),Refunds (GBP),Fee (GBP),Net (GBP),Difference (GBP),Provider reference,Reconciliation issue']
+  const amount = pence => Number.isFinite(pence) ? (pence / 100).toFixed(2) : ''
+  for (const payout of payouts) {
+    for (const entry of payout.lines) {
+      const gbp = entry.currency === 'gbp'
+      lines.push([
+        esc(payout.payout_id), esc(payout.status), esc(entry.date), 'Transaction', esc(entry.player_name),
+        esc(entry.receipt_reference), 'Stripe', esc(entry.currency), gbp ? amount(entry.gross_pence) : '',
+        gbp ? amount(entry.refunds_pence) : '', gbp ? amount(entry.fee_pence) : '', gbp ? amount(entry.net_pence) : '',
+        '', esc(entry.balance_transaction_id), esc(entry.issue),
+      ].join(','))
+    }
+    const total = payout.breakdown
+    lines.push([
+      esc(payout.payout_id), esc(payout.status), esc(payout.arrival_on), 'Payout total', '', '', 'Stripe', 'gbp',
+      amount(total?.gross_pence), amount(total?.refunds_pence), amount(total?.fees_pence), amount(total?.net_pence),
+      amount(total?.difference_pence), '', esc(total?.issues?.join(' | ')),
+    ].join(','))
+  }
+  return lines.join('\r\n')
+}
+
 // players: [{ name, preferred, paid }]
 export function buildFixtureCsv(fixture, players) {
   const us = teamMatchName(fixture.team)

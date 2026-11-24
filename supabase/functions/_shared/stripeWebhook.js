@@ -40,7 +40,7 @@ export async function verifyStripeConnectSignature(raw, header, secret, {
 }
 
 export async function handleStripeConnectWebhook(req, {
-  secret, platformAccountId, mode, settle, crypto = globalThis.crypto, nowSeconds,
+  secret, platformAccountId, mode, settle, recordPayout, crypto = globalThis.crypto, nowSeconds,
   maxBodyBytes = 1024 * 1024,
 }) {
   const json = (body, status = 200) => new Response(JSON.stringify(body), {
@@ -65,8 +65,9 @@ export async function handleStripeConnectWebhook(req, {
         !event.data?.object || typeof event.data.object !== 'object' || Array.isArray(event.data.object)) {
       throw new WebhookError('Invalid Stripe Connect event scope.')
     }
-    if (!supportedEvents.has(event.type)) return json({ received: true, outcome: 'ignored' })
-    const result = await settle(platformAccountId, event)
+    const payoutEvent = ['payout.paid', 'payout.failed'].includes(event.type)
+    if (!payoutEvent && !supportedEvents.has(event.type)) return json({ received: true, outcome: 'ignored' })
+    const result = payoutEvent ? await recordPayout(platformAccountId, event) : await settle(platformAccountId, event)
     return json({ received: true, outcome: result.outcome })
   } catch (error) {
     if (error instanceof WebhookError) return json({ error: error.message }, error.status)

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import SavedCards from './SavedCards'
 
 const uuid = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
 const money = pence => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100)
@@ -166,6 +167,7 @@ export default function PlayerCheckout({ profileId, statusOnly = false, onStatus
         {view && <button className="btn btn-ghost btn-block mt-2" disabled={busy} onClick={() => { setView(null); setQuote(null); setError('') }}>Cancel</button>}
       </>}
       {error && <p className="field-error mt-2" role="alert">{error}</p>}
+      <SavedCards key={profileId} profileId={profileId} ready={showActions} />
     </>}
   </div>
 }

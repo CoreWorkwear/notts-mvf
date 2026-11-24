@@ -110,9 +110,9 @@ describe('Connect delivery handler', () => {
     expect(h.settle).toHaveBeenCalledOnce()
   })
 
-  it('ignores payouts and unrelated event types without any storage/financial call', async () => {
+  it('ignores unrelated event types without any storage/financial call', async () => {
     const h = harness()
-    const response = await h.handle(request(JSON.stringify(envelope({ type: 'payout.paid' }))))
+    const response = await h.handle(request(JSON.stringify(envelope({ type: 'invoice.paid' }))))
     expect(await response.json()).toEqual({ received: true, outcome: 'ignored' })
     expect(h.settle).not.toHaveBeenCalled()
   })
@@ -141,6 +141,24 @@ describe('Connect delivery handler', () => {
     const h = harness({ maxBodyBytes: 4 })
     expect((await h.handle(request('12345'))).status).toBe(413)
     expect((await h.handle(new Request('https://club.example', { method: 'GET' }))).status).toBe(405)
+    expect(h.settle).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Connect payout lifecycle routing', () => {
+  it.each(['payout.paid', 'payout.failed'])('routes signed %s only to provider-fact storage', async type => {
+    const recordPayout = vi.fn(async () => ({ outcome: type.split('.')[1] }))
+    const h = harness({ recordPayout })
+    const event = envelope({ type })
+    const response = await h.handle(request(JSON.stringify(event)))
+    expect(response.status).toBe(200)
+    expect(recordPayout).toHaveBeenCalledWith('acct_platform', event)
+    expect(h.settle).not.toHaveBeenCalled()
+  })
+  it('does not acknowledge payout delivery when its storage handler is unavailable', async () => {
+    const h = harness()
+    expect((await h.handle(request(JSON.stringify(envelope({ type: 'payout.paid' }))))).status).toBe(503)
     expect(h.settle).not.toHaveBeenCalled()
   })
 })

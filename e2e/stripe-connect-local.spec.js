@@ -68,7 +68,7 @@ test('manager starts and resumes sandbox onboarding from Club settings', async (
   }
 })
 
-test('a signed sandbox fixture settles and refunds exactly once, even while paused', async () => {
+test('signed sandbox fixtures settle, refund and record payout status even while paused', async ({ page }) => {
   test.skip(process.env.E2E_STRIPE_SIGNED_FIXTURES !== '1', 'requires the isolated signed-event endpoint')
   expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
   const api = env.VITE_SUPABASE_URL
@@ -163,6 +163,12 @@ test('a signed sandbox fixture settles and refunds exactly once, even while paus
     const refund = event('refund.updated', 'Refund', {
       object: 'refund', id: `re_Proof${stamp}`, amount: 200, currency: 'gbp', status: 'succeeded', payment_intent: fakeIntent,
     })
+    const payoutTime = Math.floor(Date.now() / 1000)
+    const failedPayout = event('payout.failed', 'Payout', {
+      object: 'payout', id: `po_Proof${stamp}`, status: 'failed', amount: 640, currency: 'gbp',
+      arrival_date: payoutTime, created: payoutTime, automatic: true, reconciliation_status: 'pending',
+      failure_code: 'account_closed',
+    })
     await enable(false)
     expect((await deliver(payment, false)).status).toBe(400)
     expect((await deliver(refund)).status).toBe(503)
@@ -170,6 +176,8 @@ test('a signed sandbox fixture settles and refunds exactly once, even while paus
     expect(results.map(result => result.status)).toEqual([200, 200, 200])
     expect((await deliver(refund)).status).toBe(200)
     expect((await deliver(refund)).status).toBe(200)
+    expect((await deliver(failedPayout)).status).toBe(200)
+    expect((await deliver(failedPayout)).status).toBe(200)
     await enable(true)
     const playerClient = createClient(api, env.VITE_SUPABASE_ANON_KEY, options)
     await checked(playerClient.auth.signInWithPassword({ email: player.email, password: player.password }))
@@ -179,6 +187,20 @@ test('a signed sandbox fixture settles and refunds exactly once, even while paus
       ['opening', -900], ['receipt', 900], ['refund', -200],
     ])
     expect(statement.entries[2].linked_entry_id).toBe(statement.entries[1].id)
+    const today = new Date().toISOString().slice(0, 10)
+    const denied = await playerClient.functions.invoke('stripe-payout-reconciliation', {
+      body: { action: 'list', from: today, to: today },
+    })
+    expect(denied.error?.context?.status).toBe(403)
+    await signIn(page, manager.email, manager.password)
+    await page.getByRole('button', { name: 'Manager view' }).click()
+    await page.goto('/manage')
+    await page.getByRole('link', { name: 'Stripe payouts', exact: true }).tap()
+    const payout = page.getByText(/Failed payout · £6.40/)
+    await expect(payout).toHaveCount(1)
+    await payout.tap()
+    await expect(page.getByText('Reconciliation outstanding')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Export payout CSV' })).toBeVisible()
   } finally {
     if (enabled) await enable(false)
     for (const id of people) await checked(admin.auth.admin.deleteUser(id))

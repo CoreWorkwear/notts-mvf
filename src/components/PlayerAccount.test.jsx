@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 
 const store = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: store.rpc, functions: { invoke: store.invoke } } }))
+vi.mock('./SavedCards', () => ({ default: () => null }))
 import PlayerAccount from './PlayerAccount'
 
 const empty = { profile_id: 'p1', balance_pence: 0, entries: [] }

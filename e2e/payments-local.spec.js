@@ -400,3 +400,56 @@ test('confirmed training attendance charges each occurrence independently', asyn
     for (const person of members) await checked(admin.auth.admin.deleteUser(person.id))
   }
 })
+
+test('account reminder opens the signed-in player’s current balance', async ({ browser, browserName, page }) => {
+  test.skip(process.env.E2E_PAYMENTS_LOCAL !== '1', 'requires the isolated payments database')
+  expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
+  expect(serviceKey).toBeTruthy()
+  const admin = createClient(env.VITE_SUPABASE_URL, serviceKey, authOptions)
+  const people = []
+  const club = await checked(admin.from('clubs').insert({ name: 'Account reminder proof club' }).select('id').single())
+  let enabled = false
+  const reminderRelease = value => checked(admin.rpc('set_club_payments_release', {
+    p_club_id: club.id, p_enabled: value, p_cutover: value,
+  }))
+  try {
+    await checked(admin.from('seasons').insert({ club_id: club.id, label: 'Test season', is_current: true }))
+    const manager = await member(admin, 'Notice manager', 'admin', club.id)
+    people.push(manager)
+    const player = await member(admin, 'Reminder proof', 'player', club.id)
+    people.push(player)
+    await reminderRelease(true)
+    enabled = true
+    await checked(admin.rpc('post_account_entry', { p_entry: {
+      club_id: club.id, profile_id: player.id, kind: 'opening', source: 'opening',
+      amount_pence: -700, source_id: randomUUID(), description: 'Opening balance',
+    } }))
+    await signIn(page, manager.email, manager.password)
+    await page.getByRole('button', { name: 'Manager view' }).click()
+    await page.goto('/manage')
+    await page.getByRole('link', { name: 'Account reminders' }).click()
+    await expect(page.getByRole('region', { name: 'Players in arrears' }).getByText('Reminder proof', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Send account reminders' }).click()
+    await expect(page.getByText('In-app reminders created for 1 player.')).toBeVisible()
+    const managerApi = await signedIn(manager)
+    await checked(managerApi.rpc('record_account_receipt', {
+      p_request_id: randomUUID(), p_profile_id: player.id, p_amount_pence: 700, p_method: 'bank',
+    }))
+    const device = browserName === 'webkit' ? devices['iPhone 14'] : devices['Pixel 7']
+    const { defaultBrowserType: _engine, ...phoneOptions } = device
+    const playerContext = await browser.newContext({ ...phoneOptions, baseURL: 'http://localhost:4173', serviceWorkers: 'block' })
+    try {
+      const phone = await playerContext.newPage()
+      await signIn(phone, player.email, player.password)
+      const reminder = phone.getByRole('complementary', { name: 'Account reminder' })
+      await reminder.getByRole('link', { name: 'View your account' }).tap()
+      const account = phone.getByRole('region', { name: 'Player account' })
+      await expect(account.getByText('Settled', { exact: true }).first()).toBeVisible()
+    } finally {
+      await playerContext.close()
+    }
+  } finally {
+    if (enabled) await reminderRelease(false)
+    for (const person of people) await checked(admin.auth.admin.deleteUser(person.id))
+  }
+})

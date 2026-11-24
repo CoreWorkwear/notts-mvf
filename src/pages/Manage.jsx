@@ -14,7 +14,14 @@ export default function Manage() {
   const { user, profile } = useAuth()
   const release = usePaymentsRelease(user?.id, profile?.club_id)
   const sections = release.enabled
-    ? [...groups, ['Club settings', [['Fees', '/manage/fees', IconCompetitions], ['Opening balances', '/manage/settings/opening-balances', IconPlayers], ['Stripe', '/manage/settings/stripe', IconDiagnostics], ['Activity charges', '/manage/accounts-report', IconDiagnostics]]]]
+    ? [...groups, ['Club settings', [
+      ['Fees', '/manage/fees', IconCompetitions],
+      ['Opening balances', '/manage/settings/opening-balances', IconPlayers],
+      ['Stripe', '/manage/settings/stripe', IconDiagnostics],
+      ['Stripe payouts', '/manage/settings/stripe-payouts', IconDiagnostics],
+      ['Activity charges', '/manage/accounts-report', IconDiagnostics],
+      ['Account reminders', '/manage/settings/account-reminders', IconReminders],
+    ]]]
     : groups
   return <div className="page">
     <h1 className="display page-title">Club admin</h1>

@@ -7,6 +7,20 @@ Deno.serve(req => handleStripeConnectWebhook(req, {
   secret: Deno.env.get('STRIPE_WEBHOOK_SECRET_CONNECT'),
   platformAccountId: Deno.env.get('STRIPE_PLATFORM_ACCOUNT_ID'),
   mode: Deno.env.get('STRIPE_WEBHOOK_MODE'),
+  async recordPayout(platformAccountId: string, event: unknown) {
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data, error } = await admin.rpc('record_stripe_payout_event', {
+      p_platform_account_id: platformAccountId, p_event: event,
+    })
+    if (error) {
+      if (['22023', '22P02', '22003', '23505', '23514'].includes(error.code)) throw new WebhookError('Stripe payout details could not be verified.')
+      throw new Error('stripe_payout_event_retry_required')
+    }
+    if (!data?.outcome) throw new Error('stripe_payout_event_result_missing')
+    return data
+  },
   async settle(platformAccountId: string, event: unknown) {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
       auth: { persistSession: false, autoRefreshToken: false },

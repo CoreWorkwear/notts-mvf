@@ -13,6 +13,7 @@ import { OverlayTarget } from './components/Overlay'
 import Auth from './pages/Auth'
 import Holding from './pages/Holding'
 import { TrainingNoticeBanner } from './components/TrainingNoticeInbox'
+import AccountReminderBanner from './components/AccountReminderBanner'
 import SetNewPassword from './pages/SetNewPassword'
 import Fixtures from './pages/Fixtures'
 import Results from './pages/Results'
@@ -31,6 +32,8 @@ const Fees = lazy(() => import('./pages/Fees'))
 const AccountsReport = lazy(() => import('./pages/AccountsReport'))
 const OpeningBalances = lazy(() => import('./pages/OpeningBalances'))
 const StripeSettings = lazy(() => import('./pages/StripeSettings'))
+const AccountReminders = lazy(() => import('./pages/AccountReminders'))
+const StripePayouts = lazy(() => import('./pages/StripePayouts'))
 const ProfileDetails = lazy(() => import('./pages/ProfileDetails'))
 const AdminAvailability = lazy(() => import('./pages/AdminAvailability'))
 const Players = lazy(() => import('./pages/Players'))
@@ -203,6 +206,7 @@ function AppRoutes({ adminOnly }) {
   return (
     <main>
       {!/^\/training\/?$/.test(location.pathname) && <TrainingNoticeBanner />}
+      <AccountReminderBanner />
       <OverlayTarget.Provider value={document.body}>
         <RouteFrame key={location.pathname}>
           <Suspense fallback={fallback}>
@@ -219,6 +223,8 @@ function AppRoutes({ adminOnly }) {
               <Route path="/manage/settings/opening-balances" element={adminOnly(<OpeningBalances />)} />
               <Route path="/manage/accounts-report" element={adminOnly(<AccountsReport />)} />
               <Route path="/manage/settings/stripe" element={adminOnly(<StripeSettings />)} />
+              <Route path="/manage/settings/account-reminders" element={adminOnly(<AccountReminders />)} />
+              <Route path="/manage/settings/stripe-payouts" element={adminOnly(<StripePayouts />)} />
               <Route path="/whos-in" element={adminOnly(seasonPage(<AdminAvailability />))} />
               <Route path="/players" element={adminOnly(<Players />)} />
               <Route path="/opponents" element={adminOnly(<Opponents />)} />
