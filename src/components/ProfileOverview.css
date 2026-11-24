@@ -1,0 +1,8 @@
+.profile-identity { display: flex; align-items: center; gap: var(--space-3); }
+.profile-identity h1 { font-size: var(--type-display); }
+.profile-avatar { width: 60px; height: 60px; flex: none; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--surface-subtle); color: var(--text-muted); font-size: var(--type-lg); font-weight: 700; }
+.profile-badges { flex-wrap: wrap; }
+.profile-overview h2 { font-size: var(--type-lg); font-weight: 700; }
+.profile-settings { border-block-start: 1px solid var(--border); padding-block: var(--space-3); }
+.profile-settings summary { min-height: var(--target); align-content: center; cursor: pointer; font-weight: 650; }
+.profile-settings summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

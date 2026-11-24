@@ -27,6 +27,9 @@ import SponsorStrip from './components/SponsorStrip'
 // instant and offline-safe after first load.
 const Training = lazy(() => import('./pages/Training'))
 const Manage = lazy(() => import('./pages/Manage'))
+const Fees = lazy(() => import('./pages/Fees'))
+const AccountsReport = lazy(() => import('./pages/AccountsReport'))
+const ProfileDetails = lazy(() => import('./pages/ProfileDetails'))
 const AdminAvailability = lazy(() => import('./pages/AdminAvailability'))
 const Players = lazy(() => import('./pages/Players'))
 const Opponents = lazy(() => import('./pages/Opponents'))
@@ -207,8 +210,11 @@ function AppRoutes({ adminOnly }) {
               <Route path="/training" element={<Training />} />
               <Route path="/club" element={seasonPage(<Club />)} />
               <Route path="/you" element={<Profile />} />
+              <Route path="/you/details" element={<ProfileDetails />} />
               <Route path="/news" element={<News />} />
               <Route path="/manage" element={adminOnly(<Manage />)} />
+              <Route path="/manage/fees" element={adminOnly(<Fees />)} />
+              <Route path="/manage/accounts-report" element={adminOnly(<AccountsReport />)} />
               <Route path="/whos-in" element={adminOnly(seasonPage(<AdminAvailability />))} />
               <Route path="/players" element={adminOnly(<Players />)} />
               <Route path="/opponents" element={adminOnly(<Opponents />)} />

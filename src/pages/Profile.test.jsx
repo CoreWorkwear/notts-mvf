@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render as renderView, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 
 // The You page's personal fields come from profile_private. ProfileEdit
@@ -20,10 +21,13 @@ vi.mock('../lib/supabase', () => {
   return { supabase: { from: () => q } }
 })
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
+const release = vi.hoisted(() => ({ enabled: false, error: false, retry: vi.fn() }))
+vi.mock('../hooks/usePaymentsRelease', () => ({ usePaymentsRelease: () => release }))
+vi.mock('../components/PlayerAccount', () => ({ default: ({ profileId }) => <section aria-label="Player account">Account for {profileId}</section> }))
 const who = vi.hoisted(() => ({ account: { approved: true, active: true }, isRealAdmin: false }))
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
-    profile: { id: 'me', first_name: 'Joe', last_name: 'Bloggs', positions: [], preferred: null, photo_url: null, ...who.account },
+    profile: { id: 'me', first_name: 'Joe', last_name: 'Bloggs', positions: [], preferred: null, photo_url: null, is_player: true, ...who.account },
     teamKeys: [],
     isRealAdmin: who.isRealAdmin,
     refreshProfile: vi.fn(),
@@ -35,8 +39,33 @@ vi.mock('../components/ImageUpload', () => ({ default: (props) => { upload.props
 vi.mock('../components/ProfileEdit', () => ({ default: ({ open }) => (open ? <div data-testid="edit-sheet" /> : null) }))
 
 import Profile from './Profile'
+const render = ui => renderView(<MemoryRouter>{ui}</MemoryRouter>)
 
-beforeEach(() => { store.privErr = null; who.account = { approved: true, active: true }; who.isRealAdmin = false; upload.props = null })
+beforeEach(() => { store.privErr = null; who.account = { approved: true, active: true }; who.isRealAdmin = false; upload.props = null; release.enabled = false; release.error = false })
+
+describe('Profile — release gated account placement', () => {
+  test('disabled club preserves the original details view', async () => {
+    render(<Profile />)
+    expect(await screen.findByText('joe@x.com')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Player account' })).not.toBeInTheDocument()
+  })
+  test('enabled club shows the own account immediately after badges and before private details', async () => {
+    release.enabled = true; who.isRealAdmin = true
+    render(<Profile />)
+    const badge = screen.getByText('Manager')
+    const account = screen.getByRole('region', { name: 'Player account' })
+    const details = screen.getByRole('link', { name: 'Edit details' })
+    expect(badge.parentElement.nextElementSibling).toBe(account)
+    expect(account.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(account).toHaveTextContent('Account for me')
+  })
+  test.each([true, false])('non-playing member with manager=%s has no own account', async isManager => {
+    release.enabled = true; who.isRealAdmin = isManager; who.account.is_player = false
+    render(<Profile />)
+    expect(screen.getByRole('link', { name: 'Edit details' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Player account' })).not.toBeInTheDocument()
+  })
+})
 
 describe('Profile — avatar uploads go to the per-user folder (media policy: players/<uid>/…)', () => {
   test('ImageUpload is given players/<profile id>, not the shared players folder', async () => {

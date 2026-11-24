@@ -10,6 +10,7 @@ import { isSquadMember, squadIds } from '../lib/players'
 import { fixtureMatchup } from '../lib/teams'
 import { friendlyError } from '../lib/errors'
 import { logError } from '../lib/logger'
+import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
 
 // The Who's In team-sheet (DESIGN-SYSTEM §6.2 / UX-AND-IA §3): not an RSVP
 // list — the XI filling up, a big count, and a one-tap chase for the players who
@@ -18,7 +19,9 @@ import { logError } from '../lib/logger'
 // Once the game has kicked off nobody can answer any more (0034), so the chase
 // and the push nudge go; the subs stay, and gain anyone named in the line-up.
 export default function WhosInSheet({ open, onClose, fixture }) {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
+  const payments = usePaymentsRelease(user?.id, profile?.club_id)
+  const legacyPayments = !payments.loading && !payments.error && !payments.cutover_at
   const [groups, setGroups] = useState(null)
   const [error, setError] = useState(null)
   const [attempt, setAttempt] = useState(0) // bumped by "Try again"
@@ -48,7 +51,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
             .from('team_memberships')
             .select('profiles!inner(id, first_name, last_name, active, approved, is_player)')
             .eq('team_id', fixture.team_id),
-          supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id),
+          legacyPayments ? supabase.from('payments').select('profile_id, paid').eq('fixture_id', fixture.id) : Promise.resolve({ data: [], error: null }),
           lineupQuery,
         ])
         if (!active) return
@@ -107,7 +110,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
     // user?.id, not user: supabase-js hands over a new user object on every
     // return to the foreground, and the sheet blanked and reloaded each time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, fixture, user?.id, attempt])
+  }, [open, fixture, user?.id, attempt, legacyPayments])
 
   if (!fixture) return null
   const f = fixture
@@ -128,6 +131,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   })
 
   async function togglePaid(id, next) {
+    if (!legacyPayments) return
     setPaid(id, next)
     const { error } = await supabase
       .from('payments')
@@ -139,6 +143,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
   }
 
   function exportCsv() {
+    if (!legacyPayments) return
     const players = payers.map((p) => ({ name: p.name, preferred: p.preferred, paid: !!p.paid }))
     downloadCsv(csvFilename(f), buildFixtureCsv(f, players))
   }
@@ -216,7 +221,7 @@ export default function WhosInSheet({ open, onClose, fixture }) {
           )}
 
           {/* Subs — admin only (HANDOVER §10) */}
-          {isAdmin && payers.length > 0 && (
+          {isAdmin && legacyPayments && payers.length > 0 && (
             <div className="subs mt-5">
               <div className="row spread" style={{ alignItems: 'center' }}>
                 <p className="kicker"><span className="kicker-rule">SUBS · £{MATCH_FEE}</span></p>

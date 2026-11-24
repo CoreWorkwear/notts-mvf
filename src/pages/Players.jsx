@@ -9,9 +9,15 @@ import PlayerForm from '../components/PlayerForm'
 import Loader from '../components/Loader'
 import Toast from '../components/Toast'
 import PageHead from '../components/PageHead'
+import Sheet from '../components/Sheet'
+import PlayerAccount from '../components/PlayerAccount'
+import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
 
 export default function Players() {
-  const { user } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
+  const payments = usePaymentsRelease(user?.id, profile?.club_id)
+  const [accountPlayer, setAccountPlayer] = useState(null)
+  const onAccount = payments.enabled && isAdmin ? setAccountPlayer : undefined
   const { players, loading, error, refetch } = usePlayers()
   const [teams, setTeams] = useState([])
   const [teamsError, setTeamsError] = useState(null)
@@ -100,23 +106,27 @@ export default function Players() {
       {pendingList.length > 0 && (
         <Section title={`Awaiting sign-off · ${pendingList.length}`} list={pendingList} onEdit={openEdit} onApprove={approve} meId={user?.id} accent />
       )}
-      <Section title={`Active · ${squadList.length}`} list={squadList} onEdit={openEdit} meId={user?.id} empty="No active players." />
+      <Section title={`Active · ${squadList.length}`} list={squadList} onEdit={openEdit} onAccount={onAccount} meId={user?.id} empty="No active players." />
       {supporterList.length > 0 && (
         <Section title={`Supporters · ${supporterList.length}`} list={supporterList} onEdit={openEdit} meId={user?.id} />
       )}
       {inactiveList.length > 0 && (
-        <Section title={`Inactive · ${inactiveList.length}`} list={inactiveList} onEdit={openEdit} meId={user?.id} muted />
+        <Section title={`Inactive · ${inactiveList.length}`} list={inactiveList} onEdit={openEdit} onAccount={onAccount} meId={user?.id} muted />
       )}
 
       <PlayerForm
         open={formOpen} onClose={() => setFormOpen(false)} onSaved={refetch}
         player={editing} teams={teams} currentUserId={user?.id}
       />
+      <Sheet open={!!accountPlayer && payments.enabled} onClose={() => setAccountPlayer(null)} aria-label="Player account">
+        <h2>{accountPlayer?.first_name} {accountPlayer?.last_name}</h2>
+        <PlayerAccount profileId={accountPlayer?.id} actorId={user?.id} active={!!accountPlayer && payments.enabled} canRecord={isAdmin} players={players} />
+      </Sheet>
     </div>
   )
 }
 
-function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent }) {
+function Section({ title, list, onEdit, onApprove, onAccount, meId, muted, empty, accent }) {
   return (
     <div className="mt-5">
       <p className="kicker" style={{ color: accent ? 'var(--amber)' : 'var(--bone-mute)' }}>{title}</p>
@@ -144,6 +154,7 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
                   </span>
                 </span>
               </button>
+              {onAccount && p.is_player && <button type="button" className="btn btn-ghost pl-account" aria-label={`Account for ${p.first_name} ${p.last_name}`} onClick={() => onAccount(p)}>Account</button>}
               {onApprove && (
                 <button type="button" className="pl-approve" onClick={() => onApprove(p.id)}
                   aria-label={`Sign off ${p.first_name} ${p.last_name}`}>
@@ -157,6 +168,7 @@ function Section({ title, list, onEdit, onApprove, meId, muted, empty, accent })
       )}
 
       <style>{`
+        .pl-account { position: relative; z-index: 1; flex: none; }
         .pl-list { container-type: inline-size; }
         .pl-row { position: relative; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); background: var(--coal);
           color: var(--bone); border: 1px solid var(--line); text-align: left; }
