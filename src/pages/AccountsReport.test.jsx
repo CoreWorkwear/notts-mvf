@@ -25,8 +25,30 @@ test('all four charge categories, signed correction and grand total are distinct
   const receipts = screen.getByRole('region', { name: 'Club receipts' })
   expect(receipts).toHaveTextContent('Gross receipts£30.00')
   expect(receipts).toHaveTextContent('Refunds-£2.00')
-  expect(receipts).toHaveTextContent('Linked receipt: receipt')
+  expect(within(receipts).getByRole('button', { name: 'Export bank and cash CSV' })).toBeVisible()
   expect(table).not.toHaveTextContent('£30.00')
+})
+
+test('receipt correction opens its original entry on the player statement', async () => {
+  const report = fixture()
+  report.receipts.entries[1].profile_id = 'player'
+  state.rpc.mockResolvedValueOnce({ data: report }).mockResolvedValue({
+    data: {
+      profile_id: 'player', balance_pence: 2800,
+      entries: [{ id: 'receipt', kind: 'receipt', description: 'Bank transfer', source: 'bank',
+        occurred_on: '2026-10-31', reference: 'Earlier transfer', amount_pence: 3000, running_balance_pence: 3000 }],
+    },
+  })
+  render(<AccountsReport />)
+  await userEvent.click(await screen.findByText('Receipt reconciliation details', { selector: 'summary' }))
+  await userEvent.selectOptions(screen.getByLabelText('Receipt method'), 'cash')
+  expect(screen.queryByRole('button', { name: 'View original receipt' })).toBeNull()
+  await userEvent.selectOptions(screen.getByLabelText('Receipt method'), 'bank')
+  await userEvent.click(screen.getByRole('button', { name: 'View original receipt' }))
+  const dialog = screen.getByRole('dialog', { name: 'Receipt player statement' })
+  const receipt = await within(dialog).findByText('Reference: Earlier transfer')
+  expect(receipt.closest('li')).toHaveFocus()
+  expect(state.rpc).toHaveBeenLastCalledWith('get_player_account', { p_profile_id: 'player' })
 })
 
 test('inclusive date filter submits exact selected dates and rejects inverted periods', async () => {

@@ -57,7 +57,7 @@ export default function ProfileOverview() {
       {teamKeys.map(key => <span key={key} className={`member-tag ${key}`}>{TEAMS[key]?.label ?? key}</span>)}
       {isRealAdmin && <span className="member-tag">Manager</span>}
     </div>
-    {profile.is_player && <PlayerAccount profileId={profile.id} />}
+    {profile.is_player && <PlayerAccount profileId={profile.id} canPay />}
     <Link className="btn btn-ghost btn-block mt-3" to="/you/details">Edit details</Link>
     <section className="mt-5" aria-labelledby="profile-notifications"><h2 id="profile-notifications">Notifications</h2><div className="mt-3"><NotificationToggle /></div></section>
     <details className="profile-settings mt-5"><summary>App settings</summary><FeelSettings /><InstallPrompt /></details>

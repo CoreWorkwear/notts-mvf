@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ManagerAccountChange, { pendingAccountChange } from './ManagerAccountChange'
 import { todayISO } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import './PlayerAccount.css'
+import PlayerCheckout from './PlayerCheckout'
 
 const money = pence => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Math.abs(pence) / 100)
 const balanceLabel = pence => pence === 0 ? 'Settled' : `${money(pence)} ${pence < 0 ? 'owed' : 'in credit'}`
@@ -26,7 +27,10 @@ function saveDraft(key, draft) {
   } catch { /* Keep the in-memory recovery path. */ }
 }
 
-export default function PlayerAccount({ profileId, actorId = '', canRecord = false, active = true, players = [] }) {
+export default function PlayerAccount({ profileId, actorId = '', canRecord = false, canPay = false, active = true, players = [], initialEntryId }) {
+  const panel = useRef(null)
+  const focusedEntries = useRef(new Set())
+  const paymentRefreshes = useRef(new Set())
   const [account, setAccount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -36,7 +40,14 @@ export default function PlayerAccount({ profileId, actorId = '', canRecord = fal
   const [notice, setNotice] = useState('')
   useEffect(() => {
     setAccount(null); setReceipt(false); setCorrection(false); setNotice('')
+    paymentRefreshes.current.clear()
   }, [profileId, active])
+  const refreshPayment = useCallback((id, status) => {
+    const key = `${id}:${status}`
+    if (paymentRefreshes.current.has(key)) return
+    paymentRefreshes.current.add(key)
+    setAttempt(value => value + 1)
+  }, [])
   useEffect(() => {
     if (!active || !profileId) return
     let on = true
@@ -58,15 +69,25 @@ export default function PlayerAccount({ profileId, actorId = '', canRecord = fal
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [active, receipt, correction])
+  useEffect(() => {
+    if (loading || !account || !initialEntryId) return
+    const key = `${profileId}:${initialEntryId}`
+    if (focusedEntries.current.has(key)) return
+    const entry = [...(panel.current?.querySelectorAll('.account-entry') ?? [])].find(element => element.id === `statement-entry-${initialEntryId}`)
+    if (!entry) return
+    focusedEntries.current.add(key)
+    entry.scrollIntoView?.({ block: 'nearest' }); entry.focus({ preventScroll: true })
+  }, [loading, account, initialEntryId, profileId])
   if (!active) return null
   const actorNames = new Map(players.map(player => [player.id, [player.first_name, player.last_name].join(" ")]))
-  return <section className="player-account mt-5" aria-label="Player account">
+  return <section ref={panel} className="player-account mt-5" aria-label="Player account">
     <h2>Balance and statement</h2>
     {loading ? <p role="status" className="muted mt-2">Loading your account…</p> : error ? <div role="alert" className="mt-2">
       <p>Couldn't load the account. Your balance is unavailable.</p>
       <button className="btn btn-ghost mt-2" onClick={() => setAttempt(a => a + 1)}>Try again</button>
     </div> : account && <>
       <p className="account-balance mono mt-2">{balanceLabel(account.balance_pence)}</p>
+      {canPay && <PlayerCheckout key={profileId} profileId={profileId} onStatus={refreshPayment} />}
       {notice && <p role="status" className="mt-2">{notice}</p>}
       {canRecord && !receipt && !correction && <button className="btn btn-primary btn-block mt-3" onClick={() => { setReceipt(true); setNotice('') }}>{readDraft(draftKey(profileId, actorId)) ? 'Resume receipt' : 'Record receipt'}</button>}
       {receipt && <ReceiptForm profileId={profileId} actorId={actorId} onSaved={() => { setReceipt(false); setNotice('Receipt recorded.'); setAttempt(a => a + 1) }} onCancel={() => setReceipt(false)} />}

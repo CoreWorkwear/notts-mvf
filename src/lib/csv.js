@@ -12,8 +12,21 @@ import { teamLabel, teamMatchName } from './teams'
 // separator, quote or line break (CR included, or it splits the row).
 function esc(v) {
   let s = String(v ?? '')
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  if (/^[\s\uFEFF]*[=+\-@]|^[\t\r\n]/.test(s)) s = "'" + s
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+
+export function buildBankAndCashCsv(entries) {
+  const lines = ['Date,Player,Method,Entry,Reference,Amount (GBP),Entry ID,Original receipt ID']
+  for (const entry of entries) {
+    if (entry.method !== 'bank' && entry.method !== 'cash') continue
+    const amount = (entry.amount_pence / 100).toFixed(2)
+    lines.push([
+      esc(entry.occurred_on), esc(entry.player_name), entry.method === 'bank' ? 'Bank transfer' : 'Cash',
+      esc(entry.kind), esc(entry.reference), amount, esc(entry.id), esc(entry.linked_entry_id),
+    ].join(','))
+  }
+  return lines.join('\r\n')
 }
 
 // players: [{ name, preferred, paid }]

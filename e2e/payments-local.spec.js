@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { devices, expect, test } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { loadEnv } from 'vite'
@@ -226,6 +227,14 @@ test('a manager records a receipt and the player sees it once on their phone', a
     await expect(page.getByRole('heading', { name: 'Club receipts' })).toBeVisible()
     await page.getByText('Receipt reconciliation details', { exact: true }).click()
     await expect(page.getByText(bankReference, { exact: false })).toBeVisible()
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export bank and cash CSV' }).click()
+    const exported = await readFile(await (await download).path(), 'utf8')
+    expect(exported).toContain(`Bank transfer,receipt,${bankReference},20.00`)
+    const receiptRow = page.locator('li').filter({ hasText: bankReference })
+    await receiptRow.getByRole('button', { name: 'View player statement' }).click()
+    const receiptStatement = page.getByRole('dialog', { name: 'Receipt player statement' })
+    await expect(receiptStatement.getByText(`Reference: ${bankReference}`, { exact: true })).toBeVisible()
 
     await release(admin, false)
     putReleaseBack = false

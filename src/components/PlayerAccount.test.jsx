@@ -1,15 +1,44 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 
-const store = vi.hoisted(() => ({ rpc: vi.fn() }))
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: store.rpc } }))
+const store = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn() }))
+vi.mock('../lib/supabase', () => ({ supabase: { rpc: store.rpc, functions: { invoke: store.invoke } } }))
 import PlayerAccount from './PlayerAccount'
 
 const empty = { profile_id: 'p1', balance_pence: 0, entries: [] }
-beforeEach(() => store.rpc.mockReset().mockResolvedValue({ data: empty, error: null }))
+beforeEach(() => { store.rpc.mockReset().mockResolvedValue({ data: empty, error: null }); store.invoke.mockReset() })
 
 describe('Player account', () => {
+  test('own Checkout action follows the balance and precedes the statement', async () => {
+    store.invoke.mockResolvedValue({ data: { ready: true, can_pay: false, kind: 'balance', amount_pence: 0, balance_pence: 0, min_amount_pence: 30, currency: 'gbp' } })
+    render(<MemoryRouter><PlayerAccount profileId="p1" canPay /></MemoryRouter>)
+    const action = await screen.findByRole('button', { name: 'Add money' })
+    expect(screen.getByText('Settled').compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(action.compareDocumentPosition(screen.getByRole('heading', { name: 'Statement' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  test('confirmed Checkout return refreshes account once without a remount refresh loop', async () => {
+    const id = crypto.randomUUID()
+    store.invoke.mockImplementation(async (_, { body }) => ({ data: body.action === 'status' ? { attempt_id: id, amount_pence: 1000, currency: 'gbp', status: 'succeeded' } : { ready: false, can_pay: false, kind: 'balance', amount_pence: 0, balance_pence: 0, min_amount_pence: 30, currency: 'gbp' } }))
+    render(<MemoryRouter initialEntries={[`/you?payment_attempt=${id}&payment_status=return`]}><PlayerAccount profileId="p1" canPay /></MemoryRouter>)
+    await screen.findByText('Payment confirmed: £10.00. Your balance and statement are being refreshed.')
+    await waitFor(() => expect(store.rpc.mock.calls.filter(([name]) => name === 'get_player_account')).toHaveLength(2))
+  })
+
+  test('initialEntryId focuses a matching transaction once and does not steal focus on refresh', async () => {
+    store.rpc.mockResolvedValue({ data: { ...empty, balance_pence: 500, entries: [{ id: 'target-entry', kind: 'receipt', amount_pence: 500, description: 'Target receipt', source: 'cash', occurred_on: '2026-11-24', running_balance_pence: 500 }] } })
+    render(<PlayerAccount profileId="p1" initialEntryId="target-entry" />)
+    const entry = (await screen.findByText('Target receipt')).closest('li')
+    await waitFor(() => expect(entry).toHaveFocus())
+    const other = document.createElement('button')
+    other.textContent = 'Other control'; document.body.append(other); other.focus()
+    fireEvent.focus(window)
+    await waitFor(() => expect(store.rpc).toHaveBeenCalledTimes(2))
+    await screen.findByText('Target receipt')
+    expect(other).toHaveFocus(); other.remove()
+  })
   test('empty account is settled with no transactions', async () => {
     render(<PlayerAccount profileId="p1" />)
     expect(await screen.findByText('Settled')).toBeInTheDocument()

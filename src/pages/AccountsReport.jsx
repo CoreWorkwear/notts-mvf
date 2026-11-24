@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
+import Sheet from '../components/Sheet'
+import PlayerAccount from '../components/PlayerAccount'
+import { buildBankAndCashCsv, downloadCsv } from '../lib/csv'
 import './AccountsReport.css'
 
 const CATEGORIES = { first_team: 'First Team', community: 'Community', training: 'Training', fines: 'Fines' }
@@ -30,6 +33,8 @@ export default function AccountsReport() {
   const [invalid, setInvalid] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [target, setTarget] = useState(null)
+  const [receiptMethod, setReceiptMethod] = useState('')
+  const [receiptAccount, setReceiptAccount] = useState(null)
 
   useEffect(() => {
     if (!isAdmin || !release.enabled) { setReport(null); return }
@@ -45,6 +50,7 @@ export default function AccountsReport() {
   useEffect(() => {
     if (report && target && !loading) revealCharge(target)
   }, [report, target, loading])
+  useEffect(() => { setReceiptAccount(null) }, [user?.id, profile?.club_id, release.enabled, isAdmin])
 
   function show(event) {
     event.preventDefault()
@@ -59,6 +65,11 @@ export default function AccountsReport() {
       setFrom(originalDate); setTo(originalDate); setPeriod({ from: originalDate, to: originalDate })
     }
   }
+
+  const receiptEntries = report?.receipts.entries.filter(entry => !receiptMethod || entry.method === receiptMethod) ?? []
+  const showReceipt = (entry, entryId = entry.id) => setReceiptAccount({
+    profileId: entry.profile_id, playerName: entry.player_name, entryId,
+  })
 
   return <div className="page finance-report">
     <h1 className="display">Activity charges</h1>
@@ -98,9 +109,33 @@ export default function AccountsReport() {
           <p className="muted mt-2">Confirmed money received is separate from activity charges.</p>
           <dl className="report-receipt-totals mt-3"><div><dt>Gross receipts</dt><dd className="mono">{money(report.receipts.gross_pence)}</dd></div><div><dt>Refunds</dt><dd className="mono">{money(report.receipts.refunds_pence)}</dd></div><div><dt>Receipt reversals</dt><dd className="mono">{money(report.receipts.reversals_pence)}</dd></div><div><dt>Net receipts</dt><dd className="mono">{money(report.receipts.net_pence)}</dd></div></dl>
           <ul className="report-lines mt-3">{report.receipts.methods.map(method => <li key={method.method}><strong>{METHODS[method.method] || method.method}</strong><p className="mono">Gross {money(method.gross_pence)} · Refunds {money(method.refunds_pence)} · Reversals {money(method.reversals_pence)} · Net {money(method.net_pence)}</p></li>)}</ul>
-          <details className="report-detail mt-3"><summary>Receipt reconciliation details</summary><ul className="report-lines">{report.receipts.entries.map(entry => <li key={entry.id}><div className="report-line-head"><strong>{entry.player_name}</strong><span className="mono">{signed(entry.amount_pence)}</span></div><p>{entry.description || entry.kind}</p><p className="muted">{date(entry.occurred_on)} · {METHODS[entry.method] || entry.method} · {entry.kind.replaceAll('_', ' ')}</p>{entry.reference && <p>Reference: {entry.reference}</p>}{entry.linked_entry_id && <p className="muted">Linked receipt: {entry.linked_entry_id}</p>}</li>)}</ul>{report.receipts.entries.length === 0 && <p className="muted mt-2">No receipts, refunds or receipt reversals in this period.</p>}</details>
+          <button type="button" className="btn btn-ghost mt-3" onClick={() =>
+            downloadCsv(`nottsmvf_receipts_${report.from}_${report.to}.csv`, buildBankAndCashCsv(report.receipts.entries))}>
+            Export bank and cash CSV
+          </button>
+          <details className="report-detail mt-3">
+            <summary>Receipt reconciliation details</summary>
+            <label className="field mt-3" htmlFor="receipt-method">Receipt method</label>
+            <select className="select mt-1" id="receipt-method" value={receiptMethod} onChange={event => setReceiptMethod(event.target.value)}>
+              <option value="">All methods</option>
+              {Object.entries(METHODS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <ul className="report-lines">{receiptEntries.map(entry => <li key={entry.id}>
+              <div className="report-line-head"><strong>{entry.player_name}</strong><span className="mono">{signed(entry.amount_pence)}</span></div>
+              <p>{entry.description || entry.kind}</p>
+              <p className="muted">{date(entry.occurred_on)} · {METHODS[entry.method] || entry.method} · {entry.kind.replaceAll('_', ' ')}</p>
+              {entry.reference && <p>Reference: {entry.reference}</p>}
+              <button type="button" className="btn btn-ghost mt-2" onClick={() => showReceipt(entry)}>View player statement</button>
+              {entry.linked_entry_id && <button type="button" className="btn btn-ghost mt-2" onClick={() => showReceipt(entry, entry.linked_entry_id)}>View original receipt</button>}
+            </li>)}</ul>
+            {receiptEntries.length === 0 && <p className="muted mt-2">No receipts, refunds or receipt reversals for this selection.</p>}
+          </details>
         </section>
       </>}
     </>}
+    <Sheet open={!!receiptAccount && isAdmin && release.enabled} onClose={() => setReceiptAccount(null)} aria-label="Receipt player statement">
+      <h2>{receiptAccount?.playerName}</h2>
+      <PlayerAccount profileId={receiptAccount?.profileId} initialEntryId={receiptAccount?.entryId} active={!!receiptAccount && isAdmin && release.enabled} />
+    </Sheet>
   </div>
 }

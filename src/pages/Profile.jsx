@@ -14,6 +14,7 @@ import ProfileEdit from '../components/ProfileEdit'
 import Toast from '../components/Toast'
 import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
 import ProfileOverview from '../components/ProfileOverview'
+import { PlayerCheckoutReturn } from '../components/PlayerCheckout'
 
 // You / Profile. Shows the real record + badges, lets the player set their own
 // avatar and edit their own details — everything except email (the account hangs
@@ -103,6 +104,7 @@ export default function Profile() {
       </div>
 
       {profile.is_player && payments.error && <div role="alert" className="mt-5"><p>Couldn't load the account. Your balance is unavailable.</p><button className="btn btn-ghost mt-2" onClick={payments.retry}>Try again</button></div>}
+      <PlayerCheckoutReturn profileId={profile.id} />
 
       <dl className="card mt-5" style={{ padding: 'var(--space-4)' }}>
         <Row label="Email" value={full.email ?? '—'} />
