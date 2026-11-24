@@ -8,7 +8,7 @@ import Toast from './Toast'
 // A sensible default hint per shape; callers can override with `hint`.
 const defaultHint = (shape) => shape === 'round' ? 'Square photo · circular crop' : 'Landscape photo · 4:3 or 16:9'
 
-export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200, multiple = false, hint }) {
+export default function ImageUpload({ folder, onUploaded, current, label = 'Upload image', shape = 'square', maxDim = 1200, multiple = false, hint, compact = false }) {
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(null)
@@ -47,7 +47,7 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
     <div className="iu-wrap">
       <Toast message={error} onDismiss={() => setError(null)} />
       <div className="iu">
-        {!multiple && (
+        {!multiple && !compact && (
           <div className={'iu-preview ' + shape}>
             {preview ? <ClubImage sizes="56px" src={preview} alt="" /> : <span className="iu-empty">—</span>}
           </div>
@@ -57,7 +57,7 @@ export default function ImageUpload({ folder, onUploaded, current, label = 'Uplo
         </button>
         <input ref={inputRef} type="file" accept="image/*" multiple={multiple} hidden onChange={onPick} />
       </div>
-      {hintText && <p className="iu-hint">{hintText}</p>}
+      {hintText && !compact && <p className="iu-hint">{hintText}</p>}
 
       <style>{`
         .iu-wrap { display: flex; flex-direction: column; gap: var(--space-1); }

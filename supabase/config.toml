@@ -20,3 +20,24 @@ verify_jwt = false
 # Private training outbox worker uses the same server-only cron secret.
 [functions.run-training-push]
 verify_jwt = false
+
+# Each browser function handles preflight and verifies the signed-in user
+# and club permissions internally.
+[functions.stripe-connect-onboard]
+verify_jwt = false
+
+[functions.stripe-checkout]
+verify_jwt = false
+
+[functions.stripe-saved-cards]
+verify_jwt = false
+
+[functions.send-account-reminders]
+verify_jwt = false
+
+[functions.stripe-payout-reconciliation]
+verify_jwt = false
+
+# Stripe sends signed requests without a Supabase JWT.
+[functions.stripe-connect-webhook]
+verify_jwt = false

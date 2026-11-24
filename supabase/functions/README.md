@@ -1,6 +1,6 @@
 # Edge Functions — Notts MvF
 
-Five functions. Three are **admin-only** (they verify the caller's JWT is an
+Three of the original functions are **admin-only** (they verify the caller's JWT is an
 ACTIVE admin, mirroring `is_admin()`); `run-reminders` is fired by pg_cron and
 gated by a shared secret instead. `run-training-push` uses the same private
 cron gate to dispatch durable training notices. Deploy with the Supabase CLI (or the
@@ -63,7 +63,7 @@ supabase functions deploy admin-create-player
 supabase functions deploy admin-delete-player
 supabase functions deploy run-reminders
 ```
-All five run with **platform `verify_jwt = false`** (set in `supabase/config.toml`)
+The original five run with **platform `verify_jwt = false`** (set in `supabase/config.toml`)
 so the browser CORS preflight reaches the function — the admin ones enforce
 auth *inside* (verify the caller's JWT → `is_admin`), and `run-reminders`
 checks `x-cron-secret`, so this is not a hole. If you deploy before that
@@ -87,6 +87,28 @@ with nothing in the function's own log. On any non-CLI deploy:
 
 `admin-delete-player` needs **migration 0035** applied first (it calls the
 `anonymise_and_delete_profile` RPC).
+
+## Player accounts and Stripe
+
+Deploy `stripe-connect-onboard`, `stripe-checkout`, `stripe-saved-cards`,
+`stripe-connect-webhook`, `stripe-payout-reconciliation` and `send-account-reminders`
+from the same build as migrations 0045–0058. The browser functions handle CORS
+and verify the caller and club permissions before accessing payment data.
+Use the `verify_jwt` values in `supabase/config.toml` for the gateway.
+
+Set `APP_BASE_URL` to the approved HTTPS app origin for live Stripe redirects.
+Approved active club managers can onboard through `stripe-connect-onboard`
+while player payments are off. Checkout, cards and payout reports remain
+controlled by the club’s payments switch. Store
+`STRIPE_SECRET_KEY`, `STRIPE_PLATFORM_ACCOUNT_ID`, `STRIPE_WEBHOOK_MODE`
+(`test` or `live`) and `STRIPE_WEBHOOK_SECRET_CONNECT` in the target project's
+Edge secrets. Match the key, endpoint secret and platform account to the
+environment. The Connect event destination sends to
+`/functions/v1/stripe-connect-webhook` for connected accounts. Subscribe to
+the `payment_intent`, `checkout.session` and refund events listed in
+[`stripeWebhook.js`](_shared/stripeWebhook.js), plus `payout.paid` and
+`payout.failed`. Keep that endpoint running while club payments are paused.
+The account reminder uses the existing VAPID setup for optional push delivery.
 
 ## The run-reminders cron
 `run-reminders` has no user: pg_cron calls it every hour and it checks the

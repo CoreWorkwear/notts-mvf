@@ -12,6 +12,9 @@ import FeelSettings from '../components/FeelSettings'
 import ImageUpload from '../components/ImageUpload'
 import ProfileEdit from '../components/ProfileEdit'
 import Toast from '../components/Toast'
+import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
+import ProfileOverview from '../components/ProfileOverview'
+import { PlayerCheckoutReturn } from '../components/PlayerCheckout'
 
 // You / Profile. Shows the real record + badges, lets the player set their own
 // avatar and edit their own details — everything except email (the account hangs
@@ -19,6 +22,7 @@ import Toast from '../components/Toast'
 // privileged columns regardless.
 export default function Profile() {
   const { profile, teamKeys, isRealAdmin, refreshProfile } = useAuth()
+  const payments = usePaymentsRelease(profile?.id, profile?.club_id)
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(false)
   // The personal fields live in profile_private (self-or-admin RLS) — fetch
@@ -30,7 +34,7 @@ export default function Profile() {
   const [privReady, setPrivReady] = useState(false)
   const [attempt, setAttempt] = useState(0) // bumped to retry a failed fetch
   useEffect(() => {
-    if (!profile?.id || editing) return
+    if (!profile?.id || editing || payments.enabled) return
     let on = true
     supabase.from('profile_private')
       .select('email, phone, dob, ec_name, ec_phone')
@@ -42,8 +46,9 @@ export default function Profile() {
       })
       .catch((e) => { if (on) { setPrivReady(false); logError('fetch', e ?? 'profile_private load failed', { op: 'profilePrivate' }) } })
     return () => { on = false }
-  }, [profile?.id, editing, attempt])
+  }, [profile?.id, editing, attempt, payments.enabled])
   if (!profile) return <Loader route="you" label="Loading your profile…" />
+  if (payments.enabled) return <ProfileOverview />
   const full = { ...profile, ...(priv ?? {}) }
   const openEdit = () => {
     if (privReady) { setEditing(true); return }
@@ -97,6 +102,9 @@ export default function Profile() {
         ))}
         {isRealAdmin && <span className="member-tag">Manager</span>}
       </div>
+
+      {profile.is_player && payments.error && <div role="alert" className="mt-5"><p>Couldn't load the account. Your balance is unavailable.</p><button className="btn btn-ghost mt-2" onClick={payments.retry}>Try again</button></div>}
+      <PlayerCheckoutReturn profileId={profile.id} />
 
       <dl className="card mt-5" style={{ padding: 'var(--space-4)' }}>
         <Row label="Email" value={full.email ?? '—'} />

@@ -3,7 +3,7 @@
 Run order (SQL editor, top to bottom), each as its own run:
 
 1. `migrations/0001_init_schema_and_rls.sql` — tables, helpers, triggers, RLS, grants.
-2. every later numbered migration in order, `0002_*` … `0044_*`, each as its own
+2. every later numbered migration in order, `0002_*` … `0058_*`, each as its own
    run. They are cumulative and the order matters. **Never re-run a migration
    older than the newest one already applied.** Several of them `alter policy`
    in place (0031 above all), so replaying one silently puts back policy bodies
@@ -48,6 +48,36 @@ never writes NULL). The other order works for a new result but refuses a save
 that *clears* a half time already stored. T46 in step 4 checks it landed.
 
 Migrations 0041 and 0042 add Training sessions, replies, club notices and push delivery records. Run `tests/training_test.sql` against an isolated test database after the migrations. Its synthetic accounts and activity roll back. Migration 0043 configures dispatch scheduling. See [the release and rollback procedure](../Docs/mobile-ux/TRAINING-RELEASE.md) and [Edge Function setup](functions/README.md) before enabling push.
+
+## Player accounts release switch
+
+Apply migrations 0045–0058 in order on the target database before running the
+matching app build. The rollback tests in `supabase/tests/` cover the ledger,
+effective-dated fees, activity finance report, manager corrections, opening
+balances, match appearances, training attendance, Stripe attempts and
+settlement, account reminders and payout reconciliation.
+
+Each club starts with player accounts off. The owner enables the feature and
+records the cutover in one transaction with
+`set_club_payments_release(club_id, true, true)`. Once cutover is recorded,
+the former per-fixture paid ticks remain in the archive. The fixture toggle is
+retired even while accounts are paused.
+
+Use `set_club_payments_release(club_id, false)` to pause and
+`set_club_payments_release(club_id, true)` to resume a club that already cut
+over. The function is restricted to privileged server or database operator
+roles. Pausing hides the player account surfaces and refuses new manager postings.
+Approved active club managers can open Club admin → Club settings → Stripe
+to prepare or check the club’s connected account before cutover or while paused.
+Completing Stripe setup leaves the player-payments switch off until cutover.
+Posted entries stay intact. Keep the signed Stripe webhook deployed while
+paused so previously initiated payments and refunds can settle.
+
+Reconcile the signed opening credit and arrears totals in Club admin, under
+Club settings and Opening balances. The first successful manager entry
+sets the effective date for the club. Enter each opening before any other
+activity on that account. Historic fixture paid ticks stay in the archive.
+
 
 ## Two settings that live in the Dashboard, not in SQL
 The database cannot enforce these, so they are easy to lose and worth checking

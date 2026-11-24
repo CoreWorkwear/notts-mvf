@@ -1,0 +1,22 @@
+.finance-report h1 { font-size: var(--type-poster); }
+.finance-report h2 { font-size: var(--type-title); font-weight: 700; }
+.report-filter { display: flex; align-items: end; flex-wrap: wrap; gap: var(--space-3); }
+.report-filter .field { flex: 1 1 9rem; }
+.report-filter .btn { flex: 1 1 100%; }
+.report-table-wrap { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--border-strong) var(--surface); }
+.report-table-wrap:focus-visible, .report-lines li:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.report-table { border-collapse: collapse; width: 100%; font-size: var(--type-sm); }
+.report-table th, .report-table td { padding: var(--space-3) var(--space-2); border-bottom: 1px solid var(--border); text-align: right; }
+.report-table th:first-child { text-align: left; }
+.report-table thead { color: var(--text-muted); }
+.report-table tfoot { font-weight: 700; }
+.report-detail { padding-block: var(--space-3); border-block-end: 1px solid var(--border); }
+.report-detail summary { min-height: var(--target); align-content: center; cursor: pointer; font-weight: 650; }
+.report-detail summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.report-lines { list-style: none; padding: 0; margin: 0; }
+.report-lines li { padding-block: var(--space-3); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.report-lines li:last-child { border-bottom: 0; }
+.report-lines p { margin-top: var(--space-1); }
+.report-line-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); }
+.report-receipt-totals { display: grid; gap: var(--space-2); }
+.report-receipt-totals > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }

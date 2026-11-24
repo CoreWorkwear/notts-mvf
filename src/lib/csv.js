@@ -12,8 +12,46 @@ import { teamLabel, teamMatchName } from './teams'
 // separator, quote or line break (CR included, or it splits the row).
 function esc(v) {
   let s = String(v ?? '')
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  if (/^[\s\uFEFF]*[=+\-@]|^[\t\r\n]/.test(s)) s = "'" + s
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+
+export function buildBankAndCashCsv(entries) {
+  const lines = ['Date,Player,Method,Entry,Reference,Amount (GBP),Entry ID,Original receipt ID']
+  for (const entry of entries) {
+    if (entry.method !== 'bank' && entry.method !== 'cash') continue
+    const amount = (entry.amount_pence / 100).toFixed(2)
+    lines.push([
+      esc(entry.occurred_on), esc(entry.player_name), entry.method === 'bank' ? 'Bank transfer' : 'Cash',
+      esc(entry.kind), esc(entry.reference), amount, esc(entry.id), esc(entry.linked_entry_id),
+    ].join(','))
+  }
+  return lines.join('\r\n')
+}
+
+export function buildStripePayoutCsv(payouts) {
+  const lines = ['Payout,Status,Date,Row,Player,Receipt reference,Method,Currency,Gross (GBP),Refunds (GBP),Fee (GBP),Net (GBP),Payout amount (GBP),Difference (GBP),Provider reference,Reconciliation issue']
+  const amount = pence => Number.isFinite(pence) ? (pence / 100).toFixed(2) : ''
+  for (const payout of payouts) {
+    for (const entry of payout.lines) {
+      const gbp = entry.currency === 'gbp'
+      lines.push([
+        esc(payout.payout_id), esc(payout.status), esc(entry.date), 'Transaction', esc(entry.player_name),
+        esc(entry.receipt_reference), 'Stripe', esc(entry.currency), gbp ? amount(entry.gross_pence) : '',
+        gbp ? amount(entry.refunds_pence) : '', gbp ? amount(entry.fee_pence) : '', gbp ? amount(entry.net_pence) : '',
+        '', '', esc(entry.balance_transaction_id), esc(entry.issue),
+      ].join(','))
+    }
+    const total = payout.currency === 'gbp' && payout.breakdown?.component_net_available !== false ? payout.breakdown : null
+    lines.push([
+      esc(payout.payout_id), esc(payout.status), esc(payout.arrival_on), payout.amount_pence < 0 ? 'Bank debit total' : 'Payout total',
+      '', '', 'Stripe', esc(payout.currency),
+      amount(total?.gross_pence), amount(total?.refunds_pence), amount(total?.fees_pence), amount(total?.net_pence),
+      amount(payout.currency === 'gbp' ? payout.amount_pence : null), amount(total?.difference_pence), '',
+      esc(payout.breakdown?.issues?.join(' | ')),
+    ].join(','))
+  }
+  return lines.join('\r\n')
 }
 
 // players: [{ name, preferred, paid }]

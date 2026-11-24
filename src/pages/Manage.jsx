@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
 import { IconChevron, IconWhosIn, IconPlayers, IconOpponents, IconSeasons, IconMedia, IconReminders, IconSponsors, IconDiagnostics, IconCompetitions, IconBell } from '../components/Icons'
 
 const groups = [
@@ -7,11 +9,25 @@ const groups = [
   ['Around the club', [['News', '/news', IconBell], ['Media', '/media', IconMedia], ['Sponsors', '/sponsors', IconSponsors]]],
   ['App support', [['Diagnostics', '/diagnostics', IconDiagnostics]]],
 ]
+const stripeSetup = ['Stripe', '/manage/settings/stripe', IconDiagnostics]
 
 export default function Manage() {
+  const { user, profile, isAdmin } = useAuth()
+  const release = usePaymentsRelease(user?.id, profile?.club_id)
+  const settings = release.enabled
+    ? [
+      ['Fees', '/manage/fees', IconCompetitions],
+      ['Opening balances', '/manage/settings/opening-balances', IconPlayers],
+      stripeSetup,
+      ['Stripe payouts', '/manage/settings/stripe-payouts', IconDiagnostics],
+      ['Activity charges', '/manage/accounts-report', IconDiagnostics],
+      ['Account reminders', '/manage/settings/account-reminders', IconReminders],
+    ]
+    : [stripeSetup]
+  const sections = isAdmin ? [...groups, ['Club settings', settings]] : groups
   return <div className="page">
     <h1 className="display page-title">Club admin</h1>
-    {groups.map(([heading, links]) => <section key={heading} className="manage-section">
+    {sections.map(([heading, links]) => <section key={heading} className="manage-section">
       <h2>{heading}</h2>
       <div className="manage-links">
         {links.map(([label, to, Icon]) => <Link key={to} to={to} className="manage-link">

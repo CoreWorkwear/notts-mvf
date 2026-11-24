@@ -1,5 +1,5 @@
 import ClubImage from './ClubImage'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import LoadIssue from './LoadIssue'
 import { logError } from '../lib/logger'
@@ -13,6 +13,9 @@ import { fmtDateLong } from '../lib/format'
 import { heroBackground } from '../lib/media'
 import { fixtureMatchup, halfTimeScore } from '../lib/teams'
 import { IconCompetitions } from './Icons'
+import { useAuth } from '../context/AuthContext'
+import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
+import AttendanceRegister from './AttendanceRegister'
 import '../styles/editorial.css'
 
 // Match centre (HANDOVER §5): big FT score + HT, MOTM with a star, the goal
@@ -20,6 +23,10 @@ import '../styles/editorial.css'
 // subs) for games where one was named, falling back to availability='in' for
 // older games with no line-up.
 export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = [], onEdit }) {
+  const { user, profile } = useAuth()
+  const payments = usePaymentsRelease(user?.id, profile?.club_id)
+  const [attendanceOpen, setAttendanceOpen] = useState(false)
+  const attendanceOpener = useRef(null)
   const [played, setPlayed] = useState([])   // fallback: [{id, name}] marked in
   const [lineup, setLineup] = useState(null) // { formation, starters, subs } or null
   const [lineNames, setLineNames] = useState({}) // profile_id -> 'First Last'
@@ -28,6 +35,7 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
   const [zoom, setZoom] = useState(false) // MOTM photo lightbox
   const [squadState, setSquadState] = useState('loading')
   const [attempt, setAttempt] = useState(0)
+  useEffect(() => { setAttendanceOpen(false) }, [fixture?.id, open])
 
   useEffect(() => {
     if (!open) return
@@ -210,6 +218,9 @@ export default function MatchCentre({ open, onClose, fixture, isAdmin, pool = []
             </>
           ) : null}
 
+          {isAdmin && payments.enabled && <>
+            {!attendanceOpen ? <button ref={attendanceOpener} className="btn btn-primary btn-block mt-5" onClick={() => setAttendanceOpen(true)}>Confirm who played</button> : <AttendanceRegister key={f.id} fixtureId={f.id} onClose={() => { setAttendanceOpen(false); requestAnimationFrame(() => attendanceOpener.current?.focus()) }} />}
+          </>}
         </article>
       </Sheet>
       <Sheet open={Boolean(open && zoom && r.motm_photo_url)} onClose={() => setZoom(false)} aria-label={`${motm} photo`}>

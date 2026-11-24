@@ -1,5 +1,5 @@
 import PreferredPosition from './PreferredPosition'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import Toast from './Toast'
 import { supabase } from '../lib/supabase'
@@ -10,7 +10,10 @@ import { validatePlayer } from '../lib/players'
 // date of birth, emergency contact, positions, preferred — but NOT email (the
 // account hangs off it; the manager changes that) and NOT role/team/approval
 // (admin-only, and the DB's protect-profile-columns trigger enforces that anyway).
-export default function ProfileEdit({ open, onClose, profile, onSaved }) {
+export default function ProfileEdit({ open, onClose, profile, onSaved, mode = 'sheet' }) {
+  const detailsOnly = mode === 'details'
+  const id = useId()
+  const Wrapper = detailsOnly ? Fragment : Sheet
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
@@ -64,7 +67,7 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
       // Squad-visible fields on profiles; the personal ones on profile_private
       // (self-or-admin RLS — the row always exists, created at signup).
       const { error: upErr } = await supabase.from('profiles').update({
-        first_name: firstName.trim(), last_name: lastName.trim(),
+        ...(!detailsOnly ? { first_name: firstName.trim(), last_name: lastName.trim() } : {}),
         positions, preferred: preferred || null,
       }).eq('id', profile.id)
       if (upErr) throw upErr
@@ -82,27 +85,29 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
   }
 
   return (
-    <Sheet open={open} onClose={onClose}>
+    <Wrapper {...(detailsOnly ? {} : { open, onClose })}>
       <Toast message={error} tone="error" onDismiss={() => setError(null)} />
-      <h2 className="display" style={{ fontSize: 'var(--type-title)' }}>Edit your details</h2>
+      {!detailsOnly && <h2 className="display" style={{ fontSize: 'var(--type-title)' }}>Edit your details</h2>}
 
       <form className="col gap-3 mt-4" onSubmit={onSubmit} ref={formRef}>
-        <div className="row gap-2">
+        {!detailsOnly && <div className="row gap-2">
           <div className="field grow"><label className="label">First name</label>
             <input className="input" value={firstName} aria-invalid={invalid.has('first') || undefined}
               onChange={(e) => { setFirstName(e.target.value); clearInvalid('first') }} /></div>
           <div className="field grow"><label className="label">Surname</label>
             <input className="input" value={lastName} aria-invalid={invalid.has('last') || undefined}
               onChange={(e) => { setLastName(e.target.value); clearInvalid('last') }} /></div>
-        </div>
+        </div>}
 
-        <div className="field"><label className="label">Phone</label>
-          <input className="input" value={phone} aria-invalid={invalid.has('phone') || undefined}
+        {detailsOnly && <label className="field">Sign-in email<input className="input" type="email" readOnly value={profile.email ?? ''} /></label>}
+
+        <div className="field"><label className="label" htmlFor={`${id}-phone`}>Phone</label>
+          <input id={`${id}-phone`} className="input" type="tel" autoComplete="tel" value={phone} aria-invalid={invalid.has('phone') || undefined}
             onChange={(e) => { setPhone(e.target.value); clearInvalid('phone') }} /></div>
 
         <div className="row gap-2">
-          <div className="field grow"><label className="label">Date of birth</label>
-            <input className="input" type="date" value={dob ?? ''} onChange={(e) => setDob(e.target.value)} /></div>
+          <div className="field grow"><label className="label" htmlFor={`${id}-dob`}>Date of birth</label>
+            <input id={`${id}-dob`} className="input" type="date" value={dob ?? ''} onChange={(e) => setDob(e.target.value)} /></div>
         </div>
         <PreferredPosition value={preferred} onChange={setPreferred} />
 
@@ -114,18 +119,18 @@ export default function ProfileEdit({ open, onClose, profile, onSaved }) {
           </div></div>
 
         <div className="row gap-2">
-          <div className="field grow"><label className="label">Emergency contact</label>
-            <input className="input" value={ecName} onChange={(e) => setEcName(e.target.value)} /></div>
-          <div className="field grow"><label className="label">Emergency phone</label>
-            <input className="input" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
+          <div className="field grow"><label className="label" htmlFor={`${id}-ec-name`}>Emergency contact</label>
+            <input id={`${id}-ec-name`} className="input" value={ecName} onChange={(e) => setEcName(e.target.value)} /></div>
+          <div className="field grow"><label className="label" htmlFor={`${id}-ec-phone`}>Emergency phone</label>
+            <input id={`${id}-ec-phone`} className="input" type="tel" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></div>
         </div>
 
         <p className="dim" style={{ fontSize: 'var(--type-caption)' }}>Only a manager can change your sign-in email.</p>
 
-        <div className="sheet-actions">
+        <div className={detailsOnly ? undefined : 'sheet-actions'}>
           <button className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
         </div>
       </form>
-    </Sheet>
+    </Wrapper>
   )
 }

@@ -1,5 +1,20 @@
 import { describe, test, expect } from 'vitest'
-import { buildFixtureCsv, csvFilename } from './csv'
+import { buildBankAndCashCsv, buildFixtureCsv, csvFilename } from './csv'
+
+test('bank and cash CSV exports signed period entries and protects text cells', () => {
+  const date = '2026-11-24'
+  const receipts = [
+    { id: 'bank-1', method: 'bank', kind: 'receipt', player_name: 'Hall, Sam', reference: ' =value', occurred_on: date, amount_pence: 1800 },
+    { id: 'cash-1', method: 'cash', kind: 'receipt', player_name: 'Taylor', occurred_on: date, amount_pence: 500 },
+    { id: 'reverse-1', method: 'bank', kind: 'reversal', player_name: 'Hall, Sam', linked_entry_id: 'old-bank', occurred_on: date, amount_pence: -700 },
+    { id: 'stripe-1', method: 'stripe', kind: 'receipt', player_name: 'Online', occurred_on: date, amount_pence: 1500 },
+  ]
+  expect(buildBankAndCashCsv(receipts).split('\r\n').slice(1)).toEqual([
+    `${date},"Hall, Sam",Bank transfer,receipt,' =value,18.00,bank-1,`,
+    `${date},Taylor,Cash,receipt,,5.00,cash-1,`,
+    `${date},"Hall, Sam",Bank transfer,reversal,,-7.00,reverse-1,old-bank`,
+  ])
+})
 
 const FIX = {
   team: { label: 'XL 11s' }, opponent: { name: 'Carlton Town' },

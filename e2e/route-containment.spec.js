@@ -86,14 +86,23 @@ test('scrolling a long sheet keeps the page in place and Back restores its opene
     await dialog.press('PageDown')
   }
   await expect.poll(() => dialog.evaluate(el => el.scrollTop)).toBeGreaterThan(50)
-  await dialog.press('Home')
+  expect(await scroll()).toBe(previous)
+  if (browserName === 'chromium') {
+    // Home supersedes Chromium's native touch momentum.
+    await dialog.press('Home')
+  } else {
+    // Reset the starting position for the pull gesture without racing a
+    // second WebKit keyboard scroll against the first one.
+    await dialog.evaluate(el => el.scrollTo({ top: 0, behavior: 'instant' }))
+  }
   await expect.poll(() => dialog.evaluate(el => el.scrollTop)).toBe(0)
 
   // A pull that started inside the sheet can end on its backdrop. The
   // resulting click belongs to the backdrop only when the press started there.
-  await page.mouse.move(x, box.y + 90)
+  // Start in the sheet padding so WebKit does not autoscroll a text selection.
+  await page.mouse.move(box.x + 8, box.y + 90)
   await page.mouse.down()
-  await page.mouse.move(x, box.y - 8, { steps: 10 })
+  await page.mouse.move(box.x + 8, box.y - 8, { steps: 10 })
   await page.mouse.up()
   await expect(dialog).toBeVisible()
   expect(await scroll()).toBe(previous)

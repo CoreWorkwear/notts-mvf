@@ -6,6 +6,8 @@ import userEvent from '@testing-library/user-event'
 const auth = vi.hoisted(() => ({ user: { id: 'u1' }, isAdmin: false }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => auth }))
 vi.mock('../lib/logger', () => ({ logError: vi.fn() }))
+const release = vi.hoisted(() => ({ enabled: false, cutover_at: null, loading: false, error: false }))
+vi.mock('../hooks/usePaymentsRelease', () => ({ usePaymentsRelease: () => release }))
 
 // A tiny store-driven supabase: rows are filtered by the .eq() keys they carry,
 // a table can answer with an error, and a query can be held back (`defer`,
@@ -45,7 +47,35 @@ const member = (id, first, last, extra = {}) => ({ id, first_name: first, last_n
 const joe = member('p1', 'Joe', 'Morris')
 const sam = member('p2', 'Sam', 'Lee')
 
-beforeEach(() => { store.tables = {}; store.errors = {}; store.defer = {} })
+beforeEach(() => { store.tables = {}; store.errors = {}; store.defer = {}; Object.assign(release, { enabled: false, cutover_at: null, loading: false, error: false }) })
+
+describe('WhosInSheet — cutover permanently retires the fixture paid controls', () => {
+  test.each([true, false])('cutover with enabled=%s keeps availability usable without legacy payments', async enabled => {
+    auth.isAdmin = true
+    Object.assign(release, { enabled, cutover_at: '2026-11-24T00:00:00Z' })
+    store.tables.availability = [{ fixture_id: 'fA', status: 'in', profile: joe }]
+    store.tables.team_memberships = [{ team_id: 't1', profiles: joe }]
+    // A retired payments query must not be able to break availability.
+    store.errors.payments = { message: 'legacy table unavailable' }
+    render(<WhosInSheet open fixture={fxA} onClose={() => {}} />)
+    expect(await screen.findByText('Joe')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /not paid|paid ✓|export csv/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    auth.isAdmin = false
+  })
+
+  test('unknown release state fails closed for money and leaves availability readable', async () => {
+    auth.isAdmin = true
+    release.error = true
+    store.tables.availability = [{ fixture_id: 'fA', status: 'in', profile: joe }]
+    store.tables.team_memberships = [{ team_id: 't1', profiles: joe }]
+    store.errors.payments = { message: 'legacy table unavailable' }
+    render(<WhosInSheet open fixture={fxA} onClose={() => {}} />)
+    expect(await screen.findByText('Joe')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /not paid|export csv/i })).not.toBeInTheDocument()
+    auth.isAdmin = false
+  })
+})
 
 describe("WhosInSheet — a failed load doesn't pose as an empty team-sheet", () => {
   test('failed availability fetch → alert + retry, never "No one\'s in yet"', async () => {
