@@ -1,0 +1,9 @@
+.attendance-register { border-block-start: 1px solid var(--border); padding-block-start: var(--space-4); }
+.attendance-register h2 { font-size: var(--type-lg); font-weight: 700; }
+.attendance-options { display: grid; gap: var(--space-2); padding: 0; border: 0; min-width: 0; }
+.attendance-options legend { font-weight: 650; margin-block-end: var(--space-2); }
+.attendance-person { display: flex; align-items: center; gap: var(--space-3); min-height: var(--target); padding: var(--space-2); border-bottom: 1px solid var(--border); cursor: pointer; }
+.attendance-person input { inline-size: 1.5rem; block-size: 1.5rem; accent-color: var(--action-fill); flex: none; }
+.attendance-person input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.attendance-person span { min-width: 0; overflow-wrap: anywhere; }
+.attendance-actions { display: grid; gap: var(--space-2); }

@@ -239,3 +239,85 @@ test('a manager records a receipt and the player sees it once on their phone', a
     for (const member of members) await checked(admin.auth.admin.deleteUser(member.id))
   }
 })
+
+test('confirmed match appearances charge the players who took part', async ({ page }) => {
+  test.skip(process.env.E2E_PAYMENTS_LOCAL !== '1', 'requires the isolated payments database')
+  expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
+  expect(serviceKey).toBeTruthy()
+  const admin = createClient(env.VITE_SUPABASE_URL, serviceKey, authOptions)
+  const members = []
+  let fixtureId
+  let opponentId
+  let enabled = false
+  try {
+    const manager = await member(admin, 'Match manager', 'admin')
+    members.push(manager)
+    const starter = await member(admin, 'Starter', 'player')
+    members.push(starter)
+    const usedSub = await member(admin, 'Used sub', 'player')
+    members.push(usedSub)
+    const unusedSub = await member(admin, 'Unused sub', 'player')
+    members.push(unusedSub)
+    await release(admin, true)
+    enabled = true
+    const managerApi = await signedIn(manager)
+    const matchDate = '2026-10-15'
+    await checked(managerApi.rpc('set_club_fee_rate', {
+      p_category: 'first_team', p_amount_pence: 700, p_effective_from: matchDate,
+    }))
+    await checked(managerApi.rpc('set_club_fee_rate', {
+      p_category: 'first_team', p_amount_pence: 1000, p_effective_from: addDaysISO(matchDate, 1),
+    }))
+    const opponent = await checked(admin.from('opponents').insert({
+      club_id: seededClub, name: `Appearance proof ${randomUUID().slice(0, 8)}`,
+    }).select('id').single())
+    opponentId = opponent.id
+    const fixture = await checked(admin.from('fixtures').insert({
+      club_id: seededClub, season_id: '22222222-2222-2222-2222-222222222222',
+      team_id: '33333333-3333-3333-3333-333333333333', opponent_id: opponentId,
+      match_date: matchDate, kickoff: '12:00', venue: 'Test pitch',
+    }).select('id').single())
+    fixtureId = fixture.id
+    await checked(admin.from('results').insert({ fixture_id: fixtureId, us: 2, them: 1 }))
+    await checked(admin.from('lineups').insert([
+      { fixture_id: fixtureId, profile_id: starter.id, role: 'start', position: 'ST', slot: 10 },
+      { fixture_id: fixtureId, profile_id: usedSub.id, role: 'sub' },
+      { fixture_id: fixtureId, profile_id: unusedSub.id, role: 'sub' },
+    ]))
+    const account = id => checked(managerApi.rpc('get_player_account', { p_profile_id: id }))
+    expect((await account(starter.id)).entries).toEqual([])
+
+    await signIn(page, manager.email, manager.password)
+    await page.getByRole('button', { name: 'Manager view' }).click()
+    await page.getByRole('link', { name: 'Results', exact: true }).tap()
+    await page.getByRole('button', { name: /Match centre/ }).tap()
+    await page.getByRole('button', { name: 'Confirm who played' }).tap()
+    const register = page.getByRole('region', { name: 'Match attendance' })
+    await expect(register.getByText(/£7\.00 per appearance/)).toBeVisible()
+    const starterBox = register.getByRole('checkbox', { name: starter.name, exact: true })
+    const subBox = register.getByRole('checkbox', { name: usedSub.name, exact: true })
+    await expect(starterBox).not.toBeChecked()
+    await expect(register.getByRole('checkbox', { name: unusedSub.name, exact: true })).not.toBeChecked()
+    await starterBox.check()
+    await subBox.check()
+    await register.getByRole('button', { name: 'Save attendance' }).tap()
+    await expect(register.getByText(/^Attendance saved/)).toBeVisible()
+    expect((await account(starter.id)).balance_pence).toBe(-700)
+    expect((await account(usedSub.id)).balance_pence).toBe(-700)
+    expect((await account(unusedSub.id)).entries).toEqual([])
+
+    await starterBox.uncheck()
+    await register.getByRole('button', { name: 'Save attendance' }).tap()
+    await expect(register.getByText(/^Attendance saved/)).toBeVisible()
+    const corrected = await account(starter.id)
+    expect(corrected.balance_pence).toBe(0)
+    expect(corrected.entries.map(entry => entry.amount_pence)).toEqual([-700, 700])
+    expect(corrected.entries[1].linked_entry_id).toBe(corrected.entries[0].id)
+    expect((await account(usedSub.id)).entries).toHaveLength(1)
+  } finally {
+    if (fixtureId) await checked(admin.from('fixtures').delete().eq('id', fixtureId))
+    if (opponentId) await checked(admin.from('opponents').delete().eq('id', opponentId))
+    if (enabled) await release(admin, false)
+    for (const person of members) await checked(admin.auth.admin.deleteUser(person.id))
+  }
+})

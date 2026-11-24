@@ -13,6 +13,10 @@ vi.mock('../lib/supabase', () => {
 })
 
 vi.mock('./ScoreBug', () => ({ default: () => null }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'manager' }, profile: { club_id: 'club' } }) }))
+const release = vi.hoisted(() => ({ enabled: false }))
+vi.mock('../hooks/usePaymentsRelease', () => ({ usePaymentsRelease: () => release }))
+vi.mock('./AttendanceRegister', () => ({ default: () => <section aria-label="Match attendance">Actual appearances only</section> }))
 
 import MatchCentre from './MatchCentre'
 
@@ -29,7 +33,20 @@ const answered = (id, first, last, over = {}) => ({
   profile: { id, first_name: first, last_name: last, active: true, approved: true, is_player: true, ...over },
 })
 
-beforeEach(() => { store.lineups = []; store.availability = []; store.failed = null })
+beforeEach(() => { store.lineups = []; store.availability = []; store.failed = null; release.enabled = false })
+
+test('flag-off manager match report has no attendance action', () => {
+  render(<MatchCentre open isAdmin onClose={() => {}} fixture={FIXTURE} />)
+  expect(screen.queryByRole('button', { name: 'Confirm who played' })).not.toBeInTheDocument()
+})
+
+test('flag-on manager opens attendance inline in the existing sheet', async () => {
+  release.enabled = true
+  render(<MatchCentre open isAdmin onClose={() => {}} fixture={FIXTURE} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Confirm who played' }))
+  expect(screen.getByRole('region', { name: 'Match attendance' })).toBeInTheDocument()
+  expect(screen.getAllByRole('dialog')).toHaveLength(1)
+})
 
 describe('MatchCentre line-up', () => {
   test('opens the award photograph in its own labelled sheet and returns focus to the report', async () => {
