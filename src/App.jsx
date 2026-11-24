@@ -29,6 +29,7 @@ const Training = lazy(() => import('./pages/Training'))
 const Manage = lazy(() => import('./pages/Manage'))
 const Fees = lazy(() => import('./pages/Fees'))
 const AccountsReport = lazy(() => import('./pages/AccountsReport'))
+const OpeningBalances = lazy(() => import('./pages/OpeningBalances'))
 const ProfileDetails = lazy(() => import('./pages/ProfileDetails'))
 const AdminAvailability = lazy(() => import('./pages/AdminAvailability'))
 const Players = lazy(() => import('./pages/Players'))
@@ -214,6 +215,7 @@ function AppRoutes({ adminOnly }) {
               <Route path="/news" element={<News />} />
               <Route path="/manage" element={adminOnly(<Manage />)} />
               <Route path="/manage/fees" element={adminOnly(<Fees />)} />
+              <Route path="/manage/settings/opening-balances" element={adminOnly(<OpeningBalances />)} />
               <Route path="/manage/accounts-report" element={adminOnly(<AccountsReport />)} />
               <Route path="/whos-in" element={adminOnly(seasonPage(<AdminAvailability />))} />
               <Route path="/players" element={adminOnly(<Players />)} />

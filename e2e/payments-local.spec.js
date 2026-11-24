@@ -61,22 +61,48 @@ test('a manager records a receipt and the player sees it once on their phone', a
     members.push(player)
     const other = await member(admin, 'Taylor', 'player')
     members.push(other)
+    const creditPlayer = await member(admin, 'Credit', 'player')
+    const settledPlayer = await member(admin, 'Settled', 'player')
+    members.push(creditPlayer, settledPlayer)
     const separateClub = await checked(admin.from('clubs').insert({ name: 'Subs proof other club' }).select('id').single())
     const outside = await member(admin, 'Outside', 'admin', separateClub.id)
     members.push(outside)
 
     await release(admin, true)
     putReleaseBack = true
-    // Seed signed opening arrears using the trusted database boundary.
-    await checked(admin.rpc('post_account_entry', {
-      p_entry: {
-        club_id: seededClub, profile_id: player.id, kind: 'opening', amount_pence: -700,
-        source: 'opening', source_id: randomUUID(), description: 'Opening balance', occurred_on: proofDate,
-        actor_id: manager.id,
-      },
-    }))
     await signIn(page, manager.email, manager.password)
     await page.getByRole('button', { name: 'Manager view' }).click()
+    const managerApi = await signedIn(manager)
+    const beforeOpenings = await checked(managerApi.rpc('get_account_opening_summary'))
+    await page.goto('/manage')
+    await page.getByRole('link', { name: 'Opening balances' }).click()
+    await expect(page.getByRole('heading', { name: 'Opening balances' })).toBeVisible()
+    const openingDirection = page.getByLabel('Opening balance', { exact: true })
+    await page.route('**/rest/v1/rpc/record_account_opening', async route => {
+      const response = await route.fetch()
+      if (!response.ok()) return route.fulfill({ response })
+      await route.abort('failed')
+    }, { times: 1 })
+    for (const opening of [
+      { member: player, direction: 'arrears', amount: '7.00' },
+      { member: creditPlayer, direction: 'credit', amount: '18.00' },
+      { member: settledPlayer, direction: 'settled' },
+    ]) {
+      await page.getByLabel('Player', { exact: true }).selectOption(opening.member.id)
+      await openingDirection.selectOption(opening.direction)
+      if (opening.amount) await page.getByLabel('Amount (£)').fill(opening.amount)
+      await page.getByRole('button', { name: 'Save opening balance' }).click()
+      if (opening.member === player) await page.getByRole('button', { name: 'Retry opening balance' }).click()
+      await expect(page.getByRole('region', { name: 'Opening records' }).getByText(opening.member.name, { exact: true })).toBeVisible()
+    }
+    const afterOpenings = await checked(managerApi.rpc('get_account_opening_summary'))
+    expect(afterOpenings.account_count).toBe(beforeOpenings.account_count + 3)
+    expect(afterOpenings.opening_credit_pence).toBe(beforeOpenings.opening_credit_pence + 1800)
+    expect(afterOpenings.opening_arrears_pence).toBe(beforeOpenings.opening_arrears_pence + 700)
+    expect(afterOpenings.settled_count).toBe(beforeOpenings.settled_count + 1)
+    const settled = await checked(managerApi.rpc('get_player_account', { p_profile_id: settledPlayer.id }))
+    expect(settled.balance_pence).toBe(0)
+    expect(settled.entries.map(entry => entry.description)).toEqual(['Opening balance'])
     await page.goto('/players')
     await page.getByRole('button', { name: `Account for ${player.name}` }).click()
     const dialog = page.getByRole('dialog', { name: 'Player account' })
@@ -147,7 +173,6 @@ test('a manager records a receipt and the player sees it once on their phone', a
     }
 
     const playerApi = await signedIn(player)
-    const managerApi = await signedIn(manager)
     const outsideApi = await signedIn(outside)
     expect((await playerApi.rpc('get_player_account', { p_profile_id: other.id })).error?.code).toBe('42501')
     expect((await outsideApi.rpc('get_player_account', { p_profile_id: player.id })).error?.code).toBe('42501')
