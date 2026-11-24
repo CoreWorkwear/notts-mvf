@@ -6,14 +6,40 @@ const mock = vi.hoisted(() => ({ auth: {}, state: {}, create: vi.fn(), reply: vi
 vi.mock('../context/AuthContext', () => ({ useAuth: () => mock.auth }))
 vi.mock('../hooks/useTraining', () => ({ useTraining: () => mock.state, createTrainingSessions: mock.create, replyToTraining: mock.reply, getTrainingHeadcount: mock.count, changeTrainingSession: mock.change }))
 vi.mock('../components/TrainingNoticeInbox', () => ({ default: () => null }))
+const release = vi.hoisted(() => ({ enabled: false }))
+vi.mock('../hooks/usePaymentsRelease', () => ({ usePaymentsRelease: () => release }))
+vi.mock('../components/AttendanceRegister', () => ({ default: ({ mode, sessionId, onClose }) => <section aria-label="Training attendance">{mode} register for {sessionId}<button onClick={onClose}>Cancel attendance</button></section> }))
 import Training from './Training'
 const session = { id: 's1', start_date: '2030-10-21', start_time: '19:00:00', venue: 'Club pitch', town: 'Nottingham', audience: 'club', focus: 'Passing', canReply: true, openForReplies: true, revision: 1 }
 function mount(path = '/training?session=s1') { return render(<MemoryRouter initialEntries={[path]}><Training /></MemoryRouter>) }
 beforeEach(() => {
   vi.clearAllMocks()
+  release.enabled = false
   mock.auth = { isAdmin: false, managerView: false }
   mock.state = { sessions: [{ ...session }], replies: { s1: 'in' }, loading: false, error: null, reload: vi.fn(async () => ({ sessions: mock.state.sessions, replies: mock.state.replies })) }
   mock.change.mockResolvedValue(); mock.create.mockResolvedValue('s2'); mock.reply.mockResolvedValue(); mock.count.mockResolvedValue([])
+})
+
+test('manager opens actual attendance inline separately from advance replies only when accounts enabled', async () => {
+  mock.auth = { isAdmin: true, managerView: true }
+  release.enabled = true
+  mount()
+  const dialog = await screen.findByRole('dialog', { name: 'Training session' })
+  expect(within(dialog).getByRole('button', { name: 'In', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await userEvent.click(screen.getByRole('button', { name: 'Confirm who attended' }))
+  expect(screen.getByRole('region', { name: 'Training attendance' })).toHaveTextContent('training register for s1')
+  expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  expect(mock.reply).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel attendance' }))
+  expect(screen.queryByRole('region', { name: 'Training attendance' })).not.toBeInTheDocument()
+  expect(screen.getByRole('dialog', { name: 'Training session' })).toBeInTheDocument()
+})
+
+test('disabled club hides training attendance action for managers', async () => {
+  mock.auth = { isAdmin: true, managerView: true }
+  mount()
+  await screen.findByRole('dialog', { name: 'Training session' })
+  expect(screen.queryByRole('button', { name: 'Confirm who attended' })).not.toBeInTheDocument()
 })
 test('opens the exact occurrence by deep link and changes only its reply', async () => {
   mount()

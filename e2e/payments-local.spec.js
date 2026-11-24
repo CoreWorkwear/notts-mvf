@@ -321,3 +321,73 @@ test('confirmed match appearances charge the players who took part', async ({ pa
     for (const person of members) await checked(admin.auth.admin.deleteUser(person.id))
   }
 })
+
+test('confirmed training attendance charges each occurrence independently', async ({ page }) => {
+  test.skip(process.env.E2E_PAYMENTS_LOCAL !== '1', 'requires the isolated payments database')
+  expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
+  expect(serviceKey).toBeTruthy()
+  const admin = createClient(env.VITE_SUPABASE_URL, serviceKey, authOptions)
+  const members = []
+  const sessionIds = []
+  let enabled = false
+  try {
+    const manager = await member(admin, 'Training manager', 'admin')
+    members.push(manager)
+    const attended = await member(admin, 'Attended', 'player')
+    members.push(attended)
+    const replied = await member(admin, 'Replied', 'player')
+    members.push(replied)
+    await release(admin, true)
+    enabled = true
+    const managerApi = await signedIn(manager)
+    const firstDate = '2026-10-15'
+    const nextDate = addDaysISO(firstDate, 7)
+    for (const [date, amount] of [[firstDate, 400], [nextDate, 600]]) {
+      await checked(managerApi.rpc('set_club_fee_rate', {
+        p_category: 'training', p_amount_pence: amount, p_effective_from: date,
+      }))
+    }
+    const series = randomUUID()
+    const sessions = await checked(admin.from('training_sessions').insert([firstDate, nextDate].map(start_date => ({
+      club_id: seededClub, series_id: series, venue: 'Training proof pitch',
+      start_date, start_time: '19:00', audience: 'club',
+    }))).select('id,start_date'))
+    sessionIds.push(...sessions.map(item => item.id))
+    const first = sessions.find(item => item.start_date === firstDate)
+    const next = sessions.find(item => item.start_date === nextDate)
+    await checked(admin.from('training_replies').insert({ session_id: first.id, profile_id: replied.id, status: 'in' }))
+    const account = id => checked(managerApi.rpc('get_player_account', { p_profile_id: id }))
+    expect((await account(replied.id)).entries).toEqual([])
+
+    await signIn(page, manager.email, manager.password)
+    await page.getByRole('button', { name: 'Manager view' }).click()
+    await page.goto(`/training?session=${first.id}`)
+    await page.getByRole('button', { name: 'Confirm who attended' }).tap()
+    const register = page.getByRole('region', { name: 'Training attendance' })
+    await expect(register.getByText(/£4\.00 per attendee/)).toBeVisible()
+    const attendedBox = register.getByRole('checkbox', { name: attended.name, exact: true })
+    await expect(register.getByRole('checkbox', { name: replied.name, exact: true })).not.toBeChecked()
+    await attendedBox.check()
+    await register.getByRole('button', { name: 'Save attendance' }).tap()
+    await expect(register.getByText(/^Attendance saved/)).toBeVisible()
+    const posted = await account(attended.id)
+    expect(posted.balance_pence).toBe(-400)
+    expect(posted.entries[0].category).toBe('training')
+    expect(posted.entries[0].activity_id).toBe(first.id)
+    expect((await account(replied.id)).entries).toEqual([])
+    const nextRegister = await checked(managerApi.rpc('get_training_attendance_register', { p_session_id: next.id }))
+    expect(nextRegister.confirmed_profile_ids).toEqual([])
+    expect(nextRegister.rate.amount_pence).toBe(600)
+
+    await attendedBox.uncheck()
+    await register.getByRole('button', { name: 'Save attendance' }).tap()
+    await expect(register.getByText(/^Attendance saved/)).toBeVisible()
+    const corrected = await account(attended.id)
+    expect(corrected.balance_pence).toBe(0)
+    expect(corrected.entries[1].linked_entry_id).toBe(posted.entries[0].id)
+  } finally {
+    if (sessionIds.length) await checked(admin.from('training_sessions').delete().in('id', sessionIds))
+    if (enabled) await release(admin, false)
+    for (const person of members) await checked(admin.auth.admin.deleteUser(person.id))
+  }
+})

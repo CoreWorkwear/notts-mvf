@@ -8,6 +8,8 @@ import PageHead from '../components/PageHead'
 import Sheet from '../components/Sheet'
 import TrainingNoticeInbox from '../components/TrainingNoticeInbox'
 import { TrainingSessionCard, TrainingVenueDetails } from '../components/TrainingVenue'
+import AttendanceRegister from '../components/AttendanceRegister'
+import { usePaymentsRelease } from '../hooks/usePaymentsRelease'
 import '../styles/training.css'
 
 const audiences = { club: 'Whole club', xl: '1st Team', community: 'Community' }
@@ -156,13 +158,17 @@ function Headcount({ session, refresh }) {
 }
 
 export default function Training() {
-  const { isAdmin, managerView } = useAuth()
+  const { user, profile, isAdmin, managerView } = useAuth()
+  const payments = usePaymentsRelease(user?.id, profile?.club_id)
   const manager = isAdmin && managerView
   const { sessions = [], replies = {}, loading, error, reload } = useTraining()
   const { search, key: locationKey } = useLocation()
   const requested = new URLSearchParams(search).get('session')
   const [week, setWeek] = useState(monday(todayISO()))
   const [selected, setSelected] = useState(null)
+  const [attendanceOpen, setAttendanceOpen] = useState(false)
+  const attendanceOpener = useRef(null)
+  useEffect(() => { setAttendanceOpen(false) }, [selected])
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
@@ -247,6 +253,7 @@ export default function Training() {
     <Sheet open={!!session} onClose={() => setSelected(null)} aria-label="Training session">{session && <div className="training-detail"><div className="training-sheet-head"><h2>{audiences[session.audience]} training</h2><button className="btn btn-ghost" disabled={busy} onClick={() => setSelected(null)}>Close</button></div><p><time dateTime={`${session.start_date}T${session.start_time}`}>{fmtDate(session.start_date)} {session.start_date.slice(0, 4)} · {session.start_time.slice(0, 5)}</time></p><TrainingVenueDetails key={session.id} session={session} />{session.focus && <p className="training-focus">{session.focus}</p>}
       {closed(session) ? <p role="status">{session.cancelled ? 'Cancelled' : 'Started'}{replies[session.id] && ` · Your reply: ${label(replies[session.id])}`}</p> : session.canReply ? <fieldset className="training-replies" disabled={busy || needsRefresh}><legend>Your availability</legend>{statuses.map(status => <button type="button" className={`btn training-reply training-reply-${status}`} key={status} aria-pressed={replies[session.id] === status} onClick={() => reply(status)}>{label(status)}</button>)}</fieldset> : <p>Availability · Invited players only</p>}
       {replyError && <p role="alert">{replyError}</p>}{needsRefresh && <button className="btn btn-ghost" onClick={refreshCurrent}>Retry latest details</button>}{busy && <p role="status">Saving…</p>}{manager && <><Headcount session={session} refresh={refresh} />{!closed(session) && <div className="training-manager-actions">{confirmCancel ? <><p>Cancel this session? Club members will be notified. Saved replies will be retained.</p><button className="btn btn-danger" disabled={busy || needsRefresh} onClick={cancel}>Confirm cancellation</button><button className="btn btn-ghost" disabled={busy} onClick={() => setConfirmCancel(false)}>Keep session</button></> : <><button className="btn btn-ghost" disabled={busy || needsRefresh} onClick={() => { setEditing(session); setSelected(null); setFormOpen(true) }}>Edit session</button><button className="btn btn-ghost" disabled={busy || needsRefresh} onClick={() => { setConfirmCancel(true); cancelRequest.current = null }}>Cancel session</button></>}</div>}</>}
+      {manager && payments.enabled && (!attendanceOpen ? <button type="button" ref={attendanceOpener} className="btn btn-primary btn-block mt-5" onClick={() => setAttendanceOpen(true)}>Confirm who attended</button> : <AttendanceRegister key={`attendance-${session.id}`} mode="training" sessionId={session.id} onClose={() => { setAttendanceOpen(false); requestAnimationFrame(() => attendanceOpener.current?.focus()) }} />)}
     </div>}</Sheet>
     <TrainingForm open={formOpen} session={editing} onConflict={async id => { const data = await reload(); return data?.sessions.find(item => item.id === id) }} onClose={() => setFormOpen(false)} onSaved={async (id, date) => { await reload(); setWeek(monday(date)); setSelected(editing?.id || id) }} />
   </div>

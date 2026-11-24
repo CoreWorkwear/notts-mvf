@@ -109,3 +109,57 @@ test('failed read offers retry without an editable blank register', async () => 
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
   await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(2))
 })
+
+const trainingRegister = () => ({ ...register(), fixture_id: undefined, session_id: 'session-1', category: 'training', rate: { id: 'training-rate', amount_pence: 400 }, occurrence_revision: 2 })
+const trainingView = (sessionId = 'session-1') => render(<AttendanceRegister mode="training" sessionId={sessionId} onClose={vi.fn()} />)
+
+test('training uses its own occurrence API and never defaults from an advance reply; next series date is separate', async () => {
+  const occurrences = { 'session-1': trainingRegister(), 'session-2': { ...trainingRegister(), session_id: 'session-2' } }
+  state.rpc.mockImplementation(async (name, payload) => {
+    if (name === 'confirm_training_attendance') occurrences[payload.p_session_id] = { ...occurrences[payload.p_session_id], revision: 1, confirmed_profile_ids: payload.p_profile_ids }
+    return { data: occurrences[payload.p_session_id] }
+  })
+  const first = trainingView()
+  expect(await screen.findByRole('checkbox', { name: 'Sam Lee' })).not.toBeChecked()
+  expect(screen.getByText('£4.00 per attendee', { exact: false })).toBeInTheDocument()
+  expect(screen.getByText('Tick only players who actually attended. Advance replies do not confirm attendance.')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Joe Bloggs' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save attendance' }))
+  await screen.findByText('Attendance saved. Showing the current confirmed attendees.')
+  const payload = state.rpc.mock.calls.find(([name]) => name === 'confirm_training_attendance')[1]
+  expect(payload).toMatchObject({ p_session_id: 'session-1', p_profile_ids: ['joe'], p_expected_revision: 0 })
+  expect(payload).not.toHaveProperty('p_fixture_id')
+  first.unmount(); trainingView('session-2')
+  expect(await screen.findByRole('checkbox', { name: 'Joe Bloggs' })).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: 'Sam Lee' })).not.toBeChecked()
+  expect(state.rpc).toHaveBeenLastCalledWith('get_training_attendance_register', { p_session_id: 'session-2' })
+})
+
+test('training cancellation after opening reports stale and refreshes into a closed register', async () => {
+  let current = trainingRegister()
+  state.rpc.mockImplementation(async name => name === 'confirm_training_attendance' ? { error: { code: '40001' } } : { data: current })
+  trainingView('training-stale')
+  await userEvent.click(await screen.findByRole('checkbox', { name: 'Sam Lee' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save attendance' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Refresh attendance')
+  current = { ...trainingRegister(), can_confirm: false, allow_clear: false, unavailable_reason: 'cancelled' }
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh attendance' }))
+  expect(await screen.findByRole('checkbox', { name: 'Sam Lee' })).not.toBeChecked()
+  expect(screen.getByRole('button', { name: 'Save attendance' })).toBeDisabled()
+  expect(screen.getByText(/This session cannot gain new attendees: cancelled/)).toBeInTheDocument()
+  expect(screen.queryByText('Attendance saved.', { exact: false })).not.toBeInTheDocument()
+})
+
+test('training ambiguous retry preserves its own session request after closing', async () => {
+  let writeCount = 0
+  state.rpc.mockImplementation(async name => name === 'confirm_training_attendance' ? (++writeCount === 1 ? { error: { message: 'response lost' } } : { data: { ...trainingRegister(), confirmed_profile_ids: ['joe'], revision: 1 } }) : { data: trainingRegister() })
+  const first = trainingView('training-retry')
+  await userEvent.click(await screen.findByRole('checkbox', { name: 'Joe Bloggs' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save attendance' }))
+  await screen.findByRole('alert')
+  first.unmount(); trainingView('training-retry')
+  await userEvent.click(await screen.findByRole('button', { name: 'Retry attendance' }))
+  await screen.findByText('Attendance saved. Showing the current confirmed attendees.')
+  const payloads = state.rpc.mock.calls.filter(([name]) => name === 'confirm_training_attendance').map(([, payload]) => payload)
+  expect(payloads).toHaveLength(2); expect(payloads[1]).toEqual(payloads[0])
+})
