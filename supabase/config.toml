@@ -20,3 +20,6 @@ verify_jwt = false
 # Private training outbox worker uses the same server-only cron secret.
 [functions.run-training-push]
 verify_jwt = false
+
+[functions.stripe-connect-onboard]
+verify_jwt = true
