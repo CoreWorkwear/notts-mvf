@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { loadEnv } from 'vite'
 import { signIn } from './helpers.js'
+import { createStripeClient } from '../supabase/functions/_shared/stripeConnect.js'
 
 const sandbox = process.env.E2E_STRIPE_SANDBOX === '1'
 const env = loadEnv('production', process.cwd(), 'VITE_')
@@ -109,7 +110,7 @@ test('signed sandbox fixtures settle, refund and record payout status even while
 
   function event(type, id, object) {
     return { id: `evt_${id}${stamp}`, type, livemode: false, account: fakeAccount,
-      created: Math.floor(Date.now() / 1000), data: { object: { ...object, livemode: false } } }
+      created: Math.floor(Date.now() / 1000), data: { object: type.startsWith('refund.') ? object : { ...object, livemode: false } } }
   }
 
   function deliver(payload, valid = true) {
@@ -203,6 +204,80 @@ test('signed sandbox fixtures settle, refund and record payout status even while
     await expect(page.getByRole('button', { name: 'Export payout CSV' })).toBeVisible()
   } finally {
     if (enabled) await enable(false)
+    for (const id of people) await checked(admin.auth.admin.deleteUser(id))
+  }
+})
+
+test('hosted sandbox Checkout opens from You and cancellation leaves the balance untouched', async ({ page }) => {
+  test.skip(process.env.E2E_STRIPE_HOSTED !== '1', 'requires a dedicated ready connected Stripe sandbox')
+  test.setTimeout(75_000)
+  expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
+  const secret = process.env.STRIPE_API_KEY
+  expect(Boolean(secret && /^(sk|rk)_test_/.test(secret))).toBe(true)
+  const platform = process.env.STRIPE_PLATFORM_ACCOUNT_ID
+  const account = process.env.E2E_STRIPE_CONNECTED_ACCOUNT
+  expect(account).toMatch(/^acct_/)
+  expect(account).not.toBe(platform)
+  const stripe = createStripeClient(secret)
+  expect((await stripe('/account')).id).toBe(platform)
+  const admin = createClient(env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, options)
+  const clubName = 'Stripe hosted sandbox proof'
+  const fixtureClub = await checked(admin.from('clubs').select('id').eq('name', clubName).maybeSingle())
+    ?? await checked(admin.from('clubs').insert({ name: clubName }).select('id').single())
+  const people = []
+  async function member(role) {
+    const email = `checkout-proof-${randomUUID()}@example.com`
+    const password = randomUUID()
+    const { user } = await checked(admin.auth.admin.createUser({ email, password, email_confirm: true,
+      user_metadata: { first_name: 'Hosted', last_name: 'Proof', phone: '07700900912' } }))
+    people.push(user.id)
+    await checked(admin.from('profiles').update({ club_id: fixtureClub.id, role, active: true, approved: true }).eq('id', user.id))
+    return { id: user.id, email, password }
+  }
+  const setRelease = enabled => checked(admin.rpc('set_club_payments_release', {
+    p_club_id: fixtureClub.id, p_enabled: enabled, p_cutover: enabled,
+  }))
+
+  try {
+    const manager = await member('admin')
+    const player = await member('player')
+    await setRelease(true)
+    const connection = await checked(admin.rpc('reserve_club_stripe_connection', { p_club_id: fixtureClub.id,
+      p_platform_account_id: platform, p_livemode: false, p_actor_id: manager.id }))
+    const current = await stripe(`/accounts/${account}`)
+    expect(current.id).toBe(account)
+    expect(current.charges_enabled && current.payouts_enabled).toBe(true)
+    const metadata = { club_id: fixtureClub.id, platform_account_id: platform, provider_mode: 'test', connection_creation_id: connection.creation_id }
+    if (!Object.entries(metadata).every(([key, value]) => current.metadata?.[key] === value)) {
+      // A dedicated target may be initialized, but never claimed from another club.
+      for (const [key, value] of Object.entries(metadata)) expect([undefined, value]).toContain(current.metadata?.[key])
+      const body = Object.fromEntries(Object.entries(metadata).map(([key, value]) => [`metadata[${key}]`, value]))
+      const updated = await stripe(`/accounts/${account}`, { method: 'POST', body, idempotencyKey: `sandbox-fixture:${connection.creation_id}` })
+      expect(updated.metadata).toMatchObject(metadata)
+    }
+    await checked(admin.rpc('save_club_stripe_connection', { p_club_id: fixtureClub.id,
+      p_platform_account_id: platform, p_livemode: false, p_creation_id: connection.creation_id, p_account_id: account,
+      p_status: { charges_enabled: true, payouts_enabled: true } }))
+
+    await signIn(page, player.email, player.password)
+    await page.goto('/you')
+    await page.getByRole('button', { name: 'Add money' }).click()
+    await page.getByLabel('Amount to add (£)').fill('3.00')
+    await page.getByRole('button', { name: 'Review amount' }).click()
+    await page.getByRole('button', { name: 'Continue to secure Checkout' }).click()
+    await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//)
+    await expect(page.getByText('Sandbox', { exact: true })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('£3.00', { exact: true })).toBeVisible()
+    await page.getByRole('link', { name: /^back to/i }).click()
+    await expect(page).toHaveURL(/\/you\?.*payment_status=cancelled/)
+    await expect(page.getByText('No transactions yet.')).toBeVisible()
+    const playerApi = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, options)
+    await checked(playerApi.auth.signInWithPassword({ email: player.email, password: player.password }))
+    const statement = await checked(playerApi.rpc('get_player_account'))
+    expect(statement.balance_pence).toBe(0)
+    expect(statement.entries).toEqual([])
+  } finally {
+    await setRelease(false)
     for (const id of people) await checked(admin.auth.admin.deleteUser(id))
   }
 })

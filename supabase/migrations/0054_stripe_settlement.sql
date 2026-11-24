@@ -83,11 +83,19 @@ begin
   'refund.created','refund.updated','refund.failed') then
   return jsonb_build_object('event_id',event_id,'outcome','ignored');
  end if;
- if jsonb_typeof(obj->'livemode') is distinct from 'boolean' or (obj->>'livemode')::boolean is distinct from live then
-  raise exception 'Stripe object mode mismatch' using errcode='22023';
+ is_refund:=event_type like 'refund.%';
+ -- Stripe Refund has no livemode field. Its signed envelope and the exact
+ -- original PI/account lookup below establish mode. If supplied, object mode
+ -- must still be a matching boolean; payment/session objects require it.
+ if not is_refund or obj ? 'livemode' then
+  if jsonb_typeof(obj->'livemode') is distinct from 'boolean' then
+   raise exception 'Stripe object mode mismatch' using errcode='22023';
+  end if;
+  if (obj->>'livemode')::boolean is distinct from live then
+   raise exception 'Stripe object mode mismatch' using errcode='22023';
+  end if;
  end if;
  payload:=jsonb_build_object('type',event_type,'account',account_id,'livemode',live,'object',obj);
- is_refund:=event_type like 'refund.%';
  if is_refund then
   if obj->>'object' is distinct from 'refund' then raise exception 'Invalid Stripe refund object' using errcode='22023'; end if;
   pi:=case jsonb_typeof(obj->'payment_intent') when 'object' then obj#>>'{payment_intent,id}' else obj->>'payment_intent' end;

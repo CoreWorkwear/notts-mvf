@@ -54,7 +54,7 @@ create function pg_temp.payment_event(eid text,etype text,n integer,pi text) ret
 $$;
 create function pg_temp.refund_event(eid text,rid text,pi text,amount integer,state text,etype text default 'refund.created') returns jsonb language sql as $$
  select jsonb_build_object('id',eid,'type',etype,'account','acct_settlementClub','livemode',false,'created',extract(epoch from now())::bigint,
- 'data',jsonb_build_object('object',jsonb_build_object('id',rid,'object','refund','livemode',false,'payment_intent',pi,'currency','gbp','amount',amount,'status',state)));
+ 'data',jsonb_build_object('object',jsonb_build_object('id',rid,'object','refund','payment_intent',pi,'currency','gbp','amount',amount,'status',state)));
 $$;
 create function pg_temp.player_pence(player uuid) returns bigint language sql as $$
  select coalesce(sum(e.amount_pence::bigint),0) from public.account_entries e join public.player_accounts a on a.id=e.account_id where a.club_id='35540000-0000-0000-0000-000000000100' and a.profile_id=player;
@@ -94,6 +94,9 @@ end; $$;
 -- Refund arrives before binding, then before original success: neither failure
 -- may record completion; the identical event must succeed on a later retry.
 do $$ declare event jsonb:=pg_temp.refund_event('evt_refundEarly','re_partialOne','pi_second',250,'succeeded'); begin
+ perform pg_temp.settlement_check(not ((event#>'{data,object}') ? 'livemode'),'real Stripe refund fixture has no object livemode');
+ perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(event,'{data,object,livemode}','true')),'22023','contradictory explicit refund mode refused');
+ perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(event,'{data,object,livemode}','null')),'22023','invalid explicit refund mode refused');
  perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',event),'P0002','refund before PI binding retries');
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.payment_event('evt_secondPending','payment_intent.processing',22,'pi_second'));
  perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',event),'P0002','refund before original success retries');
