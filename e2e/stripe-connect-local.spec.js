@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { loadEnv } from 'vite'
@@ -65,5 +65,122 @@ test('manager starts and resumes sandbox onboarding from Club settings', async (
   } finally {
     await checked(admin.rpc('set_club_payments_release', { p_club_id: clubId, p_enabled: false }))
     await checked(admin.auth.admin.deleteUser(user.id))
+  }
+})
+
+test('a signed sandbox fixture settles and refunds exactly once, even while paused', async () => {
+  test.skip(process.env.E2E_STRIPE_SIGNED_FIXTURES !== '1', 'requires the isolated signed-event endpoint')
+  expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
+  const api = env.VITE_SUPABASE_URL
+  const platform = process.env.STRIPE_PLATFORM_ACCOUNT_ID
+  const signingSecret = process.env.STRIPE_WEBHOOK_SECRET_CONNECT
+  expect(platform).toMatch(/^acct_/)
+  expect(Boolean(signingSecret?.startsWith('whsec_'))).toBe(true)
+  const admin = createClient(api, process.env.SUPABASE_SERVICE_ROLE_KEY, options)
+  const people = []
+  let fixtureClub
+  let enabled = false
+  const stamp = randomUUID().replaceAll('-', '')
+  const fakeAccount = `acct_Proof${stamp}`
+  const fakeCustomer = `cus_Proof${stamp}`
+  const fakeIntent = `pi_Proof${stamp}`
+  const fakeSession = `cs_test_Proof${stamp}`
+  const attemptId = randomUUID()
+  const callback = 'http://localhost:4173/you'
+
+  async function makeUser(role) {
+    const email = `signed-proof-${randomUUID()}@example.com`
+    const password = randomUUID()
+    const { user } = await checked(admin.auth.admin.createUser({
+      email, password, email_confirm: true,
+      user_metadata: { first_name: 'Signed', last_name: 'Fixture', phone: '07700900912' },
+    }))
+    people.push(user.id)
+    await checked(admin.from('profiles').update({
+      approved: true, active: true, club_id: fixtureClub.id, role,
+    }).eq('id', user.id))
+    return { id: user.id, email, password }
+  }
+
+  async function enable(value) {
+    await checked(admin.rpc('set_club_payments_release', { p_club_id: fixtureClub.id, p_enabled: value, p_cutover: value }))
+    enabled = value
+  }
+
+  function event(type, id, object) {
+    return { id: `evt_${id}${stamp}`, type, livemode: false, account: fakeAccount,
+      created: Math.floor(Date.now() / 1000), data: { object: { ...object, livemode: false } } }
+  }
+
+  function deliver(payload, valid = true) {
+    const body = JSON.stringify(payload)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const digest = valid ? createHmac('sha256', signingSecret).update(`${timestamp}.${body}`).digest('hex') : '0'.repeat(64)
+    return fetch(`${api}/functions/v1/stripe-connect-webhook`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Stripe-Signature': `t=${timestamp},v1=${digest}` }, body,
+    })
+  }
+
+  try {
+    fixtureClub = await checked(admin.from('clubs').insert({ name: 'Stripe signed fixture' }).select('id').single())
+    const manager = await makeUser('admin')
+    const player = await makeUser('player')
+    await enable(true)
+    const connection = await checked(admin.rpc('reserve_club_stripe_connection', {
+      p_club_id: fixtureClub.id, p_platform_account_id: platform, p_livemode: false, p_actor_id: manager.id,
+    }))
+    await checked(admin.rpc('save_club_stripe_connection', {
+      p_club_id: fixtureClub.id, p_platform_account_id: platform, p_livemode: false,
+      p_creation_id: connection.creation_id, p_account_id: fakeAccount,
+      p_status: { charges_enabled: true, payouts_enabled: true },
+    }))
+    await checked(admin.rpc('post_account_entry', { p_entry: {
+      club_id: fixtureClub.id, profile_id: player.id, kind: 'opening', source: 'opening', amount_pence: -900,
+      description: 'Opening balance', source_id: stamp,
+    } }))
+    const reservation = await checked(admin.rpc('reserve_stripe_checkout', {
+      p_attempt_id: attemptId, p_club_id: fixtureClub.id, p_actor_id: player.id, p_platform_account_id: platform,
+      p_livemode: false, p_kind: 'balance', p_amount_pence: 900, p_success_url: callback, p_cancel_url: callback,
+    }))
+    await checked(admin.rpc('bind_stripe_player_customer', {
+      p_creation_id: reservation.customer.creation_id, p_customer_id: fakeCustomer,
+    }))
+    await checked(admin.rpc('bind_stripe_checkout_session', {
+      p_attempt_id: attemptId, p_customer_id: fakeCustomer, p_session_id: fakeSession, p_checkout_url: null,
+    }))
+    const metadata = {
+      club_id: fixtureClub.id, profile_id: player.id, player_account_id: reservation.attempt.player_account_id,
+      platform_account_id: platform, attempt_id: attemptId, provider_mode: 'test',
+    }
+    const payment = event('payment_intent.succeeded', 'Payment', {
+      object: 'payment_intent', id: fakeIntent, amount: 900, amount_received: 900,
+      currency: 'gbp', status: 'succeeded', customer: fakeCustomer, metadata,
+    })
+    const checkout = event('checkout.session.completed', 'Checkout', {
+      object: 'checkout.session', mode: 'payment', id: fakeSession, payment_intent: fakeIntent, amount_total: 900,
+      currency: 'gbp', payment_status: 'paid', customer: fakeCustomer, metadata,
+    })
+    const refund = event('refund.updated', 'Refund', {
+      object: 'refund', id: `re_Proof${stamp}`, amount: 200, currency: 'gbp', status: 'succeeded', payment_intent: fakeIntent,
+    })
+    await enable(false)
+    expect((await deliver(payment, false)).status).toBe(400)
+    expect((await deliver(refund)).status).toBe(503)
+    const results = await Promise.all([deliver(payment), deliver(checkout), deliver(payment)])
+    expect(results.map(result => result.status)).toEqual([200, 200, 200])
+    expect((await deliver(refund)).status).toBe(200)
+    expect((await deliver(refund)).status).toBe(200)
+    await enable(true)
+    const playerClient = createClient(api, env.VITE_SUPABASE_ANON_KEY, options)
+    await checked(playerClient.auth.signInWithPassword({ email: player.email, password: player.password }))
+    const statement = await checked(playerClient.rpc('get_player_account'))
+    expect(statement.balance_pence).toBe(-200)
+    expect(statement.entries.map(entry => [entry.kind, entry.amount_pence])).toEqual([
+      ['opening', -900], ['receipt', 900], ['refund', -200],
+    ])
+    expect(statement.entries[2].linked_entry_id).toBe(statement.entries[1].id)
+  } finally {
+    if (enabled) await enable(false)
+    for (const id of people) await checked(admin.auth.admin.deleteUser(id))
   }
 })

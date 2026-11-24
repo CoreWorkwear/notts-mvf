@@ -26,3 +26,7 @@ verify_jwt = true
 
 [functions.stripe-checkout]
 verify_jwt = true
+
+# Stripe sends signed requests without a Supabase JWT.
+[functions.stripe-connect-webhook]
+verify_jwt = false
