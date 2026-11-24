@@ -78,7 +78,7 @@ do $$ declare r jsonb:=pg_temp.payout_report('po_one')->'payouts'->0; b jsonb; b
  perform pg_temp.payout_check((b->>'gross_pence')::bigint=900 and (b->>'refunds_pence')::bigint=200 and (b->>'fees_pence')::bigint=40 and (b->>'net_pence')::bigint=660,'gross refund embedded and separate fee totals');
  perform pg_temp.payout_check(jsonb_array_length(r->'lines')=3 and r->>'arrival_on'='2026-12-02' and r->>'created_on'='2026-12-01' and r->>'paid_on'='2026-12-01','provider lifecycle and itemised dates');
  perform pg_temp.payout_check(r->'lines'->0->>'player_name'='Payout Player' and r->'lines'->0->>'receipt_reference'='pi_payoutOne' and r->'lines'->1->>'refund_id'='re_payoutOne','payment refund receipt and player linkage');
- perform pg_temp.payout_check((select count(*)=3 from public.account_entries),'payout creates no further player receipt or expense');
+ perform pg_temp.payout_check((select count(*)=3 from public.account_entries where club_id='41570000-0000-0000-0000-000000000100'),'payout creates no further player receipt or expense');
 end; $$;
 reset role;
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',660)));
@@ -88,6 +88,8 @@ select pg_temp.payout_save(pg_temp.payout_object('po_gap',700),pg_temp.payout_li
 select pg_temp.payout_save(pg_temp.payout_object('po_unknown',665),pg_temp.payout_lines()||'[{"balance_transaction_id":"txn_unknown","created":1796083203,"type":"adjustment","currency":"gbp","amount_pence":5,"fee_pence":0,"net_pence":5}]');
 select pg_temp.payout_save(pg_temp.payout_object('po_foreign',660),pg_temp.payout_lines()||'[{"balance_transaction_id":"txn_foreign","created":1796083203,"type":"charge","currency":"eur","amount_pence":100,"fee_pence":0,"net_pence":100}]');
 select pg_temp.payout_save(pg_temp.payout_object('po_manual',660,'paid',false),'[]',false);
+-- Older cached refreshes could store both manual and automatic warnings.
+select public.save_stripe_payout_breakdown('41570000-0000-0000-0000-000000000010','41570000-0000-0000-0000-000000000100','acct_payoutPlatform',false,pg_temp.payout_object('po_manual',660,'paid',false),'[]',false,array['Manual payout components cannot be identified automatically','Manual payout components cannot be identified automatically','Stripe has not completed automatic payout reconciliation']);
 select pg_temp.payout_save(pg_temp.payout_object('po_pending',660,'pending'),pg_temp.payout_lines(),false);
 select pg_temp.payout_save(pg_temp.payout_object('po_badnet',660),jsonb_set(pg_temp.payout_lines(),'{0,net_pence}','869'));
 select pg_temp.payout_refused(format('select pg_temp.payout_save(%L::jsonb,%L::jsonb)',pg_temp.payout_object('po_duplicate',660),pg_temp.payout_lines()||pg_temp.payout_lines()),'22023','duplicate balance rows refused');
@@ -96,6 +98,7 @@ select pg_temp.payout_check((pg_temp.payout_report('po_gap')->'payouts'->0->'bre
 select pg_temp.payout_check((pg_temp.payout_report('po_unknown')->'payouts'->0->'breakdown'->>'difference_pence')::bigint=0 and not(pg_temp.payout_report('po_unknown')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'unknown movement unreconciled even at exact total');
 select pg_temp.payout_check((pg_temp.payout_report('po_foreign')->'payouts'->0->'breakdown'->>'net_pence')::bigint=660 and (pg_temp.payout_report('po_foreign')->'payouts'->0->'breakdown'->>'unresolved_count')::integer=1,'foreign currency itemised but never added to GBP');
 select pg_temp.payout_check(not(pg_temp.payout_report('po_manual')->'payouts'->0->'breakdown'->>'reconciled')::boolean and not(pg_temp.payout_report('po_pending')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'manual or incomplete pending payout not falsely reconciled');
+select pg_temp.payout_check(pg_temp.payout_report('po_manual')->'payouts'->0->'breakdown'->'difference_pence'='null'::jsonb and not(pg_temp.payout_report('po_manual')->'payouts'->0->'breakdown'->>'component_net_available')::boolean and jsonb_array_length(pg_temp.payout_report('po_manual')->'payouts'->0->'breakdown'->'issues')=1,'manual evidence unavailable with one warning and no fictional component gap');
 select pg_temp.payout_check((pg_temp.payout_report('po_badnet')->'payouts'->0->'breakdown'->>'unresolved_count')::integer=1,'provider amount fee net inconsistency remains visible');
 reset role;
 -- Missing settlement may arrive later. Linking resolves from immutable provider
@@ -108,6 +111,34 @@ select pg_temp.payout_payment(22,'pi_late',100);
 set local role authenticated;
 select pg_temp.payout_check((pg_temp.payout_report('po_unlinked')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'later original settlement resolves source dynamically');
 reset role;
+-- A positive provider refund_failure returns the failed refund to Stripe.
+-- Match its exact failure balance transaction, scoped refund and linked 0054
+-- corrective credit. It offsets refunds and never becomes another gross receipt.
+select public.process_stripe_settlement_event('acct_payoutPlatform','{"id":"evt_payoutRefundFailed","type":"refund.failed","account":"acct_payoutClub","livemode":false,"created":1796083204,"data":{"object":{"id":"re_payoutOne","object":"refund","payment_intent":"pi_payoutOne","amount":200,"currency":"gbp","status":"failed","failure_balance_transaction":"txn_payoutRestored"}}}');
+create function pg_temp.payout_restore_line(provider_type text default 'refund_failure') returns jsonb language sql as $$
+ select jsonb_build_array(jsonb_build_object('balance_transaction_id','txn_payoutRestored','created',1796083204,'type',provider_type,'reporting_category','refund_failure',
+ 'currency','gbp','source_id','re_payoutOne','refund_id','re_payoutOne','payment_intent_id','pi_payoutOne','failure_balance_transaction_id','txn_payoutRestored','amount_pence',200,'fee_pence',0,'net_pence',200));
+$$;
+do $$ declare provider_type text; r jsonb; begin
+ foreach provider_type in array array['refund_failure','payment_refund'] loop
+  perform pg_temp.payout_save(pg_temp.payout_object('po_restored',200),pg_temp.payout_restore_line(provider_type));
+  r:=pg_temp.payout_report('po_restored')->'payouts'->0;
+  perform pg_temp.payout_check((r->'breakdown'->>'reconciled')::boolean and (r->'breakdown'->>'difference_pence')::bigint=0,'verified positive refund restoration reconciles');
+  perform pg_temp.payout_check((r->'breakdown'->>'gross_pence')::bigint=0 and (r->'breakdown'->>'refunds_pence')::bigint=-200 and (r->'breakdown'->>'net_pence')::bigint=200,'restoration is negative refunds never gross');
+  perform pg_temp.payout_check((r->'lines'->0->>'linked')::boolean and r->'lines'->0->>'player_name'='Payout Player' and r->'lines'->0->>'receipt_reference'='pi_payoutOne','restoration links through original refund and receipt');
+ end loop;
+ perform pg_temp.payout_save(pg_temp.payout_object('po_restoreMissing',200),pg_temp.payout_restore_line()#-'{0,failure_balance_transaction_id}');
+ perform pg_temp.payout_check(not(pg_temp.payout_report('po_restoreMissing')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'missing explicit failure transaction remains unresolved');
+ perform pg_temp.payout_save(pg_temp.payout_object('po_restoreWrong',200),jsonb_set(pg_temp.payout_restore_line(),'{0,failure_balance_transaction_id}','"txn_wrong"'));
+ perform pg_temp.payout_check(not(pg_temp.payout_report('po_restoreWrong')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'wrong explicit failure transaction remains unresolved');
+ perform pg_temp.payout_save(pg_temp.payout_object('po_restoreUnknown',200),jsonb_set(pg_temp.payout_restore_line(),'{0,refund_id}','"re_unknown"'));
+ perform pg_temp.payout_check(not(pg_temp.payout_report('po_restoreUnknown')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'unsettled refund restoration remains unresolved');
+ perform pg_temp.payout_save(pg_temp.payout_object('po_restoreWrongPI',200),jsonb_set(pg_temp.payout_restore_line(),'{0,payment_intent_id}','"pi_other"'));
+ perform pg_temp.payout_check(not(pg_temp.payout_report('po_restoreWrongPI')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'wrong restoration PI remains unresolved');
+ perform pg_temp.payout_save(pg_temp.payout_object('po_descriptionOnly',200),jsonb_set(pg_temp.payout_restore_line(),'{0,type}','"adjustment"'));
+ perform pg_temp.payout_check(not(pg_temp.payout_report('po_descriptionOnly')->'payouts'->0->'breakdown'->>'reconciled')::boolean and (pg_temp.payout_report('po_descriptionOnly')->'payouts'->0->'breakdown'->>'refunds_pence')::bigint=0,'unknown movement never inferred from refund-like text or reference');
+ perform pg_temp.payout_check((select count(*)=5 from public.account_entries where club_id='41570000-0000-0000-0000-000000000100'),'restoration payout facts add no further player credit');
+end; $$;
 select public.anonymise_and_delete_profile('41570000-0000-0000-0000-000000000011','41570000-0000-0000-0000-000000000100');
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutFailed',pg_temp.payout_object('po_one',660,'failed'),'acct_payoutClub',false,1796083201));
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_oldPaid',pg_temp.payout_object('po_one',660),'acct_payoutClub',false,1796083100));
@@ -115,7 +146,7 @@ select pg_temp.payout_save(pg_temp.payout_object('po_one',660),pg_temp.payout_li
 set local role authenticated;
 select pg_temp.payout_check(pg_temp.payout_report('po_one')->'payouts'->0->>'status'='failed' and not(pg_temp.payout_report('po_one')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'failed remains failed despite old paid event and stale paid refresh');
 select pg_temp.payout_check(pg_temp.payout_report('po_one')->'payouts'->0->>'failed_on'='2026-12-01' and pg_temp.payout_report('po_one')->'payouts'->0->'lines'->0->>'player_name'='Payout Player','failed date and removed player trace retained');
-select pg_temp.payout_check((select count(*)=4 from public.account_entries),'all payout facts and refreshes left player ledger untouched');
+select pg_temp.payout_check((select count(*)=5 from public.account_entries where club_id='41570000-0000-0000-0000-000000000100'),'all payout facts and refreshes left player ledger untouched');
 reset role;
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_otherPayout',pg_temp.payout_object('po_other',660),'acct_payoutOther'));
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_livePayout',jsonb_set(pg_temp.payout_object('po_live',660),'{livemode}','true'),'acct_payoutLive',true));

@@ -40,21 +40,29 @@ begin
   group by kinds.category,kinds.sort_order
  ), receipt_lines as (
   select e.id,e.sequence,e.kind,
-   case coalesce(o.source,e.source) when 'stripe_payment' then 'stripe' else coalesce(o.source,e.source) end as method,
+   case when r.id is not null then 'stripe'
+    else case coalesce(o.source,e.source) when 'stripe_payment' then 'stripe' else coalesce(o.source,e.source) end end as method,
    e.occurred_on,e.posted_at,e.profile_id,e.player_name,e.description,e.reference,e.amount_pence::bigint,
-   e.linked_entry_id
+   e.linked_entry_id,(r.id is not null) as reverses_refund,
+   case when r.id is not null then r.id when o.kind='receipt' then o.id else e.id end as original_receipt_id
   from period_entries e left join public.account_entries o
    on o.id=e.linked_entry_id and o.club_id=e.club_id and o.account_id=e.account_id
+  -- A verified failed refund restores its original debit. Follow the immutable
+  -- refund to its Stripe receipt even when both precede this reporting period.
+  left join public.account_entries r on e.kind='reversal' and o.kind='refund' and o.source='stripe_refund'
+   and r.id=o.linked_entry_id and r.club_id=e.club_id and r.account_id=e.account_id
+   and r.kind='receipt' and r.source='stripe_payment'
   where (e.kind='receipt' and e.source in ('stripe_payment','bank','cash'))
    or (e.kind in ('refund','reversal') and o.kind='receipt' and o.source in ('stripe_payment','bank','cash'))
+   or (e.kind='reversal' and r.id is not null)
  ), receipt_methods as (
   select methods.method,methods.sort_order,
    count(*) filter(where l.kind='receipt') as receipt_count,
    coalesce(sum(l.amount_pence) filter(where l.kind='receipt'),0) as gross_pence,
    count(*) filter(where l.kind='refund') as refund_count,
-   coalesce(sum(l.amount_pence) filter(where l.kind='refund'),0) as refunds_pence,
-   count(*) filter(where l.kind='reversal') as reversal_count,
-   coalesce(sum(l.amount_pence) filter(where l.kind='reversal'),0) as reversals_pence,
+   coalesce(sum(l.amount_pence) filter(where l.kind='refund' or l.reverses_refund),0) as refunds_pence,
+   count(*) filter(where l.kind='reversal' and not l.reverses_refund) as reversal_count,
+   coalesce(sum(l.amount_pence) filter(where l.kind='reversal' and not l.reverses_refund),0) as reversals_pence,
    coalesce(sum(l.amount_pence),0) as net_pence
   from (values('stripe',1),('bank',2),('cash',3)) methods(method,sort_order)
   left join receipt_lines l on l.method=methods.method

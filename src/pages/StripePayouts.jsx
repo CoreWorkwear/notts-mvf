@@ -88,7 +88,7 @@ function Payout({ payout }) {
     <summary>{statuses[payout.status] ?? 'Stripe payout'} · {payoutAmount} · {date(payout.arrival_on)}</summary>
     <p className="muted mt-2">Expected bank arrival {date(payout.arrival_on)}. Reference {payout.payout_id}</p>
     <h2 className="mt-3">{totals?.reconciled ? 'Reconciled to Stripe' : 'Reconciliation outstanding'}</h2>
-    {totals && gbp && <dl className="report-receipt-totals mt-3">
+    {totals && gbp && totals.component_net_available !== false && <dl className="report-receipt-totals mt-3">
       <div><dt>Gross</dt><dd>{money(totals.gross_pence)}</dd></div>
       <div><dt>Refunds</dt><dd>{money(totals.refunds_pence)}</dd></div>
       <div><dt>Stripe fees</dt><dd>{money(totals.fees_pence)}</dd></div>

@@ -144,9 +144,10 @@ begin
  select * into run from public.stripe_payout_breakdowns where platform_account_id=p_platform and livemode=p_live and stripe_account_id=p_account and payout_id=p_id order by sequence desc limit 1;
  with raw as (
   select x.*,case when x.type in ('charge','payment') and x.amount_pence>0 then 'payment'
-   when x.type in ('refund','payment_refund') and x.amount_pence<0 then 'refund' when x.type='stripe_fee' then 'fee' else 'other' end kind
+   when x.type in ('refund','payment_refund') and x.amount_pence<0 then 'refund'
+   when x.type in ('refund_failure','payment_refund') and x.amount_pence>0 then 'refund_restore' when x.type='stripe_fee' then 'fee' else 'other' end kind
   from jsonb_to_recordset(coalesce(run.lines,'[]'::jsonb)) as x(balance_transaction_id text,created bigint,type text,reporting_category text,currency text,
-   source_id text,payment_intent_id text,refund_id text,amount_pence bigint,fee_pence bigint,net_pence bigint,issue text)
+   source_id text,payment_intent_id text,refund_id text,failure_balance_transaction_id text,amount_pence bigint,fee_pence bigint,net_pence bigint,issue text)
  ), linked as (
   select r.*,coalesce(p.receipt_entry_id,rp.receipt_entry_id) receipt_entry_id,e.id ledger_entry_id,a.player_name,
    coalesce(p.payment_intent_id,rp.payment_intent_id) receipt_reference,
@@ -156,39 +157,54 @@ begin
     when r.kind='payment' and p.amount_pence<>r.amount_pence then 'Gross amount differs from player receipt'
     when r.kind='refund' and f.refund_entry_id is null then 'Player refund not settled or source not linked'
     when r.kind='refund' and (f.amount_pence<>-r.amount_pence or (r.payment_intent_id is not null and f.payment_intent_id<>r.payment_intent_id)) then 'Refund differs from settled refund'
+    when r.kind='refund_restore' and r.failure_balance_transaction_id is distinct from r.balance_transaction_id then 'Provider refund failure balance transaction not verified'
+    when r.kind='refund_restore' and rf.reversal_entry_id is null then 'Player refund restoration not settled or source not linked'
+    when r.kind='refund_restore' and (rf.amount_pence<>r.amount_pence or rf.original_refund_entry_id is distinct from f.refund_entry_id
+     or (r.payment_intent_id is not null and rf.payment_intent_id<>r.payment_intent_id)
+     or e.kind is distinct from 'reversal' or e.amount_pence is distinct from r.amount_pence or e.linked_entry_id is distinct from f.refund_entry_id) then 'Refund restoration differs from settled correction'
     when r.kind='other' then 'Other provider movement: '||r.type else null end) resolved_issue
   from raw r
   left join public.stripe_settled_payments p on r.kind='payment' and p.platform_account_id=p_platform and p.livemode=p_live and p.stripe_account_id=p_account and p.club_id=p_club and p.payment_intent_id=r.payment_intent_id
-  left join public.stripe_settled_refunds f on r.kind='refund' and f.platform_account_id=p_platform and f.livemode=p_live and f.stripe_account_id=p_account and f.club_id=p_club and f.refund_id=r.refund_id
+  left join public.stripe_settled_refunds f on r.kind in ('refund','refund_restore') and f.platform_account_id=p_platform and f.livemode=p_live and f.stripe_account_id=p_account and f.club_id=p_club and f.refund_id=r.refund_id
+  left join public.stripe_refund_failures rf on r.kind='refund_restore' and rf.platform_account_id=p_platform and rf.livemode=p_live and rf.stripe_account_id=p_account and rf.club_id=p_club and rf.refund_id=r.refund_id
   left join public.stripe_settled_payments rp on rp.platform_account_id=f.platform_account_id and rp.livemode=f.livemode and rp.stripe_account_id=f.stripe_account_id and rp.payment_intent_id=f.payment_intent_id
-  left join public.account_entries e on e.id=coalesce(p.receipt_entry_id,f.refund_entry_id)
+  left join public.account_entries e on e.id=case when r.kind='refund_restore' then rf.reversal_entry_id else coalesce(p.receipt_entry_id,f.refund_entry_id) end
   left join public.player_accounts a on a.id=e.account_id and a.club_id=p_club
  ), details as (
   select l.*,case when kind='payment' then amount_pence else 0 end gross,
-   case when kind='refund' then -amount_pence else 0 end refunds,
+   case when kind in ('refund','refund_restore') then -amount_pence else 0 end refunds,
    case when kind='fee' then -amount_pence+fee_pence else fee_pence end fees,
    case when kind='other' then amount_pence else 0 end other
   from linked l
  )
  select coalesce(jsonb_agg(jsonb_build_object('balance_transaction_id',d.balance_transaction_id,
    'date',(to_timestamp(d.created) at time zone 'Europe/London')::date,'type',d.type,'reporting_category',d.reporting_category,
-   'method','stripe','currency',d.currency,'source_id',d.source_id,'payment_intent_id',d.payment_intent_id,'refund_id',d.refund_id,
+   'method','stripe','currency',d.currency,'source_id',d.source_id,'payment_intent_id',d.payment_intent_id,'refund_id',d.refund_id,'failure_balance_transaction_id',d.failure_balance_transaction_id,
    'receipt_entry_id',d.receipt_entry_id,'player_name',d.player_name,'receipt_reference',d.receipt_reference,
    'gross_pence',d.gross,'refunds_pence',d.refunds,'fee_pence',d.fees,'net_pence',d.net_pence,'linked',d.ledger_entry_id is not null,'issue',d.resolved_issue)
    order by d.created,d.balance_transaction_id),'[]'::jsonb),coalesce(sum(d.gross) filter(where d.currency=payout.currency),0),coalesce(sum(d.refunds) filter(where d.currency=payout.currency),0),coalesce(sum(d.fees) filter(where d.currency=payout.currency),0),coalesce(sum(d.other) filter(where d.currency=payout.currency),0),coalesce(sum(d.net_pence) filter(where d.currency=payout.currency),0),count(*) filter(where d.resolved_issue is not null)
  into items,gross,refunds,fees,other,net,unresolved from details d;
  issues:=coalesce(run.issues,'{}'::text[]);
- if run.id is null then issues:=array_append(issues,'Breakdown has not been refreshed'); end if;
- if not coalesce(run.complete,false) then issues:=array_append(issues,'Balance transaction pages are incomplete'); end if;
- if not payout.automatic then issues:=array_append(issues,'Manual payout components cannot be identified automatically'); end if;
- if payout.reconciliation_status<>'completed' then issues:=array_append(issues,'Stripe reconciliation is not complete'); end if;
+ if payout.automatic then
+  if run.id is null then issues:=array_append(issues,'Breakdown has not been refreshed'); end if;
+  if not coalesce(run.complete,false) then issues:=array_append(issues,'Balance transaction pages are incomplete'); end if;
+  if payout.reconciliation_status<>'completed' then issues:=array_append(issues,'Stripe reconciliation is not complete'); end if;
+ else
+  -- A manual payout has provider amount/status evidence, but Stripe cannot
+  -- identify its component batch. Do not invent a full-amount discrepancy or
+  -- repeat old cached automatic/manual warnings for this unavailable evidence.
+  select coalesce(array_agg(note),'{}'::text[]) into issues from unnest(issues) note
+   where note not in ('Manual payout components cannot be identified automatically','Stripe has not completed automatic payout reconciliation');
+  issues:=array_append(issues,'Manual payout components cannot be identified automatically');
+ end if;
  if payout.status<>'paid' then issues:=array_append(issues,'Payout is '||payout.status||'; it is not confirmed received'); end if;
  if payout.currency<>'gbp' then issues:=array_append(issues,'Unsupported payout currency'); end if;
  if unresolved>0 then issues:=array_append(issues,'Some balance movements remain unresolved'); end if;
- if net<>payout.amount_pence then issues:=array_append(issues,'Component net differs from payout amount'); end if;
+ if payout.automatic and net<>payout.amount_pence then issues:=array_append(issues,'Component net differs from payout amount'); end if;
  summary:=jsonb_build_object('complete',coalesce(run.complete,false),'reconciled',cardinality(issues)=0,
   'issues',issues,'gross_pence',gross,'refunds_pence',refunds,'fees_pence',fees,'other_pence',other,
-  'net_pence',net,'difference_pence',payout.amount_pence-net,'unresolved_count',unresolved,'checked_at',run.checked_at);
+  'net_pence',net,'component_net_available',payout.automatic and run.id is not null,
+  'difference_pence',case when payout.automatic then payout.amount_pence-net else null end,'unresolved_count',unresolved,'checked_at',run.checked_at);
  return jsonb_build_object('payout_id',payout.payout_id,'status',payout.status,'arrival_on',payout.arrival_on,'created_on',payout.created_on,
   'paid_on',(payout.paid_at at time zone 'Europe/London')::date,'failed_on',(payout.failed_at at time zone 'Europe/London')::date,
   'amount_pence',payout.amount_pence,'currency',payout.currency,'automatic',payout.automatic,

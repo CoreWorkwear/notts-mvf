@@ -62,17 +62,24 @@ export async function payoutBalanceLine(row, stripe, mode) {
   if (typeof source === 'string' && /^ch_[A-Za-z0-9]+$/.test(source)) source = await stripe(`/charges/${encodeURIComponent(source)}`, { method: 'GET' })
   if (typeof source === 'string' && /^re_[A-Za-z0-9]+$/.test(source)) source = await stripe(`/refunds/${encodeURIComponent(source)}`, { method: 'GET' })
   let issue = null
+  const refundRestoration = row.amount > 0 && ['refund_failure', 'payment_refund'].includes(row.type)
+  const failureTransaction = idOf(source?.failure_balance_transaction)
   if (source && typeof source === 'object') {
     if (source.id !== sourceId) throw new PayoutError('Stripe transaction source verification failed.')
     if (typeof source.livemode === 'boolean' && source.livemode !== (mode === 'live')) throw new PayoutError('Stripe transaction mode verification failed.')
-    if (source.balance_transaction && idOf(source.balance_transaction) !== row.id) issue = 'Provider source balance transaction differs'
+    if (refundRestoration) {
+      if (source.object !== 'refund' || failureTransaction !== row.id || !['failed', 'canceled'].includes(source.status)) {
+        issue = 'Provider refund failure balance transaction not verified'
+      }
+    } else if (source.balance_transaction && idOf(source.balance_transaction) !== row.id) issue = 'Provider source balance transaction differs'
   }
+  if (refundRestoration && (!source || typeof source !== 'object')) issue = 'Provider refund failure balance transaction not verified'
   const pi = source?.object === 'payment_intent' ? source.id : idOf(source?.payment_intent)
   const refund = source?.object === 'refund' || /^re_[A-Za-z0-9]+$/.test(sourceId ?? '') ? sourceId : null
   return { balance_transaction_id: row.id, created: row.created, type: row.type,
     reporting_category: typeof row.reporting_category === 'string' ? row.reporting_category : null,
     currency: row.currency, source_id: sourceId, payment_intent_id: /^pi_[A-Za-z0-9]+$/.test(pi ?? '') ? pi : null,
-    refund_id: refund, amount_pence: row.amount, fee_pence: row.fee, net_pence: row.net, issue }
+    refund_id: refund, failure_balance_transaction_id: /^txn_[A-Za-z0-9]+$/.test(failureTransaction ?? '') ? failureTransaction : null, amount_pence: row.amount, fee_pence: row.fee, net_pence: row.net, issue }
 }
 
 export async function runPayoutAction({ action, from, to, payoutId, profile, enabled, platformAccountId, mode,
@@ -106,7 +113,7 @@ export async function runPayoutAction({ action, from, to, payoutId, profile, ena
       for (const transaction of transactions) lines.push(await payoutBalanceLine(transaction, stripe, mode))
     } else issues.push('Manual payout components cannot be identified automatically')
     const complete = payout.automatic && payout.reconciliation_status === 'completed'
-    if (!complete) issues.push('Stripe has not completed automatic payout reconciliation')
+    if (payout.automatic && !complete) issues.push('Stripe has not completed automatic payout reconciliation')
     await store.save(scope, profile.id, payout, lines, complete, issues)
   }
   return store.report(scope, from, to, payoutId ?? null)

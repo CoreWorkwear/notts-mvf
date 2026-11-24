@@ -103,7 +103,7 @@ describe('Payout provider reconciliation', () => {
     await h.run()
     expect(h.stripe).toHaveBeenCalledTimes(1)
     expect(h.store.save.mock.calls[0].slice(3, 5)).toEqual([[], false])
-    expect(h.store.save.mock.calls[0][5]).toContain('Manual payout components cannot be identified automatically')
+    expect(h.store.save.mock.calls[0][5]).toEqual(['Manual payout components cannot be identified automatically'])
   })
   it('does not claim provider reconciliation is complete before Stripe finishes', async () => {
     const h = harness(); h.stripe.mockImplementation(async path => path.startsWith('/payouts/') ? { ...payout, reconciliation_status: 'in_progress' } : { data: [charge], has_more: false })
@@ -116,6 +116,33 @@ describe('Payout provider reconciliation', () => {
     stripe.mockResolvedValue(refund.source)
     expect(await payoutBalanceLine({ ...refund, source: 're_one' }, stripe, 'test')).toMatchObject({ refund_id: 're_one', payment_intent_id: 'pi_one' })
     expect(stripe).toHaveBeenCalledWith('/refunds/re_one', { method: 'GET' })
+  })
+  it.each(['refund_failure', 'payment_refund'])('verifies positive %s from exact Refund.failure_balance_transaction', async type => {
+    const restored = { ...refund, id: 'txn_restored', type, reporting_category: 'refund_failure', amount: 100, fee: 0, net: 100,
+      source: { ...refund.source, amount: 100, status: 'failed', failure_balance_transaction: 'txn_restored' } }
+    // The Refund retains its original debit balance_transaction. It is the
+    // separate failure_balance_transaction that verifies this positive row.
+    expect(await payoutBalanceLine(restored, vi.fn(), 'test')).toMatchObject({ refund_id: 're_one', payment_intent_id: 'pi_one',
+      failure_balance_transaction_id: 'txn_restored', amount_pence: 100, net_pence: 100, issue: null })
+  })
+  it.each([
+    { status: 'failed' }, { status: 'failed', failure_balance_transaction: 'txn_wrong' },
+    { status: 'succeeded', failure_balance_transaction: 'txn_restored' },
+  ])('leaves an unverified positive refund source unresolved %j', async evidence => {
+    expect(await payoutBalanceLine({ ...refund, id: 'txn_restored', type: 'refund_failure', amount: 100, net: 100,
+      source: { ...refund.source, ...evidence } }, vi.fn(), 'test')).toMatchObject({ issue: 'Provider refund failure balance transaction not verified' })
+  })
+  it('resolves the real unexpanded positive refund shape via connected GET without requiring Refund.livemode', async () => {
+    const { livemode: _unused, ...actualRefund } = refund.source
+    const stripe = vi.fn(async () => ({ ...actualRefund, amount: 100, status: 'failed', failure_balance_transaction: 'txn_restored' }))
+    expect(await payoutBalanceLine({ ...refund, id: 'txn_restored', type: 'refund_failure', reporting_category: 'refund_failure',
+      amount: 100, net: 100, source: 're_one' }, stripe, 'test')).toMatchObject({ failure_balance_transaction_id: 'txn_restored', refund_id: 're_one', issue: null })
+    expect(stripe).toHaveBeenCalledWith('/refunds/re_one', { method: 'GET' })
+  })
+  it('never guesses a refund from description text on an unknown movement', async () => {
+    expect(await payoutBalanceLine({ ...refund, id: 'txn_adjustment', type: 'adjustment', source: null,
+      amount: 100, net: 100, description: 'Refund re_one failed and returned' }, vi.fn(), 'test'))
+      .toMatchObject({ source_id: null, refund_id: null, payment_intent_id: null, failure_balance_transaction_id: null })
   })
   it('rejects a source returned from another mode or identity', async () => {
     await expect(payoutBalanceLine({ ...charge, source: { ...charge.source, livemode: true } }, vi.fn(), 'test')).rejects.toThrow('mode')

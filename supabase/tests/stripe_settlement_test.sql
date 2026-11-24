@@ -93,7 +93,7 @@ do $$ declare event jsonb; k text; before_count bigint; begin
 end; $$;
 -- Refund arrives before binding, then before original success: neither failure
 -- may record completion; the identical event must succeed on a later retry.
-do $$ declare event jsonb:=pg_temp.refund_event('evt_refundEarly','re_partialOne','pi_second',250,'succeeded'); begin
+do $$ declare event jsonb:=pg_temp.refund_event('evt_refundEarly','re_partialOne','pi_second',250,'succeeded'); correction jsonb; failure_event jsonb; before_count bigint; begin
  perform pg_temp.settlement_check(not ((event#>'{data,object}') ? 'livemode'),'real Stripe refund fixture has no object livemode');
  perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(event,'{data,object,livemode}','true')),'22023','contradictory explicit refund mode refused');
  perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(event,'{data,object,livemode}','null')),'22023','invalid explicit refund mode refused');
@@ -108,34 +108,70 @@ do $$ declare event jsonb:=pg_temp.refund_event('evt_refundEarly','re_partialOne
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_pendingRefund','re_partialTwo','pi_second',650,'pending'));
  perform pg_temp.settlement_check(pg_temp.player_pence('35540000-0000-0000-0000-000000000012')=650,'pending refund changes nothing');
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_fullRefund','re_partialTwo','pi_second',650,'succeeded','refund.updated'));
- perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_failedAfterRefund','re_partialTwo','pi_second',650,'failed','refund.failed'));
  perform pg_temp.settlement_check(pg_temp.player_pence('35540000-0000-0000-0000-000000000012')=0,'separate partial refunds debit once to full amount');
- perform pg_temp.settlement_check((select count(*)=2 and sum(amount_pence)=900 from public.stripe_settled_refunds),'two refund references retained');
- perform pg_temp.settlement_check((select bool_and(e.linked_entry_id=p.receipt_entry_id) from public.stripe_settled_refunds r join public.account_entries e on e.id=r.refund_entry_id join public.stripe_settled_payments p on p.payment_intent_id=r.payment_intent_id and p.platform_account_id=r.platform_account_id),'refund entries link original receipt');
+ perform pg_temp.settlement_check((select count(*)=2 and sum(amount_pence)=900 from public.stripe_settled_refunds where club_id='35540000-0000-0000-0000-000000000100'),'two refund references retained');
+ perform pg_temp.settlement_check((select bool_and(e.linked_entry_id=p.receipt_entry_id) from public.stripe_settled_refunds r join public.account_entries e on e.id=r.refund_entry_id join public.stripe_settled_payments p on p.payment_intent_id=r.payment_intent_id and p.platform_account_id=r.platform_account_id where r.club_id='35540000-0000-0000-0000-000000000100'),'refund entries link original receipt');
  perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',pg_temp.refund_event('evt_overRefund','re_over','pi_second',1,'succeeded')),'22023','over refund refused atomically');
  perform pg_temp.settlement_check(not exists(select 1 from public.stripe_settlement_events where event_id='evt_overRefund'),'failed over-refund has no completion receipt');
+ -- Stripe can first report succeeded, then fail the bank/card refund. Preserve
+ -- the debit and restore it once; a stale success can never charge it again.
+ -- Reproduce the prior implementation's durable, incorrect acknowledgement
+ -- so replay proves repair without rewriting immutable historical completion.
+ failure_event:=pg_temp.refund_event('evt_failedAfterRefund','re_partialTwo','pi_second',650,'failed','refund.failed');
+ insert into public.stripe_settlement_events(platform_account_id,livemode,event_id,stripe_account_id,club_id,payload,result)
+ values('acct_settlementPlatform',false,'evt_failedAfterRefund','acct_settlementClub','35540000-0000-0000-0000-000000000100',
+  jsonb_build_object('type',failure_event->>'type','account',failure_event->>'account','livemode',false,'object',failure_event#>'{data,object}'),
+  jsonb_build_object('event_id','evt_failedAfterRefund','outcome','refunded'));
+ correction:=public.process_stripe_settlement_event('acct_settlementPlatform',failure_event);
+ perform pg_temp.settlement_check(correction->>'outcome'='failed' and correction->>'refund_reversal_entry_id' is not null,'terminal failure returns corrective entry');
+ perform pg_temp.settlement_check(public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_failedAfterRefund','re_partialTwo','pi_second',650,'failed','refund.failed'))=correction,'exact failed refund replay');
+ perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_failedDuplicate','re_partialTwo','pi_second',650,'failed','refund.updated'));
+ perform pg_temp.settlement_check(public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_fullRefund','re_partialTwo','pi_second',650,'succeeded','refund.updated'))->>'outcome'='failed','old completed success replay respects terminal failure');
+ perform pg_temp.settlement_check(public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_staleSuccess','re_partialTwo','pi_second',650,'succeeded','refund.updated'))->>'outcome'='failed','new event stale success respects terminal failure');
+ perform pg_temp.settlement_check(pg_temp.player_pence('35540000-0000-0000-0000-000000000012')=650,'succeeded then failed restores money exactly once while paused');
+ perform pg_temp.settlement_check((select e.kind='reversal' and e.amount_pence=650 and e.linked_entry_id=f.original_refund_entry_id and e.description='Stripe refund failed' from public.stripe_refund_failures f join public.account_entries e on e.id=f.reversal_entry_id where f.refund_id='re_partialTwo' and f.club_id='35540000-0000-0000-0000-000000000100'),'corrective credit links preserved original refund');
+ perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',pg_temp.refund_event('evt_wrongFailureAmount','re_partialTwo','pi_second',651,'failed')),'22023','failed refund amount mismatch cannot credit');
+ perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(pg_temp.refund_event('evt_wrongFailureMode','re_partialTwo','pi_second',650,'failed'),'{data,object,livemode}','true')),'22023','contradictory object mode cannot credit');
+ perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(pg_temp.refund_event('evt_wrongEnvelopeMode','re_partialTwo','pi_second',650,'failed'),'{livemode}','true')),'P0002','wrong signed mode cannot resolve original refund');
+ perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',jsonb_set(pg_temp.refund_event('evt_wrongFailureAccount','re_partialTwo','pi_second',650,'failed'),'{account}','"acct_wrongRefundAccount"')),'P0002','wrong connected account cannot resolve original refund');
+ select count(*) into before_count from public.account_entries where club_id='35540000-0000-0000-0000-000000000100';
+ perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_neverPostedFailure','re_neverPosted','pi_second',100,'failed','refund.failed'));
+ perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_neverPostedDuplicate','re_neverPosted','pi_second',100,'failed','refund.updated'));
+ perform pg_temp.settlement_check(public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_neverPostedStaleSuccess','re_neverPosted','pi_second',100,'succeeded'))->>'outcome'='failed','failure before posted debit suppresses stale success');
+ perform pg_temp.settlement_check((select count(*)=before_count from public.account_entries where club_id='35540000-0000-0000-0000-000000000100') and (select original_refund_entry_id is null and reversal_entry_id is null from public.stripe_refund_failures where refund_id='re_neverPosted' and club_id='35540000-0000-0000-0000-000000000100'),'failure before any debit has no balance impact');
+ perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_replacementRefund','re_replacement','pi_second',650,'succeeded'));
+ perform pg_temp.settlement_check(pg_temp.player_pence('35540000-0000-0000-0000-000000000012')=0,'new genuine replacement refund can use capacity returned by failed refund');
 end; $$;
 -- Interrupt after ledger+attempt effects, before completion: all must roll back.
 create function pg_temp.settlement_injected_failure() returns trigger language plpgsql as $$
-begin if new.event_id='evt_interrupted' then raise exception 'Injected completion failure' using errcode='P0001'; end if; return new; end; $$;
+begin if new.event_id in ('evt_interrupted','evt_refundFailureInterrupted') then raise exception 'Injected completion failure' using errcode='P0001'; end if; return new; end; $$;
 create trigger settlement_test_failure before insert on public.stripe_settlement_events for each row execute function pg_temp.settlement_injected_failure();
 select pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',pg_temp.payment_event('evt_interrupted','payment_intent.succeeded',23,'pi_third')),'P0001','interruption before completion injected');
 select pg_temp.settlement_check(not exists(select 1 from public.stripe_settled_payments where payment_intent_id='pi_third') and (select status='pending' and receipt_entry_id is null and payment_intent_id is null from public.stripe_checkout_attempts where id='35540000-0000-0000-0000-000000000023'),'interruption rolls back payment ledger and attempt binding');
+select pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',pg_temp.refund_event('evt_refundFailureInterrupted','re_partialOne','pi_second',250,'failed','refund.failed')),'P0001','interruption after corrective credit before event completion');
+select pg_temp.settlement_check(pg_temp.player_pence('35540000-0000-0000-0000-000000000012')=0 and not exists(select 1 from public.stripe_refund_failures where refund_id='re_partialOne' and club_id='35540000-0000-0000-0000-000000000100'),'interruption rolls back both corrective credit and terminal failure fact');
 drop trigger settlement_test_failure on public.stripe_settlement_events;
+do $$ begin
+ perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_refundFailureInterrupted','re_partialOne','pi_second',250,'failed','refund.failed'));
+ perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.refund_event('evt_refundFailureInterrupted','re_partialOne','pi_second',250,'failed','refund.failed'));
+ perform pg_temp.settlement_check(pg_temp.player_pence('35540000-0000-0000-0000-000000000012')=250,'failed refund correction retries once after interrupted processing');
+end; $$;
 do $$ begin
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.payment_event('evt_interrupted','payment_intent.succeeded',23,'pi_third'));
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.payment_event('evt_interrupted','payment_intent.succeeded',23,'pi_third'));
  perform pg_temp.settlement_refused(format('select public.process_stripe_settlement_event(%L,%L::jsonb)','acct_settlementPlatform',pg_temp.payment_event('evt_duplicatePI','payment_intent.succeeded',24,'pi_primary')),'23505','same PI cannot credit second attempt or player');
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.payment_event('evt_fourth','checkout.session.async_payment_succeeded',24,'pi_fourth'));
  perform public.process_stripe_settlement_event('acct_settlementPlatform',pg_temp.payment_event('evt_fourthPI','payment_intent.succeeded',24,'pi_fourth'));
- perform pg_temp.settlement_check((select count(*)=4 and sum(amount_pence)=3600 from public.stripe_settled_payments),'separate genuine equal amount payments each retained once');
+ perform pg_temp.settlement_check((select count(*)=4 and sum(amount_pence)=3600 from public.stripe_settled_payments where club_id='35540000-0000-0000-0000-000000000100'),'separate genuine equal amount payments each retained once');
  perform pg_temp.settlement_check((select amount_pence=-700 from public.account_entries where source_id='settlement-match'),'refunds do not alter activity charges');
 end; $$;
 set local role authenticated;
 select pg_temp.settlement_refused($q$select public.process_stripe_settlement_event('acct_settlementPlatform','{}')$q$,'42501','browser cannot settle');
 select pg_temp.settlement_refused($q$select * from public.stripe_settlement_events$q$,'42501','browser cannot read webhook payloads');
+select pg_temp.settlement_refused($q$select * from public.stripe_refund_failures$q$,'42501','browser cannot read or forge terminal provider facts');
 reset role;
 set local role service_role;
+select pg_temp.settlement_refused($q$insert into public.stripe_refund_failures(platform_account_id) values('acct_forged')$q$,'42501','service direct terminal fact insert refused');
 select pg_temp.settlement_refused($q$insert into public.stripe_settled_payments(platform_account_id) values('acct_forged')$q$,'42501','service direct settlement insert refused');
 reset role;
 set local role anon;

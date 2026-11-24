@@ -32,6 +32,27 @@ create table public.stripe_settled_refunds (
  foreign key(platform_account_id,livemode,stripe_account_id,payment_intent_id)
  references public.stripe_settled_payments(platform_account_id,livemode,stripe_account_id,payment_intent_id)
 );
+-- Terminal provider refund outcomes are immutable facts even when failure
+-- arrives before any debit. They suppress stale success and preserve the one
+-- compensating credit when a previously posted refund subsequently fails.
+create table public.stripe_refund_failures (
+ platform_account_id text not null,
+ livemode boolean not null,
+ stripe_account_id text not null,
+ refund_id text not null,
+ payment_intent_id text not null,
+ attempt_id uuid not null references public.stripe_checkout_attempts(id),
+ club_id uuid not null references public.clubs(id),
+ amount_pence integer not null check(amount_pence>0),
+ original_refund_entry_id uuid references public.account_entries(id),
+ reversal_entry_id uuid unique references public.account_entries(id),
+ terminal_status text not null check(terminal_status in ('failed','canceled')),
+ failure_reason text,
+ event_id text not null,
+ created_at timestamptz not null default now(),
+ primary key(platform_account_id,livemode,stripe_account_id,refund_id),
+ check((original_refund_entry_id is null)=(reversal_entry_id is null))
+);
 create table public.stripe_settlement_events (
  platform_account_id text not null,
  livemode boolean not null,
@@ -46,11 +67,13 @@ create table public.stripe_settlement_events (
 alter table public.stripe_settled_payments enable row level security;
 alter table public.stripe_settled_refunds enable row level security;
 alter table public.stripe_settlement_events enable row level security;
-revoke all on public.stripe_settled_payments,public.stripe_settled_refunds,public.stripe_settlement_events
+alter table public.stripe_refund_failures enable row level security;
+revoke all on public.stripe_settled_payments,public.stripe_settled_refunds,public.stripe_settlement_events,public.stripe_refund_failures
  from public,anon,authenticated,service_role;
-grant select on public.stripe_settled_payments,public.stripe_settled_refunds,public.stripe_settlement_events to service_role;
+grant select on public.stripe_settled_payments,public.stripe_settled_refunds,public.stripe_settlement_events,public.stripe_refund_failures to service_role;
 create trigger stripe_settled_payments_immutable before update or delete on public.stripe_settled_payments for each row execute function public.reject_financial_mutation();
 create trigger stripe_settled_refunds_immutable before update or delete on public.stripe_settled_refunds for each row execute function public.reject_financial_mutation();
+create trigger stripe_refund_failures_immutable before update or delete on public.stripe_refund_failures for each row execute function public.reject_financial_mutation();
 create trigger stripe_settlement_events_immutable before update or delete on public.stripe_settlement_events for each row execute function public.reject_financial_mutation();
 
 -- Service-only: the Edge caller MUST authenticate raw bytes and timestamp first.
@@ -64,6 +87,9 @@ declare
  attempt public.stripe_checkout_attempts;
  payment public.stripe_settled_payments;
  refund public.stripe_settled_refunds;
+ failure public.stripe_refund_failures;
+ original_refund public.account_entries;
+ refund_reversal uuid; reversal_payload jsonb;
  prior public.stripe_settlement_events;
  customer_id text; expected_customer text; pi text; session_id text; refund_id text;
  amount integer; outcome text; receipt uuid; refund_entry uuid; result jsonb;
@@ -134,17 +160,62 @@ begin
  select * into prior from public.stripe_settlement_events where platform_account_id=p_platform_account_id and livemode=live and stripe_settlement_events.event_id=(p_event->>'id');
  if found then
   if prior.payload is distinct from payload then raise exception 'Stripe event reference conflict' using errcode='22023'; end if;
-  return prior.result;
+  if is_refund then
+   select * into failure from public.stripe_refund_failures where platform_account_id=p_platform_account_id and livemode=live
+    and stripe_account_id=account_id and stripe_refund_failures.refund_id=(obj->>'id');
+   if found then
+    if failure.payment_intent_id is distinct from pi or failure.amount_pence is distinct from amount then
+     raise exception 'Stripe refund failure reference conflict' using errcode='22023';
+    end if;
+    return jsonb_strip_nulls(jsonb_build_object('event_id',event_id,'outcome','failed','receipt_entry_id',attempt.receipt_entry_id,
+     'refund_entry_id',failure.original_refund_entry_id,'refund_reversal_entry_id',failure.reversal_entry_id));
+   end if;
+  end if;
+  -- Older code could have acknowledged this failed snapshot while retaining
+  -- the debit. Replaying that exact terminal event must repair it atomically;
+  -- keep the original completion receipt immutable as historical evidence.
+  if not is_refund or coalesce(obj->>'status','') not in ('failed','canceled') then return prior.result; end if;
  end if;
  if is_refund then
   select * into payment from public.stripe_settled_payments where platform_account_id=p_platform_account_id and livemode=live
    and stripe_account_id=account_id and payment_intent_id=pi;
   select * into refund from public.stripe_settled_refunds where platform_account_id=p_platform_account_id and livemode=live
    and stripe_account_id=account_id and stripe_settled_refunds.refund_id=(obj->>'id');
-  if found then
-   if refund.payment_intent_id is distinct from pi or refund.amount_pence is distinct from amount then
-    raise exception 'Stripe refund reference conflict' using errcode='22023';
+  if refund.refund_entry_id is not null and (refund.payment_intent_id is distinct from pi or refund.amount_pence is distinct from amount) then
+   raise exception 'Stripe refund reference conflict' using errcode='22023';
+  end if;
+  select * into failure from public.stripe_refund_failures where platform_account_id=p_platform_account_id and livemode=live
+   and stripe_account_id=account_id and stripe_refund_failures.refund_id=(obj->>'id');
+  if failure.refund_id is not null then
+   if failure.payment_intent_id is distinct from pi or failure.amount_pence is distinct from amount then
+    raise exception 'Stripe refund failure reference conflict' using errcode='22023';
    end if;
+   refund_entry:=failure.original_refund_entry_id; refund_reversal:=failure.reversal_entry_id; outcome:='failed';
+  elsif obj->>'status' in ('failed','canceled') then
+   refund_entry:=refund.refund_entry_id;
+   if refund_entry is not null then
+    select e.* into original_refund from public.account_entries e where e.id=refund_entry and e.club_id=attempt.club_id
+     and e.account_id=attempt.player_account_id and e.kind='refund' and e.source='stripe_refund'
+     and e.amount_pence=-amount and e.linked_entry_id=payment.receipt_entry_id;
+    if not found then raise exception 'Original Stripe refund entry mismatch' using errcode='22023'; end if;
+    reversal_payload:=jsonb_build_object('club_id',attempt.club_id,'profile_id',attempt.profile_id,'kind','reversal','amount_pence',amount,
+     'source','reversal','source_id','stripe-refund-failure:'||p_platform_account_id||':'||live::text||':'||account_id||':'||refund_id,
+     'reference',refund_id,'description','Stripe refund failed','linked_entry_id',refund_entry,'occurred_on',accounting_date);
+    -- Only this verified, scope-matched provider transition may undo a Stripe
+    -- refund. The generic/manual writer still refuses such reversals. A single
+    -- club transaction plus the ledger's one-reversal index makes this exact.
+    insert into public.account_entries(account_id,club_id,kind,amount_pence,description,reference,category,activity_type,activity_id,
+     activity_snapshot,linked_entry_id,actor_id,source,source_id,occurred_on,request_payload)
+    values(original_refund.account_id,attempt.club_id,'reversal',amount,'Stripe refund failed',refund_id,original_refund.category,
+     original_refund.activity_type,original_refund.activity_id,original_refund.activity_snapshot,refund_entry,null,'reversal',
+     reversal_payload->>'source_id',accounting_date,reversal_payload) returning id into refund_reversal;
+   end if;
+   insert into public.stripe_refund_failures(platform_account_id,livemode,stripe_account_id,refund_id,payment_intent_id,attempt_id,
+    club_id,amount_pence,original_refund_entry_id,reversal_entry_id,terminal_status,failure_reason,event_id)
+   values(p_platform_account_id,live,account_id,refund_id,pi,attempt.id,attempt.club_id,amount,refund_entry,refund_reversal,
+    obj->>'status',obj->>'failure_reason',event_id);
+   outcome:='failed';
+  elsif refund.refund_entry_id is not null then
    refund_entry:=refund.refund_entry_id; outcome:='refunded';
   elsif obj->>'status'='succeeded' then
    if payment.receipt_entry_id is null then raise exception 'Original payment success has not settled yet' using errcode='P0002'; end if;
@@ -156,7 +227,7 @@ begin
    values(p_platform_account_id,live,account_id,refund_id,pi,attempt.club_id,amount,refund_entry);
    outcome:='refunded';
   else
-   outcome:=case when obj->>'status' in ('failed','canceled') then 'failed' else 'pending' end;
+   outcome:='pending';
   end if;
   receipt:=payment.receipt_entry_id;
  else
@@ -226,13 +297,15 @@ begin
   if receipt is not null then outcome:='succeeded'; end if;
   update public.stripe_checkout_attempts set status=outcome,receipt_entry_id=receipt where id=attempt.id;
  end if;
- result:=jsonb_strip_nulls(jsonb_build_object('event_id',event_id,'outcome',outcome,'receipt_entry_id',receipt,'refund_entry_id',refund_entry));
- insert into public.stripe_settlement_events(platform_account_id,livemode,event_id,stripe_account_id,club_id,payload,result)
- values(p_platform_account_id,live,event_id,account_id,attempt.club_id,payload,result);
+ result:=jsonb_strip_nulls(jsonb_build_object('event_id',event_id,'outcome',outcome,'receipt_entry_id',receipt,'refund_entry_id',refund_entry,'refund_reversal_entry_id',refund_reversal));
+ if prior.event_id is null then
+  insert into public.stripe_settlement_events(platform_account_id,livemode,event_id,stripe_account_id,club_id,payload,result)
+  values(p_platform_account_id,live,event_id,account_id,attempt.club_id,payload,result);
+ end if;
  return result;
 end; $$;
 revoke all on function public.process_stripe_settlement_event(text,jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.process_stripe_settlement_event(text,jsonb) to service_role;
 comment on function public.process_stripe_settlement_event(text,jsonb) is
- 'Verified Connect webhook only: raw signature/timestamp is authenticated by Edge. Atomic gross receipt/refund, scoped event/PI/refund identities and attempt transition; late failure never undoes success. App identity/original not yet bound raises P0002 for provider retry. No release flag blocks genuine settlement/refund. Fee/net enrichment is deliberately independent.';
+ 'Verified Connect webhook only: raw signature/timestamp is authenticated by Edge. Atomic gross receipt/refund, scoped event/PI/refund identities and attempt transition; late failure never undoes success. App identity/original not yet bound raises P0002 for provider retry. Terminal refund failure preserves its original debit, restores it once by linked provider reversal, and suppresses stale success. No release flag blocks genuine settlement/refund/correction. Fee/net enrichment is deliberately independent.';
 commit;

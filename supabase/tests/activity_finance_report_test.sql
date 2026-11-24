@@ -53,6 +53,13 @@ select pg_temp.report_post('charge',-500,'fine','report-fine','2027-03-27','fine
 select pg_temp.report_post('reversal',500,'reversal','report-fine-reversal','2027-03-28',linked=>(select id from public.account_entries where source_id='report-fine'));
 select pg_temp.report_post('reversal',-900,'reversal','report-bank-reversal','2027-03-28',linked=>(select id from public.account_entries where source_id='report-bank'));
 select pg_temp.report_post('refund',-500,'stripe_refund','report-refund','2027-03-28',linked=>(select id from public.account_entries where source_id='report-stripe'));
+-- Match 0054's verified succeeded-then-failed refund correction shape. The
+-- service-only settlement path inserts this linked credit without rewriting
+-- the original debit; it is not a new receipt or a charge correction.
+insert into public.account_entries(account_id,club_id,kind,amount_pence,description,reference,source,source_id,
+ occurred_on,linked_entry_id,request_payload)
+ select account_id,club_id,'reversal',500,'Stripe refund failed','re_reportFailed','reversal','report-refund-failed',
+ '2027-03-30',id,'{"provider_verified":true}' from public.account_entries where source_id='report-refund';
 select pg_temp.report_post('reversal',200,'reversal','report-adjustment-reversal','2027-03-28',linked=>(select id from public.account_entries where source_id='report-adjustment'));
 -- A different club's money must not leak into any count or report line.
 select public.post_account_entry('{"club_id":"51470000-0000-0000-0000-000000000101","profile_id":"51470000-0000-0000-0000-000000000012","kind":"receipt","amount_pence":99999,"source":"cash","source_id":"other-club-receipt","description":"Other club money","occurred_on":"2027-03-27"}');
@@ -61,7 +68,7 @@ delete from public.team_memberships where profile_id='51470000-0000-0000-0000-00
 update public.profiles set first_name='Changed' where id='51470000-0000-0000-0000-000000000011';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','51470000-0000-0000-0000-000000000010',true);
-do $$ declare r jsonb; next_r jsonb; combined jsonb; empty_r jsonb; c jsonb; begin
+do $$ declare r jsonb; next_r jsonb; combined jsonb; empty_r jsonb; recovered jsonb; whole_r jsonb; c jsonb; begin
  r:=public.get_activity_finance_report('2027-03-27','2027-03-27');
  perform pg_temp.report_check(jsonb_array_length(r->'categories')=4,'all four categories including zero');
  perform pg_temp.report_check((r->'categories'->0->>'net_charges_pence')::bigint=700,'First Team charge');
@@ -80,9 +87,35 @@ do $$ declare r jsonb; next_r jsonb; combined jsonb; empty_r jsonb; c jsonb; beg
  perform pg_temp.report_check(next_r->'categories'->3->'entries'->0->'activity_snapshot'->>'reason'='Late arrival' and next_r->'categories'->3->'entries'->0->>'original_charge_id'=r->'categories'->3->'entries'->0->>'id','correction links original reason and id');
  perform pg_temp.report_check((next_r->'receipts'->>'gross_pence')::bigint=0 and (next_r->'receipts'->>'refunds_pence')::bigint=-500 and (next_r->'receipts'->>'reversals_pence')::bigint=-900 and (next_r->'receipts'->>'net_pence')::bigint=-1400,'receipt reconciliation signed refunds and reversal');
  perform pg_temp.report_check((next_r->'receipts'->>'refund_count')::integer=1 and (next_r->'receipts'->>'reversal_count')::integer=1 and jsonb_array_length(next_r->'receipts'->'entries')=2,'receipt corrections identifiable with counts and detail');
+ recovered:=public.get_activity_finance_report('2027-03-30','2027-03-30');
+ perform pg_temp.report_check((recovered->'receipts'->>'refunds_pence')::bigint=500 and (recovered->'receipts'->>'net_pence')::bigint=500,
+  'failed refund restores refund and net totals on its own reversal date');
+ perform pg_temp.report_check((recovered->'receipts'->>'gross_pence')::bigint=0 and (recovered->'receipts'->>'receipt_count')::integer=0
+  and (recovered->'receipts'->>'reversals_pence')::bigint=0 and (recovered->'receipts'->>'reversal_count')::integer=0,
+  'refund correction never becomes gross money or an ordinary receipt reversal');
+ perform pg_temp.report_check((recovered->'totals'->>'charges_pence')::bigint=0 and (recovered->'totals'->>'corrections_pence')::bigint=0
+  and (recovered->'totals'->>'net_charges_pence')::bigint=0,'refund failure never alters activity charges');
+ perform pg_temp.report_check(jsonb_array_length(recovered->'receipts'->'entries')=1
+  and recovered->'receipts'->'entries'->0->>'method'='stripe'
+  and recovered->'receipts'->'entries'->0->>'kind'='reversal'
+  and (recovered->'receipts'->'entries'->0->>'reverses_refund')::boolean
+  and recovered->'receipts'->'entries'->0->>'original_receipt_id'=r->'receipts'->'entries'->0->>'id'
+  and recovered->'receipts'->'entries'->0->>'linked_entry_id'=next_r->'receipts'->'entries'->1->>'id',
+  'one immutable corrective export line traces refund back to original Stripe method');
+ perform pg_temp.report_check((recovered->'receipts'->'methods'->0->>'refunds_pence')::bigint=500
+  and (recovered->'receipts'->'methods'->1->>'net_pence')::bigint=0
+  and (recovered->'receipts'->'methods'->2->>'net_pence')::bigint=0,'refund correction is Stripe-only');
  combined:=public.get_activity_finance_report('2027-03-26','2027-03-28');
  perform pg_temp.report_check((combined->'receipts'->>'gross_pence')::bigint=4500 and (combined->'receipts'->>'receipt_count')::integer=3 and (combined->'receipts'->'methods'->0->>'gross_pence')::bigint=3000 and (combined->'receipts'->'methods'->1->>'gross_pence')::bigint=900 and (combined->'receipts'->'methods'->2->>'gross_pence')::bigint=600,'separate gross Stripe bank cash and counts');
  perform pg_temp.report_check((combined->'totals'->>'net_charges_pence')::bigint=1100 and (combined->'receipts'->>'net_pence')::bigint=3100,'inclusive combined totals');
+ whole_r:=public.get_activity_finance_report('2027-03-26','2027-03-30');
+ perform pg_temp.report_check((whole_r->'receipts'->>'gross_pence')::bigint=4500 and (whole_r->'receipts'->>'refunds_pence')::bigint=0
+  and (whole_r->'receipts'->>'reversals_pence')::bigint=-900 and (whole_r->'receipts'->>'net_pence')::bigint=3600,
+  'refund and corrective credit offset once without doubling gross or altering bank reversal');
+ perform pg_temp.report_check((select sum((value->>'amount_pence')::bigint) from jsonb_array_elements(whole_r->'receipts'->'entries'))
+  =(whole_r->'receipts'->>'net_pence')::bigint,'receipt export lines sum exactly to corrected net');
+ perform pg_temp.report_check((public.get_activity_finance_report('2027-03-26','2027-03-30')->'receipts'->>'net_pence')::bigint=3600,
+  'repeated reporting never reapplies a corrective credit');
  for c in select value from jsonb_array_elements(combined->'categories') loop
   perform pg_temp.report_check((select coalesce(sum((value->>'amount_pence')::bigint),0) from jsonb_array_elements(c->'entries'))=(c->>'net_charges_pence')::bigint,'category detail sums to net');
  end loop;
@@ -109,6 +142,8 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','51470000-0000-0000-0000-000000000010',true);
 select pg_temp.report_check((public.get_activity_finance_report('2027-03-27','2027-03-28')->'totals'->>'net_charges_pence')::bigint=1100,'deletion preserves net report');
 select pg_temp.report_check(public.get_activity_finance_report('2027-03-27','2027-03-28')->'categories'->0->'entries'->0->'activity_snapshot'->>'opponent'='Report opponents','deleted fixture trace retained');
+select pg_temp.report_check((public.get_activity_finance_report('2027-03-30','2027-03-30')->'receipts'->>'refunds_pence')::bigint=500,
+ 'hard player deletion preserves refund correction report');
 reset role;
 select public.set_club_payments_release('51470000-0000-0000-0000-000000000100',false,false);
 set local role authenticated;

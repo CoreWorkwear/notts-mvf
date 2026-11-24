@@ -126,7 +126,7 @@ export default function AccountsReport() {
               <p className="muted">{date(entry.occurred_on)} · {METHODS[entry.method] || entry.method} · {entry.kind.replaceAll('_', ' ')}</p>
               {entry.reference && <p>Reference: {entry.reference}</p>}
               <button type="button" className="btn btn-ghost mt-2" onClick={() => showReceipt(entry)}>View player statement</button>
-              {entry.linked_entry_id && <button type="button" className="btn btn-ghost mt-2" onClick={() => showReceipt(entry, entry.linked_entry_id)}>View original receipt</button>}
+              {entry.linked_entry_id && <button type="button" className="btn btn-ghost mt-2" onClick={() => showReceipt(entry, entry.original_receipt_id || entry.linked_entry_id)}>View original receipt</button>}
             </li>)}</ul>
             {receiptEntries.length === 0 && <p className="muted mt-2">No receipts, refunds or receipt reversals for this selection.</p>}
           </details>

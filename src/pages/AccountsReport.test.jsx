@@ -51,6 +51,36 @@ test('receipt correction opens its original entry on the player statement', asyn
   expect(state.rpc).toHaveBeenLastCalledWith('get_player_account', { p_profile_id: 'player' })
 })
 
+test('failed Stripe refund restoration opens the original receipt beyond its intermediate refund', async () => {
+  const report = fixture()
+  report.receipts = { gross_pence: 0, refunds_pence: 200, reversals_pence: 0, net_pence: 200,
+    methods: [{ method: 'stripe', gross_pence: 0, refunds_pence: 200, reversals_pence: 0, net_pence: 200 }],
+    entries: [{ id: 'refund-restored', kind: 'reversal', method: 'stripe', profile_id: 'player', player_name: 'Joe Bloggs',
+      description: 'Stripe refund failed', occurred_on: '2026-11-24', amount_pence: 200,
+      linked_entry_id: 'refund', original_receipt_id: 'receipt', reverses_refund: true }] }
+  state.rpc.mockResolvedValueOnce({ data: report }).mockResolvedValue({ data: {
+    profile_id: 'player', balance_pence: 3000, entries: [
+      { id: 'receipt', kind: 'receipt', description: 'Original Stripe payment', source: 'stripe_payment',
+        occurred_on: '2026-11-10', reference: 'pi_original', amount_pence: 3000, running_balance_pence: 3000 },
+      { id: 'refund', kind: 'refund', description: 'Stripe refund', source: 'stripe_refund', linked_entry_id: 'receipt',
+        occurred_on: '2026-11-12', amount_pence: -200, running_balance_pence: 2800 },
+      { id: 'refund-restored', kind: 'reversal', description: 'Stripe refund failed', source: 'reversal', linked_entry_id: 'refund',
+        occurred_on: '2026-11-24', amount_pence: 200, running_balance_pence: 3000 },
+    ],
+  } })
+  render(<AccountsReport />)
+  const receipts = await screen.findByRole('region', { name: 'Club receipts' })
+  expect(receipts).toHaveTextContent('Gross receipts£0.00')
+  expect(receipts).toHaveTextContent('Refunds£2.00')
+  expect(receipts).toHaveTextContent('Net receipts£2.00')
+  await userEvent.click(screen.getByText('Receipt reconciliation details', { selector: 'summary' }))
+  await userEvent.click(screen.getByRole('button', { name: 'View original receipt' }))
+  const dialog = screen.getByRole('dialog', { name: 'Receipt player statement' })
+  const original = await within(dialog).findByText('Reference: pi_original')
+  expect(original.closest('li')).toHaveFocus()
+  expect(within(dialog).getByText('Stripe refund').closest('li')).not.toHaveFocus()
+})
+
 test('inclusive date filter submits exact selected dates and rejects inverted periods', async () => {
   render(<AccountsReport />)
   await screen.findByRole('table')

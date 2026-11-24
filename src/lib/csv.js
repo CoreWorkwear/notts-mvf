@@ -42,7 +42,7 @@ export function buildStripePayoutCsv(payouts) {
         '', '', esc(entry.balance_transaction_id), esc(entry.issue),
       ].join(','))
     }
-    const total = payout.currency === 'gbp' ? payout.breakdown : null
+    const total = payout.currency === 'gbp' && payout.breakdown?.component_net_available !== false ? payout.breakdown : null
     lines.push([
       esc(payout.payout_id), esc(payout.status), esc(payout.arrival_on), 'Payout total', '', '', 'Stripe', esc(payout.currency),
       amount(total?.gross_pence), amount(total?.refunds_pence), amount(total?.fees_pence), amount(total?.net_pence),

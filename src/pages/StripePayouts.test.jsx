@@ -45,6 +45,22 @@ test('foreign payout currency is identified without reporting its totals as poun
   expect(row.at(-1)).toBe('Unsupported payout currency')
 })
 
+test('a manual payout shows the bank amount and leaves unavailable component totals blank', async () => {
+  const warning = 'Manual payout components cannot be identified automatically'
+  const manual = { ...payout, status: 'paid', amount_pence: 123, lines: [], breakdown: {
+    component_net_available: false, gross_pence: 0, refunds_pence: 0, fees_pence: 0, net_pence: 0,
+    difference_pence: null, reconciled: false, issues: [warning],
+  } }
+  state.invoke.mockResolvedValue({ data: { from: '2026-11-01', to: '2026-11-24', payouts: [manual] } })
+  render(<MemoryRouter><StripePayouts /></MemoryRouter>)
+  await userEvent.click(await screen.findByText(/Paid by Stripe · £1.23/))
+  expect(screen.getByText(warning)).toBeVisible()
+  expect(screen.queryByText('Difference', { exact: true })).not.toBeInTheDocument()
+  const row = buildStripePayoutCsv([manual]).split('\r\n')[1].split(',')
+  expect(row.slice(7, 14)).toEqual(['gbp', '', '', '', '', '1.23', ''])
+  expect(row.at(-1)).toBe(warning)
+})
+
 test('disabled or non-manager access makes no provider request', () => {
   state.manager = false
   render(<MemoryRouter><StripePayouts /></MemoryRouter>)
