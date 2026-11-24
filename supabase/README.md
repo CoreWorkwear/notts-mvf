@@ -3,7 +3,7 @@
 Run order (SQL editor, top to bottom), each as its own run:
 
 1. `migrations/0001_init_schema_and_rls.sql` — tables, helpers, triggers, RLS, grants.
-2. every later numbered migration in order, `0002_*` … `0057_*`, each as its own
+2. every later numbered migration in order, `0002_*` … `0058_*`, each as its own
    run. They are cumulative and the order matters. **Never re-run a migration
    older than the newest one already applied.** Several of them `alter policy`
    in place (0031 above all), so replaying one silently puts back policy bodies
@@ -51,7 +51,7 @@ Migrations 0041 and 0042 add Training sessions, replies, club notices and push d
 
 ## Player accounts release switch
 
-Apply migrations 0045–0057 in order on the target database before running the
+Apply migrations 0045–0058 in order on the target database before running the
 matching app build. The rollback tests in `supabase/tests/` cover the ledger,
 effective-dated fees, activity finance report, manager corrections, opening
 balances, match appearances, training attendance, Stripe attempts and
@@ -66,7 +66,10 @@ retired even while accounts are paused.
 Use `set_club_payments_release(club_id, false)` to pause and
 `set_club_payments_release(club_id, true)` to resume a club that already cut
 over. The function is restricted to privileged server or database operator
-roles. Pausing hides the account surfaces and refuses new manager postings.
+roles. Pausing hides the player account surfaces and refuses new manager postings.
+Approved active club managers can open Club admin → Club settings → Stripe
+to prepare or check the club’s connected account before cutover or while paused.
+Completing Stripe setup leaves the player-payments switch off until cutover.
 Posted entries stay intact. Keep the signed Stripe webhook deployed while
 paused so previously initiated payments and refunds can settle.
 

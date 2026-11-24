@@ -18,8 +18,8 @@ async function checked(request) {
   return data
 }
 
-test('manager starts and resumes sandbox onboarding from Club settings', async ({ page }) => {
-  test.skip(!sandbox, 'requires the isolated Stripe sandbox Edge Function')
+test('manager starts and resumes sandbox onboarding while player payments are off', async ({ page }) => {
+  test.skip(!sandbox, 'requires the isolated Stripe sandbox Edge Functions')
   expect(env.VITE_SUPABASE_URL).toBe('http://127.0.0.1:55421')
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   expect(Boolean(key)).toBe(true)
@@ -30,14 +30,32 @@ test('manager starts and resumes sandbox onboarding from Club settings', async (
     email, password, email_confirm: true,
     user_metadata: { first_name: 'Sandbox', last_name: 'Manager', phone: '07700900912' },
   }))
+  let playerId
   try {
     await checked(admin.from('profiles').update({ active: true, approved: true, role: 'admin' }).eq('id', user.id))
-    await checked(admin.rpc('set_club_payments_release', { p_club_id: clubId, p_enabled: true, p_cutover: true }))
+    await checked(admin.rpc('set_club_payments_release', { p_club_id: clubId, p_enabled: false }))
+    const playerEmail = `stripe-proof-${randomUUID()}@example.com`
+    const { user: player } = await checked(admin.auth.admin.createUser({
+      email: playerEmail, password, email_confirm: true,
+      user_metadata: { first_name: 'Sandbox', last_name: 'Player', phone: '07700900912' },
+    }))
+    playerId = player.id
+    await checked(admin.from('profiles').update({ active: true, approved: true, role: 'player', is_player: true }).eq('id', playerId))
+    const playerApi = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, options)
+    await checked(playerApi.auth.signInWithPassword({ email: playerEmail, password }))
+    const before = await checked(playerApi.rpc('payments_release_status'))
+    expect(before.enabled).toBe(false)
+
     await signIn(page, email, password)
+    await page.goto('/manage/settings/stripe')
+    await expect(page).toHaveURL(/\/fixtures$/)
     await page.getByRole('button', { name: 'Manager view' }).click()
     await page.goto('/manage')
+    await expect(page.getByRole('link', { name: 'Stripe payouts', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Fees', exact: true })).toHaveCount(0)
     await page.getByRole('link', { name: 'Stripe', exact: true }).click()
     await expect(page.getByText('Sandbox', { exact: true })).toBeVisible()
+    await expect(page.getByText('Player payments are off.')).toBeVisible()
 
     // The Edge Function performs the real sandbox calls. Leave the hosted
     // page unopened so the account holder can obtain a fresh single-use link.
@@ -63,8 +81,18 @@ test('manager starts and resumes sandbox onboarding from Club settings', async (
     const after = await checked(admin.from('club_stripe_connections').select('stripe_account_id')
       .eq('club_id', clubId).eq('livemode', false).single())
     expect(after.stripe_account_id).toBe(first.stripe_account_id)
+    expect(await checked(playerApi.rpc('payments_release_status'))).toEqual(before)
+    for (const [name, body] of [
+      ['stripe-connect-onboard', { action: 'status' }],
+      ['stripe-connect-onboard', { action: 'onboard' }],
+      ['stripe-checkout', { action: 'quote', kind: 'balance' }],
+      ['stripe-saved-cards', { action: 'list' }],
+    ]) {
+      const { error } = await playerApi.functions.invoke(name, { body })
+      expect(error?.context?.status).toBe(403)
+    }
   } finally {
-    await checked(admin.rpc('set_club_payments_release', { p_club_id: clubId, p_enabled: false }))
+    if (playerId) await checked(admin.auth.admin.deleteUser(playerId))
     await checked(admin.auth.admin.deleteUser(user.id))
   }
 })

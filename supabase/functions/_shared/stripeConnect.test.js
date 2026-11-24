@@ -34,12 +34,41 @@ describe('Stripe club connection boundaries', () => {
     [{ ...profile, approved: false }, 'status', true],
     [{ ...profile, club_id: null }, 'onboard', true],
     [{ ...profile, role: 'player', is_player: false }, 'status', true],
-    [profile, 'onboard', false],
+    [{ ...profile, role: 'player', is_player: true }, 'status', false],
+    [{ ...profile, role: 'player', is_player: true }, 'onboard', false],
+    [{ ...profile, active: false }, 'onboard', false],
+    [{ ...profile, approved: false }, 'onboard', false],
   ])('refuses unauthorized or paused calls before Stripe/store activity', async (caller, action, enabled) => {
     const h = harness()
     await expect(h.run({ profile: caller, action, enabled })).rejects.toMatchObject({ status: 403 })
     expect(h.stripe).not.toHaveBeenCalled()
     expect(h.store.reserve).not.toHaveBeenCalled()
+  })
+
+  it('lets approved managers check and start Stripe setup with payments off', async () => {
+    const h = harness()
+    expect(await h.run({ action: 'status', enabled: false })).toMatchObject({ connected: false, ready: false })
+    expect(h.store.reserve).not.toHaveBeenCalled()
+    expect(await h.run({ enabled: false })).toMatchObject({ connected: true, onboarding_url: expect.any(String) })
+    expect(h.store.reserve).toHaveBeenCalledWith({ club_id: 'club-a', platform_account_id: 'acct_platform', livemode: false }, 'manager')
+  })
+
+  it('rejects an insecure live onboarding return before reserving or calling Stripe', async () => {
+    const h = harness()
+    await expect(h.run({ enabled: false, mode: 'live', appBaseUrl: 'http://localhost:4173' })).rejects.toThrow('not configured')
+    expect(h.store.reserve).not.toHaveBeenCalled()
+    expect(h.stripe).not.toHaveBeenCalled()
+  })
+
+  it('refuses live setup until the API key and configured platform match', async () => {
+    const row = { ...reservation, livemode: true, platform_account_id: 'acct_LivePlatform' }
+    const h = harness(row)
+    const live = { enabled: false, mode: 'live' }
+    await expect(h.run(live)).rejects.toThrow('not configured')
+    expect(h.stripe).not.toHaveBeenCalled()
+    await expect(h.run({ ...live, platformAccountId: 'acct_OtherPlatform' })).rejects.toThrow('verification failed')
+    expect(h.store.reserve).not.toHaveBeenCalled()
+    expect(await h.run({ ...live, platformAccountId: row.platform_account_id })).toMatchObject({ mode: 'live', connected: true })
   })
 
   it('allows approved active players status only', () => {

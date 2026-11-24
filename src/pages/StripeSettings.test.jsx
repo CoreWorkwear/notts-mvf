@@ -37,12 +37,25 @@ test('returning from onboarding displays fresh Stripe status and outstanding req
 
   state.invoke.mockResolvedValueOnce({ data: { connected: true, ready: true, mode: 'test', charges_enabled: true, payouts_enabled: true } })
   await userEvent.click(screen.getByRole('button', { name: 'Check Stripe status' }))
-  expect(await screen.findByRole('heading', { name: 'Ready for payments' })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: 'Stripe setup complete' })).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Continue Stripe setup' })).toBeNull()
 })
 
-test('paused release does not load Stripe status', () => {
+test('a manager can open Stripe setup and check readiness while player payments are off', async () => {
   state.enabled = false
+  state.invoke.mockResolvedValueOnce({ data: { connected: false, ready: false, mode: 'live' } })
+  openSettings()
+  expect(await screen.findByRole('button', { name: 'Set up Stripe' })).toBeVisible()
+  expect(screen.getByText('Live Stripe account')).toBeVisible()
+  expect(screen.getByText('Player payments are off.')).toBeVisible()
+  state.invoke.mockResolvedValueOnce({ data: { connected: true, ready: true, mode: 'live' } })
+  await userEvent.click(screen.getByRole('button', { name: 'Check Stripe status' }))
+  expect(await screen.findByRole('heading', { name: 'Stripe setup complete' })).toBeVisible()
+  expect(screen.getByText('Player payments are off.')).toBeVisible()
+})
+
+test('a non-manager does not request Stripe setup status', () => {
+  state.isAdmin = false
   openSettings()
   expect(screen.getByText('Stripe setup is unavailable.')).toBeVisible()
   expect(state.invoke).not.toHaveBeenCalled()

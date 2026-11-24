@@ -60,6 +60,7 @@ Deno.serve(async req => {
       },
     }
     const result = await runConnectAction({ action: body?.action, profile, enabled: release?.enabled === true,
+      platformAccountId: Deno.env.get('STRIPE_PLATFORM_ACCOUNT_ID'),
       mode: stripeMode(secret), stripe: createStripeClient(secret), store, appBaseUrl: Deno.env.get('APP_BASE_URL') })
     log.info('done', { action: body.action, ready: result.ready, ms: log.elapsed() })
     return json({ ...result, requestId: log.id })

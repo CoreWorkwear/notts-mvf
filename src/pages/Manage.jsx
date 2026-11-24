@@ -9,20 +9,22 @@ const groups = [
   ['Around the club', [['News', '/news', IconBell], ['Media', '/media', IconMedia], ['Sponsors', '/sponsors', IconSponsors]]],
   ['App support', [['Diagnostics', '/diagnostics', IconDiagnostics]]],
 ]
+const stripeSetup = ['Stripe', '/manage/settings/stripe', IconDiagnostics]
 
 export default function Manage() {
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const release = usePaymentsRelease(user?.id, profile?.club_id)
-  const sections = release.enabled
-    ? [...groups, ['Club settings', [
+  const settings = release.enabled
+    ? [
       ['Fees', '/manage/fees', IconCompetitions],
       ['Opening balances', '/manage/settings/opening-balances', IconPlayers],
-      ['Stripe', '/manage/settings/stripe', IconDiagnostics],
+      stripeSetup,
       ['Stripe payouts', '/manage/settings/stripe-payouts', IconDiagnostics],
       ['Activity charges', '/manage/accounts-report', IconDiagnostics],
       ['Account reminders', '/manage/settings/account-reminders', IconReminders],
-    ]]]
-    : groups
+    ]
+    : [stripeSetup]
+  const sections = isAdmin ? [...groups, ['Club settings', settings]] : groups
   return <div className="page">
     <h1 className="display page-title">Club admin</h1>
     {sections.map(([heading, links]) => <section key={heading} className="manage-section">

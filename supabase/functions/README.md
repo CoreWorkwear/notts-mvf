@@ -92,11 +92,14 @@ with nothing in the function's own log. On any non-CLI deploy:
 
 Deploy `stripe-connect-onboard`, `stripe-checkout`, `stripe-saved-cards`,
 `stripe-connect-webhook`, `stripe-payout-reconciliation` and `send-account-reminders`
-from the same build as migrations 0045–0057. The browser functions handle CORS
+from the same build as migrations 0045–0058. The browser functions handle CORS
 and verify the caller and club permissions before accessing payment data.
 Use the `verify_jwt` values in `supabase/config.toml` for the gateway.
 
-Set `APP_BASE_URL` to the approved app origin for Stripe redirects. Store
+Set `APP_BASE_URL` to the approved HTTPS app origin for live Stripe redirects.
+Approved active club managers can onboard through `stripe-connect-onboard`
+while player payments are off. Checkout, cards and payout reports remain
+controlled by the club’s payments switch. Store
 `STRIPE_SECRET_KEY`, `STRIPE_PLATFORM_ACCOUNT_ID`, `STRIPE_WEBHOOK_MODE`
 (`test` or `live`) and `STRIPE_WEBHOOK_SECRET_CONNECT` in the target project's
 Edge secrets. Match the key, endpoint secret and platform account to the

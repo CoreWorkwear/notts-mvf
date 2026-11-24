@@ -36,11 +36,11 @@ export function authorizeConnection(profile, action, enabled) {
   if (!enabled) throw new ConnectError('Club payments are unavailable.', 403)
 }
 
-export function onboardingCallbacks(base) {
+export function onboardingCallbacks(base, mode = 'test') {
   let origin
   try { origin = new URL(base) } catch { throw new ConnectError('Payment setup is not configured.') }
   if (origin.username || origin.password || (origin.protocol !== 'https:' &&
-    !(origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)))) {
+    !(mode === 'test' && origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)))) {
     throw new ConnectError('Payment setup is not configured.')
   }
   const url = new URL('/manage/settings/stripe', origin)
@@ -128,14 +128,21 @@ export function accountStatus(account, mode, manager, checkedAt = new Date().toI
   }
 }
 
-export async function runConnectAction({ action, profile, enabled, mode, stripe, store, appBaseUrl, now }) {
+export async function runConnectAction({ action, profile, enabled, mode, platformAccountId, stripe, store, appBaseUrl, now }) {
   if (!['status', 'onboard'].includes(action)) throw new ConnectError('Choose a valid payment setup action.', 400)
-  authorizeConnection(profile, action, enabled)
-  const manager = profile.role === 'admin'
+  const manager = profile?.role === 'admin'
+  // Stripe account preparation is available before the club turns on payments.
+  // The shared authorizer still enforces the flag at the payout boundary.
+  authorizeConnection(profile, action, manager || enabled)
   // Validate callbacks before a provider account can be created.
-  const callbacks = action === 'onboard' ? onboardingCallbacks(appBaseUrl) : null
+  const callbacks = action === 'onboard' ? onboardingCallbacks(appBaseUrl, mode) : null
+  if (mode === 'live' && !/^acct_[A-Za-z0-9]+$/.test(platformAccountId ?? '')) {
+    throw new ConnectError('The live Stripe platform is not configured.')
+  }
   const platform = await stripe('/account')
-  if (!/^acct_[A-Za-z0-9]+$/.test(platform?.id ?? '')) throw new ConnectError('Stripe platform verification failed.')
+  if (!/^acct_[A-Za-z0-9]+$/.test(platform?.id ?? '') || (platformAccountId && platform.id !== platformAccountId)) {
+    throw new ConnectError('Stripe platform verification failed.')
+  }
   const scope = { club_id: profile.club_id, platform_account_id: platform.id, livemode: mode === 'live' }
   const row = action === 'onboard' ? await store.reserve(scope, profile.id) : await store.read(scope)
   if (!row || (!row.stripe_account_id && action === 'status')) return accountStatus(null, mode, manager)

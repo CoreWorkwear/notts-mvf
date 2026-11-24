@@ -30,7 +30,7 @@ export default function StripeSettings() {
   const [attempt, setAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [setupFailed, setSetupFailed] = useState(false)
-  const canRead = isAdmin && release.enabled
+  const canRead = Boolean(isAdmin && user?.id && profile?.club_id)
 
   useEffect(() => {
     if (!canRead) return
@@ -45,7 +45,7 @@ export default function StripeSettings() {
   }, [canRead, attempt, user?.id, profile?.club_id])
 
   async function openStripe() {
-    if (busy) return
+    if (!canRead || busy) return
     setBusy(true)
     setSetupFailed(false)
     try {
@@ -73,18 +73,16 @@ export default function StripeSettings() {
   return <div className="page">
     <Link className="btn btn-ghost" to="/manage">Back to Club admin</Link>
     <PageHead kicker="CLUB SETTINGS" title="Stripe" />
-    {release.error ? <div className="card pad mt-4" role="alert">
-      <p>Couldn't check whether club accounts are available.</p>
-      <button type="button" className="btn btn-ghost mt-2" onClick={release.retry}>Try again</button>
-    </div> : release.loading && !release.enabled ? <p className="mt-4" role="status">Checking club accounts…</p>
-      : !canRead ? <p className="mt-4" role="status">Stripe setup is unavailable.</p>
+    {!canRead ? <p className="mt-4" role="status">Stripe setup is unavailable.</p>
         : !result ? <p className="mt-4" role="status">Checking Stripe status…</p>
           : result.error ? <div className="card pad mt-4" role="alert">
             <p>Couldn't check Stripe status.</p>
             <button type="button" className="btn btn-ghost mt-2" onClick={retryStatus}>Try again</button>
           </div> : <section className="card pad mt-4" aria-labelledby="stripe-connection-heading">
-            <h2 id="stripe-connection-heading">{result.ready ? 'Ready for payments' : result.connected ? 'Stripe setup incomplete' : 'Connect the club to Stripe'}</h2>
+            <h2 id="stripe-connection-heading">{result.ready ? 'Stripe setup complete' : result.connected ? 'Stripe setup incomplete' : 'Connect the club to Stripe'}</h2>
             {result.mode === 'test' && <p className="dim mt-2">Sandbox</p>}
+            {result.mode === 'live' && <p className="dim mt-2">Live Stripe account</p>}
+            {!release.loading && !release.error && !release.enabled && <p className="mt-2">Player payments are off.</p>}
             {result.connected && <dl className="mt-3">
               <dt>Charges</dt><dd>{result.charges_enabled ? 'Enabled' : 'Pending'}</dd>
               <dt>Payouts</dt><dd>{result.payouts_enabled ? 'Enabled' : 'Pending'}</dd>
@@ -94,7 +92,7 @@ export default function StripeSettings() {
               <ul className="mt-2">{requirements.map(item => <li key={item}>{item}</li>)}</ul>
             </>}
             {!result.ready && result.requirements?.pending_verification?.length > 0 && <p className="mt-2">Stripe is checking submitted details.</p>}
-            {returned && !result.ready && <p className="mt-2">Complete or resume setup in Stripe to enable online payments.</p>}
+            {returned && !result.ready && <p className="mt-2">Complete or resume the club’s setup in Stripe.</p>}
             {setupFailed && <p className="mt-2" role="alert">Couldn't open Stripe setup. Try again.</p>}
             <div className="row gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
               {!result.ready && <button type="button" className="btn btn-primary" disabled={busy} onClick={openStripe}>
