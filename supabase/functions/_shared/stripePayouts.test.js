@@ -81,10 +81,41 @@ describe('Payout provider reconciliation', () => {
     await expect(h.run()).rejects.toThrow('provider down')
     expect(h.store.save).not.toHaveBeenCalled()
   })
-  it.each([{ ...payout, livemode: true }, { ...payout, id: 'po_foreign' }, { ...payout, amount: 1.5 }])('refuses mismatched payout %j before persistence', async wrong => {
+  it.each([{ ...payout, livemode: true }, { ...payout, id: 'po_foreign' }, { ...payout, amount: 1.5 }, { ...payout, amount: -1.5 }])('refuses mismatched payout %j before persistence', async wrong => {
     const h = harness(); h.stripe.mockResolvedValue(wrong)
     await expect(h.run()).rejects.toThrow('verification')
     expect(h.store.save).not.toHaveBeenCalled()
+  })
+  it.each(['paid', 'failed'])('preserves a signed negative %s payout amount through provider refresh', async status => {
+    const h = harness()
+    h.stripe.mockImplementation(async path => path.startsWith('/payouts/') ? { ...payout, amount: -200, status } : { data: [refund], has_more: false })
+    await h.run()
+    expect(h.store.save.mock.calls[0][2]).toMatchObject({ amount: -200, status })
+    expect(h.store.save.mock.calls[0][3]).toEqual([expect.objectContaining({ amount_pence: -200, net_pence: -200 })])
+  })
+  it('excludes only the exact own payout settlement, preserving other payout and unknown movements', async () => {
+    const h = harness()
+    const own = { ...refund, id: 'txn_ownPayout', type: 'payout', source: 'po_one', amount: 200, net: 200 }
+    const other = { ...own, id: 'txn_otherPayout', source: 'po_other' }
+    const failure = { ...own, id: 'txn_failedPayout', type: 'payout_failure' }
+    h.stripe.mockImplementation(async path => path.startsWith('/payouts/') ? { ...payout, amount: -200, balance_transaction: 'txn_ownPayout' }
+      : { data: [refund, own, other, failure], has_more: false })
+    await h.run()
+    expect(h.store.save.mock.calls[0][3].map(row => row.balance_transaction_id)).toEqual(['txn_refund', 'txn_otherPayout', 'txn_failedPayout'])
+  })
+  it('uses exact own payout source only when its balance-transaction pointer is unavailable', async () => {
+    const h = harness()
+    h.stripe.mockImplementation(async path => path.startsWith('/payouts/') ? { ...payout, amount: -200, balance_transaction: null }
+      : { data: [refund, { ...refund, id: 'txn_ownPayout', type: 'payout', source: { id: 'po_one', object: 'payout' }, amount: 200, net: 200 }], has_more: false })
+    await h.run()
+    expect(h.store.save.mock.calls[0][3].map(row => row.balance_transaction_id)).toEqual(['txn_refund'])
+  })
+  it('does not exclude a contradictory payout source despite matching transaction ID', async () => {
+    const h = harness()
+    h.stripe.mockImplementation(async path => path.startsWith('/payouts/') ? { ...payout, balance_transaction: 'txn_ownPayout' }
+      : { data: [{ ...refund, id: 'txn_ownPayout', type: 'payout', source: 'po_other' }], has_more: false })
+    await h.run()
+    expect(h.store.save.mock.calls[0][3]).toHaveLength(1)
   })
   it('refuses a different configured platform before connected account reads', async () => {
     const h = harness(); h.platformStripe.mockResolvedValue({ id: 'acct_other' })

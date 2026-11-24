@@ -14,6 +14,8 @@ const dates = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' })
 const date = value => value ? dates.format(parseDate(value)) : 'Awaiting date'
 const statuses = { paid: 'Paid by Stripe', failed: 'Failed payout', canceled: 'Cancelled payout',
   pending: 'Pending payout', in_transit: 'In transit' }
+const debitStatuses = { paid: 'Bank debit collected', failed: 'Failed bank debit', canceled: 'Cancelled bank debit',
+  pending: 'Pending bank debit', in_transit: 'Bank debit in transit' }
 
 export default function StripePayouts() {
   const { user, profile, isAdmin } = useAuth()
@@ -83,10 +85,12 @@ export default function StripePayouts() {
 function Payout({ payout }) {
   const totals = payout.breakdown
   const gbp = payout.currency === 'gbp'
+  const debit = payout.amount_pence < 0
+  const label = debit ? debitStatuses[payout.status] ?? 'Bank debit' : statuses[payout.status] ?? 'Stripe payout'
   const payoutAmount = gbp ? money(payout.amount_pence) : payout.currency?.toUpperCase() || 'Unknown currency'
   return <details className="report-detail mt-3">
-    <summary>{statuses[payout.status] ?? 'Stripe payout'} · {payoutAmount} · {date(payout.arrival_on)}</summary>
-    <p className="muted mt-2">Expected bank arrival {date(payout.arrival_on)}. Reference {payout.payout_id}</p>
+    <summary>{label} · {payoutAmount} · {date(payout.arrival_on)}</summary>
+    <p className="muted mt-2">{debit ? 'Expected bank debit' : 'Expected bank arrival'} {date(payout.arrival_on)}. Reference {payout.payout_id}</p>
     <h2 className="mt-3">{totals?.reconciled ? 'Reconciled to Stripe' : 'Reconciliation outstanding'}</h2>
     {totals && gbp && totals.component_net_available !== false && <dl className="report-receipt-totals mt-3">
       <div><dt>Gross</dt><dd>{money(totals.gross_pence)}</dd></div>

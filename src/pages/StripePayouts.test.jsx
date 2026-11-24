@@ -61,6 +61,19 @@ test('a manual payout shows the bank amount and leaves unavailable component tot
   expect(row.at(-1)).toBe(warning)
 })
 
+test('a negative provider payout is labelled as a bank debit and exported with its sign', async () => {
+  const debit = { ...payout, status: 'paid', amount_pence: -125, lines: [], breakdown: {
+    gross_pence: 0, refunds_pence: 125, fees_pence: 0, other_pence: 0, net_pence: -125, difference_pence: 0, reconciled: true,
+  } }
+  state.invoke.mockResolvedValue({ data: { from: '2026-11-01', to: '2026-11-24', payouts: [debit] } })
+  render(<MemoryRouter><StripePayouts /></MemoryRouter>)
+  await userEvent.click(await screen.findByText(/Bank debit collected · -£1.25/))
+  expect(screen.getByText(/Expected bank debit/)).toBeVisible()
+  const row = buildStripePayoutCsv([debit]).split('\r\n')[1].split(',')
+  expect(row[3]).toBe('Bank debit total')
+  expect(row.slice(11, 14)).toEqual(['-1.25', '-1.25', '0.00'])
+})
+
 test('disabled or non-manager access makes no provider request', () => {
   state.manager = false
   render(<MemoryRouter><StripePayouts /></MemoryRouter>)

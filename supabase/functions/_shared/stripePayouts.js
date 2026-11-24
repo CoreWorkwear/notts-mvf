@@ -45,7 +45,7 @@ export async function stripePages(stripe, path, query = {}) {
 function assertPayout(payout, mode, expectedId) {
   if (payout?.object !== 'payout' || !/^po_[A-Za-z0-9]+$/.test(payout.id ?? '') ||
       (expectedId && payout.id !== expectedId) || payout.livemode !== (mode === 'live') ||
-      !integer(payout.amount) || payout.amount < 0 || !currencies(payout.currency) ||
+      !integer(payout.amount) || !currencies(payout.currency) ||
       !integer(payout.created) || payout.created < 0 || !integer(payout.arrival_date) || payout.arrival_date < 0 ||
       typeof payout.automatic !== 'boolean' || !['pending', 'in_transit', 'paid', 'failed', 'canceled'].includes(payout.status)) {
     throw new PayoutError('Stripe payout verification failed.')
@@ -110,7 +110,17 @@ export async function runPayoutAction({ action, from, to, payoutId, profile, ena
     const issues = [], lines = []
     if (payout.automatic) {
       const transactions = await stripePages(stripe, '/balance_transactions', { payout: payout.id, 'expand[]': 'data.source' })
-      for (const transaction of transactions) lines.push(await payoutBalanceLine(transaction, stripe, mode))
+      const ownBalanceId = idOf(payout.balance_transaction)
+      for (const transaction of transactions) {
+        const sourceId = idOf(transaction.source)
+        // The payout itself can be returned alongside its components. Negative
+        // payouts have a POSITIVE own settlement row. Exclude only the exact
+        // identified transfer; retain all other payouts/failures as movements.
+        const ownSettlement = transaction.type === 'payout' && (ownBalanceId
+          ? transaction.id === ownBalanceId && (!sourceId || sourceId === payout.id)
+          : sourceId === payout.id)
+        if (!ownSettlement) lines.push(await payoutBalanceLine(transaction, stripe, mode))
+      }
     } else issues.push('Manual payout components cannot be identified automatically')
     const complete = payout.automatic && payout.reconciliation_status === 'completed'
     if (payout.automatic && !complete) issues.push('Stripe has not completed automatic payout reconciliation')

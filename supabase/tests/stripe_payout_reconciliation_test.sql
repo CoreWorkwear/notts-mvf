@@ -84,6 +84,23 @@ reset role;
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',660)));
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',660))||'{"pending_webhooks":17}'::jsonb);
 select pg_temp.payout_refused(format('select public.record_stripe_payout_event(%L,%L::jsonb)','acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',661))),'22023','changed event replay refused');
+-- Stripe uses a negative Payout.amount for a bank debit, through the same
+-- signed paid/failed events. Preserve sign; compare signed component net.
+select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_negativePaid',pg_temp.payout_object('po_negative',-200)));
+select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_negativePaid',pg_temp.payout_object('po_negative',-200)));
+select pg_temp.payout_save(pg_temp.payout_object('po_negative',-200),jsonb_build_array(pg_temp.payout_lines()->1));
+select pg_temp.payout_save(pg_temp.payout_object('po_negativeGap',-250),jsonb_build_array(pg_temp.payout_lines()->1));
+select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_negativeFailed',pg_temp.payout_object('po_negativeFailed',-200,'failed')));
+select pg_temp.payout_save(pg_temp.payout_object('po_negativeManual',-100,'paid',false),'[]',false);
+set local role authenticated;
+select pg_temp.payout_check((pg_temp.payout_report('po_negative')->'payouts'->0->>'amount_pence')::bigint=-200 and (pg_temp.payout_report('po_negative')->'payouts'->0->'breakdown'->>'net_pence')::bigint=-200 and (pg_temp.payout_report('po_negative')->'payouts'->0->'breakdown'->>'difference_pence')::bigint=0 and (pg_temp.payout_report('po_negative')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'negative bank debit sign and exact signed reconciliation');
+select pg_temp.payout_check((pg_temp.payout_report('po_negativeGap')->'payouts'->0->'breakdown'->>'difference_pence')::bigint=-50 and not(pg_temp.payout_report('po_negativeGap')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'negative payout discrepancy preserves direction');
+select pg_temp.payout_check(pg_temp.payout_report('po_negativeFailed')->'payouts'->0->>'status'='failed' and (pg_temp.payout_report('po_negativeFailed')->'payouts'->0->>'amount_pence')::bigint=-200,'negative failed lifecycle recorded without changing sign');
+select pg_temp.payout_check((pg_temp.payout_report('po_negativeManual')->'payouts'->0->>'amount_pence')::bigint=-100 and pg_temp.payout_report('po_negativeManual')->'payouts'->0->'breakdown'->'difference_pence'='null'::jsonb,'manual bank debit remains signed with unavailable component difference');
+select pg_temp.payout_check((select count(*)=3 from public.account_entries where club_id='41570000-0000-0000-0000-000000000100'),'negative payout lifecycle and facts never post player money');
+reset role;
+select pg_temp.payout_refused(format('select public.record_stripe_payout_event(%L,%L::jsonb)','acct_payoutPlatform',pg_temp.payout_event('evt_negativeSignConflict',pg_temp.payout_object('po_negative',200))),'22023','changing persisted payout direction is an identity conflict');
+select pg_temp.payout_refused(format('select pg_temp.payout_save(%L::jsonb,%L::jsonb)',jsonb_set(pg_temp.payout_object('po_negativeFraction',-200),'{amount}','-1.5'),'[]'),'22023','fractional negative payout rejected');
 select pg_temp.payout_save(pg_temp.payout_object('po_gap',700),pg_temp.payout_lines());
 select pg_temp.payout_save(pg_temp.payout_object('po_unknown',665),pg_temp.payout_lines()||'[{"balance_transaction_id":"txn_unknown","created":1796083203,"type":"adjustment","currency":"gbp","amount_pence":5,"fee_pence":0,"net_pence":5}]');
 select pg_temp.payout_save(pg_temp.payout_object('po_foreign',660),pg_temp.payout_lines()||'[{"balance_transaction_id":"txn_foreign","created":1796083203,"type":"charge","currency":"eur","amount_pence":100,"fee_pence":0,"net_pence":100}]');

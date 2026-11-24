@@ -38,7 +38,7 @@ declare old public.stripe_payouts; pid text:=p_payout->>'id'; state text:=p_payo
 begin
  if pid is null or pid !~ '^po_[A-Za-z0-9]+$' or p_payout->>'object' is distinct from 'payout'
   or jsonb_typeof(p_payout->'livemode') is distinct from 'boolean' or (p_payout->>'livemode')::boolean is distinct from p_live
-  or coalesce(p_payout->>'amount','') !~ '^[0-9]+$' or coalesce(p_payout->>'currency','') !~ '^[a-z]{3}$'
+  or coalesce(p_payout->>'amount','') !~ '^-?[0-9]+$' or coalesce(p_payout->>'currency','') !~ '^[a-z]{3}$'
   or state is null or state not in ('pending','in_transit','paid','failed','canceled')
   or jsonb_typeof(p_payout->'automatic') is distinct from 'boolean'
   or coalesce(p_payout->>'arrival_date','') !~ '^[0-9]+$' or coalesce(p_payout->>'created','') !~ '^[0-9]+$'
