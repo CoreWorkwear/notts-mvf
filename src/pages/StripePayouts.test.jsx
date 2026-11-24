@@ -2,6 +2,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
+import { buildStripePayoutCsv } from '../lib/csv'
 import StripePayouts from './StripePayouts'
 
 const state = vi.hoisted(() => ({ invoke: vi.fn(), enabled: true, manager: true }))
@@ -12,7 +13,7 @@ vi.mock('../hooks/usePaymentsRelease', () => ({ usePaymentsRelease: () => ({ ena
 beforeEach(() => { state.invoke.mockReset(); state.manager = true; state.enabled = true })
 
 const payout = {
-  payout_id: 'po_sample', status: 'failed', amount_pence: 950, arrival_on: '2026-11-24',
+  payout_id: 'po_sample', status: 'failed', currency: 'gbp', amount_pence: 950, arrival_on: '2026-11-24',
   breakdown: { gross_pence: 1000, refunds_pence: 0, fees_pence: 40, other_pence: 0, net_pence: 960,
     difference_pence: -10, reconciled: false, issues: ['One movement is unresolved.'] },
   lines: [{ balance_transaction_id: 'txn_sample', date: '2026-11-24', type: 'charge', currency: 'gbp',
@@ -29,6 +30,19 @@ test('failed payouts and unresolved differences stay visible alongside receipts 
   expect(screen.getByText('Sam')).toBeVisible()
   expect(screen.getByRole('button', { name: 'Export payout CSV' })).toBeVisible()
   expect(screen.getByRole('link', { name: 'Bank and cash receipts' })).toHaveAttribute('href', '/manage/accounts-report')
+  expect(buildStripePayoutCsv([payout])).toContain('Stripe,gbp,10.00,0.00,0.40,9.60,9.50,-0.10')
+})
+
+test('foreign payout currency is identified without reporting its totals as pounds', async () => {
+  const foreign = { ...payout, currency: 'eur', lines: [], breakdown: { ...payout.breakdown, issues: ['Unsupported payout currency'] } }
+  state.invoke.mockResolvedValue({ data: { from: '2026-11-01', to: '2026-11-24', payouts: [foreign] } })
+  render(<MemoryRouter><StripePayouts /></MemoryRouter>)
+  await userEvent.click(await screen.findByText(/Failed payout · EUR/))
+  expect(screen.getByText('Unsupported payout currency')).toBeVisible()
+  expect(screen.queryByText(/£/)).not.toBeInTheDocument()
+  const row = buildStripePayoutCsv([foreign]).split('\r\n')[1].split(',')
+  expect(row.slice(7, 14)).toEqual(['eur', '', '', '', '', '', ''])
+  expect(row.at(-1)).toBe('Unsupported payout currency')
 })
 
 test('disabled or non-manager access makes no provider request', () => {

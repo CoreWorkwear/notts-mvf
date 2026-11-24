@@ -11,10 +11,10 @@ async function request(body) {
   return data
 }
 
-export default function SavedCards({ profileId, ready = false }) {
+export default function SavedCards({ profileId }) {
   const { user, profile } = useAuth()
   const ownerKey = `${user?.id ?? ''}:${profile?.id ?? ''}:${profile?.club_id ?? ''}:${profileId}`
-  const allowed = ready && !!user?.id && user.id === profileId && profile?.id === profileId && profile.is_player && profile.approved && profile.active
+  const allowed = !!user?.id && user.id === profileId && profile?.id === profileId && profile.is_player && profile.approved && profile.active
   const currentOwner = useRef(ownerKey)
   currentOwner.current = allowed ? ownerKey : null
   const [open, setOpen] = useState(false)

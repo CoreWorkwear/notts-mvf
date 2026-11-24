@@ -65,6 +65,9 @@ grant execute on function pg_temp.payout_report(text,boolean) to authenticated;
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',660)));
 set local role authenticated;
 select pg_temp.payout_check(not(pg_temp.payout_report('po_one')->'payouts'->0->'breakdown'->>'reconciled')::boolean,'paid event alone is not a complete breakdown');
+select set_config('request.jwt.claim.sub','41570000-0000-0000-0000-000000000011',true);
+select pg_temp.payout_refused($q$select pg_temp.payout_report()$q$,'42501','active player cannot report');
+select set_config('request.jwt.claim.sub','41570000-0000-0000-0000-000000000010',true);
 select pg_temp.payout_check((public.get_stripe_payout_report('acct_missing',false,'2026-12-01','2026-12-31')->>'connected')::boolean=false and public.get_stripe_payout_report('acct_missing',false,'2026-12-01','2026-12-31')->'payouts'='[]'::jsonb,'not-connected list is explicitly empty');
 reset role;
 select pg_temp.payout_save(pg_temp.payout_object('po_one',660),pg_temp.payout_lines());
@@ -79,6 +82,7 @@ do $$ declare r jsonb:=pg_temp.payout_report('po_one')->'payouts'->0; b jsonb; b
 end; $$;
 reset role;
 select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',660)));
+select public.record_stripe_payout_event('acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',660))||'{"pending_webhooks":17}'::jsonb);
 select pg_temp.payout_refused(format('select public.record_stripe_payout_event(%L,%L::jsonb)','acct_payoutPlatform',pg_temp.payout_event('evt_payoutPaid',pg_temp.payout_object('po_one',661))),'22023','changed event replay refused');
 select pg_temp.payout_save(pg_temp.payout_object('po_gap',700),pg_temp.payout_lines());
 select pg_temp.payout_save(pg_temp.payout_object('po_unknown',665),pg_temp.payout_lines()||'[{"balance_transaction_id":"txn_unknown","created":1796083203,"type":"adjustment","currency":"gbp","amount_pence":5,"fee_pence":0,"net_pence":5}]');

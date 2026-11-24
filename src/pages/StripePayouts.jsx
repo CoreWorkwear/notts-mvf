@@ -82,11 +82,13 @@ export default function StripePayouts() {
 
 function Payout({ payout }) {
   const totals = payout.breakdown
+  const gbp = payout.currency === 'gbp'
+  const payoutAmount = gbp ? money(payout.amount_pence) : payout.currency?.toUpperCase() || 'Unknown currency'
   return <details className="report-detail mt-3">
-    <summary>{statuses[payout.status] ?? 'Stripe payout'} · {money(payout.amount_pence)} · {date(payout.arrival_on)}</summary>
+    <summary>{statuses[payout.status] ?? 'Stripe payout'} · {payoutAmount} · {date(payout.arrival_on)}</summary>
     <p className="muted mt-2">Expected bank arrival {date(payout.arrival_on)}. Reference {payout.payout_id}</p>
     <h2 className="mt-3">{totals?.reconciled ? 'Reconciled to Stripe' : 'Reconciliation outstanding'}</h2>
-    {totals && <dl className="report-receipt-totals mt-3">
+    {totals && gbp && <dl className="report-receipt-totals mt-3">
       <div><dt>Gross</dt><dd>{money(totals.gross_pence)}</dd></div>
       <div><dt>Refunds</dt><dd>{money(totals.refunds_pence)}</dd></div>
       <div><dt>Stripe fees</dt><dd>{money(totals.fees_pence)}</dd></div>

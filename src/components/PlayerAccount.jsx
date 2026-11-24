@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import ManagerAccountChange, { pendingAccountChange } from './ManagerAccountChange'
 import { todayISO } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import './PlayerAccount.css'
 import PlayerCheckout from './PlayerCheckout'
+import SavedCards from './SavedCards'
 
 const money = pence => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Math.abs(pence) / 100)
 const balanceLabel = pence => pence === 0 ? 'Settled' : `${money(pence)} ${pence < 0 ? 'owed' : 'in credit'}`
@@ -87,7 +88,10 @@ export default function PlayerAccount({ profileId, actorId = '', canRecord = fal
       <button className="btn btn-ghost mt-2" onClick={() => setAttempt(a => a + 1)}>Try again</button>
     </div> : account && <>
       <p className="account-balance mono mt-2">{balanceLabel(account.balance_pence)}</p>
-      {canPay && <PlayerCheckout key={profileId} profileId={profileId} onStatus={refreshPayment} />}
+      {canPay && <Fragment key={profileId}>
+        <PlayerCheckout profileId={profileId} onStatus={refreshPayment} />
+        <SavedCards profileId={profileId} />
+      </Fragment>}
       {notice && <p role="status" className="mt-2">{notice}</p>}
       {canRecord && !receipt && !correction && <button className="btn btn-primary btn-block mt-3" onClick={() => { setReceipt(true); setNotice('') }}>{readDraft(draftKey(profileId, actorId)) ? 'Resume receipt' : 'Record receipt'}</button>}
       {receipt && <ReceiptForm profileId={profileId} actorId={actorId} onSaved={() => { setReceipt(false); setNotice('Receipt recorded.'); setAttempt(a => a + 1) }} onCancel={() => setReceipt(false)} />}

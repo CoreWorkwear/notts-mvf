@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 const state = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { functions: { invoke: state.invoke } } }))
-vi.mock('./SavedCards', () => ({ default: () => null }))
 import PlayerCheckout, { PlayerCheckoutReturn, safeCheckoutUrl } from './PlayerCheckout'
 const quote = overrides => ({ ready: true, can_pay: false, kind: 'balance', amount_pence: 0, balance_pence: 0, min_amount_pence: 30, currency: 'gbp', ...overrides })
 const debt = quote({ can_pay: true, balance_pence: -900, amount_pence: 900 })

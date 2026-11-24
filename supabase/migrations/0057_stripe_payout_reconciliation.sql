@@ -72,27 +72,35 @@ end; $$;
 
 create function public.record_stripe_payout_event(p_platform_account_id text,p_event jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
-declare live boolean; connection public.club_stripe_connections; prior public.stripe_payout_events; obj jsonb:=p_event#>'{data,object}'; result jsonb;
+declare live boolean; connection public.club_stripe_connections; prior public.stripe_payout_events; obj jsonb:=p_event#>'{data,object}'; result jsonb; payload jsonb; saved_payload jsonb;
 begin
  if p_platform_account_id is null or p_platform_account_id !~ '^acct_[A-Za-z0-9]+$' or coalesce(p_event->>'id','') !~ '^evt_[A-Za-z0-9]+$'
   or p_event->>'type' is null or p_event->>'type' not in ('payout.paid','payout.failed')
   or jsonb_typeof(p_event->'livemode') is distinct from 'boolean' or coalesce(p_event->>'created','') !~ '^[0-9]+$' then
   raise exception 'Invalid Stripe payout event' using errcode='22023'; end if;
  live:=(p_event->>'livemode')::boolean;
+ payload:=jsonb_build_object('type',p_event->>'type','account',p_event->>'account','livemode',live,'created',p_event->'created','object',obj);
  if obj->>'status' is distinct from split_part(p_event->>'type','.',2) then raise exception 'Stripe payout event state mismatch' using errcode='22023'; end if;
  select * into connection from public.club_stripe_connections where platform_account_id=p_platform_account_id and livemode=live and stripe_account_id=p_event->>'account';
  if not found then return jsonb_build_object('outcome','ignored'); end if;
  perform pg_advisory_xact_lock(hashtextextended('payments:'||connection.club_id::text,0));
  select * into prior from public.stripe_payout_events where platform_account_id=p_platform_account_id and livemode=live and event_id=p_event->>'id';
  if found then
-  if prior.payload is distinct from p_event then raise exception 'Stripe payout event reference conflict' using errcode='22023'; end if;
+  saved_payload:=prior.payload;
+  -- Delivery bookkeeping (for example pending_webhooks) may change on replay.
+  -- Preserve compatibility with pre-freeze isolated snapshots stored verbatim.
+  if saved_payload ? 'data' then
+   saved_payload:=jsonb_build_object('type',saved_payload->>'type','account',saved_payload->>'account','livemode',saved_payload->'livemode',
+    'created',saved_payload->'created','object',saved_payload#>'{data,object}');
+  end if;
+  if saved_payload is distinct from payload then raise exception 'Stripe payout event reference conflict' using errcode='22023'; end if;
   return prior.result;
  end if;
  perform public.store_stripe_payout_fact(connection.club_id,p_platform_account_id,live,connection.stripe_account_id,obj,
   to_timestamp((p_event->>'created')::double precision),true);
  result:=jsonb_build_object('outcome',obj->>'status','payout_id',obj->>'id');
  insert into public.stripe_payout_events(platform_account_id,livemode,event_id,club_id,payout_id,payload,result)
- values(p_platform_account_id,live,p_event->>'id',connection.club_id,obj->>'id',p_event,result);
+ values(p_platform_account_id,live,p_event->>'id',connection.club_id,obj->>'id',payload,result);
  return result;
 end; $$;
 

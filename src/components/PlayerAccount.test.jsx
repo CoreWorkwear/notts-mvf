@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router-dom'
 
 const store = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: store.rpc, functions: { invoke: store.invoke } } }))
-vi.mock('./SavedCards', () => ({ default: () => null }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'p1' },
+  profile: { id: 'p1', club_id: 'club', is_player: true, approved: true, active: true } }) }))
 import PlayerAccount from './PlayerAccount'
 
 const empty = { profile_id: 'p1', balance_pence: 0, entries: [] }
@@ -18,6 +19,21 @@ describe('Player account', () => {
     const action = await screen.findByRole('button', { name: 'Add money' })
     expect(screen.getByText('Settled').compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(action.compareDocumentPosition(screen.getByRole('heading', { name: 'Statement' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  test('the player can remove their saved card while Checkout is unavailable', async () => {
+    store.invoke.mockImplementation(async (name, { body }) => {
+      if (name === 'stripe-checkout') return { data: { ready: false, can_pay: false, kind: 'balance',
+        amount_pence: 0, balance_pence: 0, min_amount_pence: 30, currency: 'gbp' } }
+      if (body.action === 'remove') return { data: { removed: true } }
+      return { data: { cards: [{ id: 'own-card', brand: 'visa', last4: '4242' }] } }
+    })
+    render(<MemoryRouter><PlayerAccount profileId="p1" canPay /></MemoryRouter>)
+    await userEvent.click(await screen.findByText('Saved cards', { selector: 'summary' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove Visa ending 4242' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove card', exact: true }))
+    expect(await screen.findByText('Visa ending 4242 removed.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Add money' })).not.toBeInTheDocument()
   })
 
   test('confirmed Checkout return refreshes account once without a remount refresh loop', async () => {
